@@ -4,43 +4,36 @@ Ejemplo de uso del LLM Arch SDK
 
 Este script demuestra cómo usar el SDK para hacer llamadas a un servidor LLM
 con autenticación automática y manejo de errores.
+
+NOTA: El SDK carga automáticamente el archivo .env del directorio actual.
+Asegúrate de tener un .env con las credenciales necesarias.
 """
 
 import logging
-import os
 from dotenv import load_dotenv
-from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
-from llm_arch_sdk.observability.bootstrap import start_trace, record_event, set_active_trace, clear_active_trace
 
-# Configurar logging para ver los logs de Langfuse
+load_dotenv()  # Carga variables de entorno desde .env
+
+from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
+from llm_arch_sdk.observability.helpers import new_session_id
+from langfuse import propagate_attributes
+
+
+# Configurar logging para ver los logs del SDK
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Cargar variables de entorno desde el archivo .env (forzado)
-_env_path = os.path.join(os.path.dirname(__file__), ".env")
-load_dotenv(dotenv_path=_env_path, override=True)
-
 def example_health(client):
     print("\n🔍 Probando Health Check...")
-    trace = start_trace(
-        name="llm.client.health",
-        input={"endpoint": "/health"},
-        metadata={"flow": example_health.__name__, "endpoint": "/health"},
-        tags=["example", "health", "basic_usage"],
-    )
-    set_active_trace(trace)
     try:
         health_response = client.health()
         print("✅ Health check exitoso:")
         print(f"   Estado: {health_response.status}")
         print(f"   Versión del servidor: {health_response.version}")
     except Exception as e:
-        record_event(trace, name="llm.client.health.error", input={"error": str(e)})
         print(f"⚠️  Health check falló: {e}")
-    finally:
-        clear_active_trace()
         
 def example_chat_completions(client):
     print("\n📝 Probando Chat Completions...")
@@ -123,19 +116,20 @@ def main():
 
     try:
         # Crear adapter con parámetros personalizados
-        adapter = LlamaAdapter(
-            timeout=60.0
-        )
-        print("✅ Adapter creado exitosamente")
+        with propagate_attributes(session_id=new_session_id()):
+            adapter = LlamaAdapter(
+                timeout=60.0
+            )
+            print("✅ Adapter creado exitosamente")
 
-        # Obtener cliente
-        client = adapter.client()
-        print("✅ Cliente LLM obtenido")
-        
-        example_health(client)
-        example_chat_completions(client)
-        example_text_completions(client)
-        example_embeddings(client)
+            # Obtener cliente
+            client = adapter.client()
+            print("✅ Cliente LLM obtenido")
+            
+            example_health(client)
+            example_chat_completions(client)
+            example_text_completions(client)
+            example_embeddings(client)
         
         print("\n🎉 Prueba completada!")
 

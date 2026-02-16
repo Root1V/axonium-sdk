@@ -4,12 +4,8 @@ from .base import BaseLLMAdapter
 from ..client.llm_client import LlmClient
 from ..transport.auth_http_client_factory import AuthHttpClientFactory
 from ..config.settings import _sdk_settings
-from langfuse import observe, get_client
 
 logger = logging.getLogger("llm.sdk.adapters.llama")
-
-langfuse = get_client()
-
 
 class LlamaAdapter(BaseLLMAdapter):
     """
@@ -39,11 +35,6 @@ class LlamaAdapter(BaseLLMAdapter):
             timeout=self.timeout,
         )
 
-    @observe(
-        name="llama.adapter.client", 
-        capture_input=False, 
-        capture_output=False
-    )
     def client(self) -> LlmClient:
         """
         Devuelve un cliente minimalista para inferencia con llama-server
@@ -51,15 +42,6 @@ class LlamaAdapter(BaseLLMAdapter):
         """
         if not self._llm_client:
             logger.info("Inicializando cliente LLM")
-            
-            # metadata técnica guardada en el span actual
-            langfuse.update_current_span(
-                metadata={
-                    "adapter": "llama",
-                    "base_url": self.base_url,
-                    "timeout": self.timeout,
-                }
-            )
             
             self._llm_client = LlmClient(
                 base_url=self.base_url,

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 import os
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import version
 
 # -------------------------
 # Observability
@@ -58,7 +58,7 @@ class LangfuseEnv:
     secret_key: Optional[str] = os.getenv("LANGFUSE_SECRET_KEY")
     base_url: Optional[str] = os.getenv("LANGFUSE_BASE_URL")
     environment: Optional[str] = os.getenv("LANGFUSE_TRACING_ENVIRONMENT")
-    release: Optional[str] = os.getenv("LANGFUSE_RELEASE")
+    release: str = field(default_factory=lambda: version("llm-arch-sdk"))
 
 
 # -------------------------

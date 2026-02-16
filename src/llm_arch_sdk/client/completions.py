@@ -5,9 +5,8 @@ from typing import Optional
 from .base_client import BaseClient
 from ..models.completion import CompletionResult
 from ..config.settings import _sdk_settings
-from langfuse import observe, get_client
-
-langfuse = get_client()
+from langfuse import observe
+from llm_arch_sdk.observability.context import obs
 
 logger = logging.getLogger("llm.client.completions")
 
@@ -24,7 +23,7 @@ class Completions:
         self,
         prompt: str,
         temperature: float ,
-        n_predict: int,
+        n_predict: int = None,
         trace_metadata: Optional[dict] = None,
         trace_tags: Optional[list[str]] = None,
         **kwargs,
@@ -37,7 +36,7 @@ class Completions:
         }
 
         logger.debug("llm.client.completions.create %s", payload)
-        langfuse.update_current_span(
+        obs.update(
             input=prompt,
             metadata={
                 "temperature": temperature,

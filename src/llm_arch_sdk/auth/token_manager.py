@@ -6,11 +6,10 @@ from typing import Optional
 
 from ..transport.circuit_breaker import CircuitBreaker
 from ..transport.http_client_factory import HttpClientFactory
-from langfuse import observe, get_client
+from langfuse import observe
+from llm_arch_sdk.observability.context import obs
+
 from ..config.settings import _sdk_settings
-
-
-langfuse = get_client()
 
 logger = logging.getLogger("llm.sdk.auth.token_manager")
 
@@ -36,8 +35,6 @@ class TokenManager(httpx.Auth):
 
     @observe(
         name="llm.auth.flow",
-        capture_input=False,
-        capture_output=False,
     )
     def auth_flow(self, request):
         # 1 Asegurar token (thread-safe)
@@ -45,19 +42,19 @@ class TokenManager(httpx.Auth):
             with self._lock:
                 if not self.token:
                     logger.info("Token no presente, login inicial")  
-                    langfuse.update_current_span(
+                    obs.update(
                         metadata={"auth.reason": "missing_token"}
                     )                  
                     self.token = self._login()
         else:
-            langfuse.update_current_span(
+            obs.update(
                 metadata={"auth.reason": "cached_token"}
             )
 
         # 2 Adjuntar token
         request.headers["Authorization"] = f"Bearer {self.token}"
         logger.debug("Enviando request con token %s", request.headers["Authorization"])
-        langfuse.update_current_span(
+        obs.update(
             metadata={"auth.token_attached": True}
         )
 
@@ -68,7 +65,7 @@ class TokenManager(httpx.Auth):
         if response.status_code == HTTPStatus.UNAUTHORIZED and not request.headers.get(_sdk_settings.circuit_breaker.retry_header):
             logger.warning("401 recibido, refrescando token")
 
-            langfuse.update_current_span(
+            obs.update(
                 metadata={"auth.reason": "token_expired"}
             )
 
@@ -83,20 +80,18 @@ class TokenManager(httpx.Auth):
 
     @observe(
         name="llm.auth.login",
-        capture_input=False,
-        capture_output=False,
     )
     def _login(self) -> str:
         # Circuit breaker: ¿se permite intentar login?
         if not self._circuit.allow_request():
-            langfuse.update_current_span(
+            obs.update(
                 metadata={"circuit": self._circuit._state.value, "blocked": True}
             )
             raise AuthError("Circuit breaker abierto: login bloqueado")
 
         try:
             login_endpoint = _sdk_settings.llm.endpoints.login
-            langfuse.update_current_span(
+            obs.update(
                 metadata={"login.endpoint": login_endpoint}
             )
             resp = self._login_client.post(
@@ -117,7 +112,7 @@ class TokenManager(httpx.Auth):
         except httpx.TimeoutException as e:
             self._circuit.record_failure()
             logger.error("Timeout durante login")
-            langfuse.update_current_span(
+            obs.update(
                 metadata={"circuit": self._circuit._state.value, "error": type(e).__name__}
             )
             raise AuthError("Timeout durante login") from e
@@ -125,7 +120,7 @@ class TokenManager(httpx.Auth):
         except httpx.RequestError as e:
             self._circuit.record_failure()
             logger.error("Error de conexión durante login")
-            langfuse.update_current_span(
+            obs.update(
                 metadata={"circuit": self._circuit._state.value, "error": type(e).__name__}
             )
             raise AuthError(f"Error de conexión durante login: {e}") from e
@@ -136,7 +131,7 @@ class TokenManager(httpx.Auth):
                 "Error HTTP durante login",
                 extra={"status_code": e.response.status_code},
             )
-            langfuse.update_current_span(
+            obs.update(
                 metadata={"circuit": self._circuit._state.value, "error": type(e).__name__}
             )
             raise AuthError(
@@ -146,7 +141,7 @@ class TokenManager(httpx.Auth):
         except Exception as e:
             self._circuit.record_failure()
             logger.exception("Error inesperado durante login")
-            langfuse.update_current_span(
+            obs.update(
                 metadata={"circuit": self._circuit._state.value, "error": type(e).__name__}
             )
             raise AuthError("Error inesperado durante login") from e

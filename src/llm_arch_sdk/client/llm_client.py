@@ -7,11 +7,9 @@ from .chat_completions import ChatCompletions
 from .completions import Completions
 from .embeddings import Embeddings
 from ..transport.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
-from langfuse import observe, get_client
+from langfuse import observe
 from ..config.settings import _sdk_settings
-
-
-langfuse = get_client()
+from llm_arch_sdk.observability.context import obs
 
 logger = logging.getLogger("llm.sdk.client")
 
@@ -35,12 +33,10 @@ class LlmClient(BaseClient):
     
     @observe(
         name="llama.client.request",
-        capture_input=False,
-        capture_output=False,
     )
     def _request(self, method: str, endpoint: str, **kwargs):
         if not self._circuit.allow_request():
-            langfuse.update_current_span(
+            obs.update(
                 metadata={"circuit": self._circuit._state.value, "blocked": True}
             )
             
@@ -60,8 +56,7 @@ class LlmClient(BaseClient):
             self._circuit.record_success()
             resp.raise_for_status()
             
-            # no capturamos body ni headers
-            langfuse.update_current_span(
+            obs.update(
                 metadata={
                     "status_code": resp.status_code,
                     "endpoint": endpoint,
@@ -74,7 +69,7 @@ class LlmClient(BaseClient):
         except httpx.HTTPStatusError as e:
             self._circuit.record_failure()
             
-            langfuse.update_current_span(
+            obs.update(
                 metadata={
                     "status_code": e.response.status_code,
                     "endpoint": endpoint,
@@ -84,7 +79,7 @@ class LlmClient(BaseClient):
         
         except (httpx.TimeoutException, httpx.RequestError) as e:
             self._circuit.record_failure()
-            langfuse.update_current_span(
+            obs.update(
                 metadata={
                     "endpoint": endpoint,
                     "error_type": type(e).__name__,

@@ -22,7 +22,7 @@ langfuse = Langfuse(
     public_key=public_key,
     secret_key=secret_key,
     host=host,
-    mask=masking_email_and_phone
+    mask=masking_email_and_phone,
 )
 
 @observe()

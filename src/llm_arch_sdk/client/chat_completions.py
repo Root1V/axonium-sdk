@@ -5,7 +5,7 @@ from typing import Optional
 from .base_client import BaseClient
 from ..models.chat_completion import ChatCompletionResult
 from ..config.settings import _sdk_settings
-
+from langfuse import observe
 
 logger = logging.getLogger("llm.client.chatcompletions")
 
@@ -14,6 +14,10 @@ class ChatCompletions:
     def __init__(self, client: BaseClient):
         self._client = client
 
+    @observe(
+        name="llama.client.chatcompletions",
+        as_type="generation"
+    )
     def create(
         self,
         model: str,

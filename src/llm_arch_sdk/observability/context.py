@@ -2,7 +2,6 @@ from typing import Dict, Optional, Any
 import logging
 
 from .bootstrap import get_langfuse_client
-from .helpers import new_session_id
 from ..config.settings import _sdk_settings
 
 
@@ -10,57 +9,38 @@ logger = logging.getLogger("llm.sdk.observability.context")
 
 class ObservabilityContext:
     """
-    Punto único para:
-    - asegurar session_id
-    - actualizar metadata/tags del span actual
-    - no exponer langfuse al resto del SDK
+    Wrapper simple para update_current_trace de Langfuse.
+    
+    IMPORTANTE: No genera session_id automáticamente.
+    El consumidor debe usar propagate_attributes() al inicio del flujo.
     """
 
     def __init__(self):
         self._client = get_langfuse_client()
 
-    def update(
-        self,
-        *,
-        session_id: Optional[str] = None,
-        user_id: Optional[str] = None,
-        tags: Optional[list[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Optional[str]:
+    def update(self, **kwargs) -> None:
         """
-        Garantiza que exista un contexto mínimo de observabilidad
-        y actualiza el span activo creado por @observe.
-
-        Devuelve el session_id efectivo.
+        Actualiza el trace/span actual de Langfuse.
+        
+        Acepta cualquier parámetro que soporte update_current_trace():
+        - user_id, tags, metadata, input, output, etc.
+        
+        NOTA: NO genera session_id automáticamente. Usa propagate_attributes()
+        en tu código para establecer session_id y otros atributos de contexto.
         """
-
         if not self._client:
-            return session_id
+            return
 
         try:
-            sid = session_id or new_session_id()
+            # Default solo para user_id si no se proporciona
+            if "user_id" not in kwargs:
+                kwargs["user_id"] = _sdk_settings.llm.username
 
-            payload: Dict[str, Any] = {
-                "session_id": sid,
-            }
-            
-            uid = user_id or _sdk_settings.llm.username
-            payload["user_id"] = uid
-
-            if metadata:
-                payload["metadata"] = metadata
-
-            if tags:
-                payload["tags"] = tags
-
-            # API oficial v3
-            self._client.update_current_trace(**payload)
-
-            return sid
+            # Pasar todo directamente a Langfuse
+            self._client.update_current_trace(**kwargs)
 
         except Exception as exc:
             logger.debug("Langfuse update_current_trace failed: %s", exc)
-            return session_id
 
 
 # singleton liviano
