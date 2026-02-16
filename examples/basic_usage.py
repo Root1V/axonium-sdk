@@ -38,8 +38,8 @@ def example_health(client):
 def example_chat_completions(client):
     print("\n📝 Probando Chat Completions...")
     try:
-        trace_metadata = {"flow": "basic_usage", "user_id": "demo"}
-        trace_tags = ["example", "chat", "basic_usage"]
+        # El SDK detecta automáticamente adapter/operation/model
+        # Solo necesitas pasar metadata/tags de negocio si las necesitas
         chat_response = client.chat.create(
             model="llama-7b",  
             messages=[
@@ -48,8 +48,9 @@ def example_chat_completions(client):
             ],
             max_tokens=100,
             temperature=0.7,
-            trace_metadata=trace_metadata,
-            trace_tags=trace_tags,
+            # Opcional: metadata custom de negocio
+            # Opcional: tags custom de negocio
+            trace_tags=["demo-user"]
         )
         print("✅ Chat completion exitoso:")
         print(f"   Respuesta: {chat_response.choices[0].message.content}")
@@ -61,15 +62,14 @@ def example_chat_completions(client):
 def example_text_completions(client):
     print("\n✍️  Probando Text Completions...")
     try:
-        trace_metadata = {"flow": "basic_usage", "user_id": "demo"}
-        trace_tags = ["example", "completions", "basic_usage"]
+        # El SDK detecta automáticamente adapter/operation/model
         completion_response = client.completions.create(
-            model="llama-7b", 
             prompt="Escribe un poema corto sobre la inteligencia artificial.",
-            max_tokens=50,
             temperature=0.7,
-            trace_metadata=trace_metadata,
-            trace_tags=trace_tags,
+            n_predict=50,
+            # Opcional: metadata custom de negocio
+            # Opcional: tags custom de negocio
+            trace_tags=["creative"]
         )
         print("✅ Text completion exitoso:")
         print(f"   Respuesta: {completion_response.content.strip()}")
@@ -82,13 +82,13 @@ def example_embeddings(client):
     # Probar embeddings
     print("\n🧠 Probando Embeddings...")
     try:
-        trace_metadata = {"flow": "basic_usage", "user_id": "demo"}
-        trace_tags = ["example", "embeddings", "basic_usage"]
+        # El SDK detecta automáticamente adapter/operation/model
         response = client.embeddings.create(
             model="llama-embedding-7b",
             input=["Inteligencia artificial", "Aprendizaje automático"],
-            trace_metadata=trace_metadata,
-            trace_tags=trace_tags,
+            # Opcional: metadata custom de negocio
+            # Opcional: tags custom de negocio
+            trace_tags=["explore"]
         )
         print("✅ Embeddings exitoso:")
         
@@ -116,7 +116,7 @@ def main():
 
     try:
         # Crear adapter con parámetros personalizados
-        with propagate_attributes(session_id=new_session_id()):
+        with propagate_attributes(session_id=new_session_id(), version="1.0"):
             adapter = LlamaAdapter(
                 timeout=60.0
             )

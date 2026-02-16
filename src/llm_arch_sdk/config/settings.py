@@ -4,6 +4,12 @@ import os
 from importlib.metadata import version
 
 # -------------------------
+# Constantes compartidas
+# -------------------------
+
+_SDK_NAME = "llm-arch-sdk"
+
+# -------------------------
 # Observability
 # -------------------------
 
@@ -58,7 +64,7 @@ class LangfuseEnv:
     secret_key: Optional[str] = os.getenv("LANGFUSE_SECRET_KEY")
     base_url: Optional[str] = os.getenv("LANGFUSE_BASE_URL")
     environment: Optional[str] = os.getenv("LANGFUSE_TRACING_ENVIRONMENT")
-    release: str = field(default_factory=lambda: version("llm-arch-sdk"))
+    release: str = field(default_factory=lambda: version(_SDK_NAME))
 
 
 # -------------------------
@@ -67,7 +73,7 @@ class LangfuseEnv:
 
 @dataclass
 class OtelEnv:
-    service_name: Optional[str] = os.getenv("OTEL_SERVICE_NAME")
+    service_name: str = field(default_factory=lambda: f"{_SDK_NAME}:{version(_SDK_NAME)}")
 
 
 
@@ -103,8 +109,8 @@ class CircuitBreakerSettings:
 
 @dataclass
 class SdkIdentitySettings:
-    name: str = "llm-arch-sdk"
-    mversion: str = field(default_factory=lambda: version("llm-arch-sdk"))
+    name: str = _SDK_NAME
+    mversion: str = field(default_factory=lambda: version(_SDK_NAME))
     accept: str = "application/json"
     
     @property

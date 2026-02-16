@@ -22,10 +22,11 @@ class LlmClient(BaseClient):
     Cliente liviano para llama-server compatible con OpenAI-style APIs
     """
 
-    def __init__(self, base_url: str, http_client: httpx.Client):
+    def __init__(self, base_url: str, http_client: httpx.Client ):
         self.base_url = base_url.rstrip("/")
         self._http_client = http_client
         self._circuit = CircuitBreaker()
+        self.adapter_type = "llama"
 
         self.completions = Completions(self)
         self.chat = ChatCompletions(self)
@@ -89,8 +90,6 @@ class LlmClient(BaseClient):
     
     @observe(
         name="llama.client.health",
-        capture_input=False,
-        capture_output=False,
     )
     def health(self):
         return self._request("GET", _sdk_settings.llm.endpoints.health)

@@ -1,4 +1,5 @@
 import logging
+import os
 
 logger = logging.getLogger("llm.sdk.observability.langfuse")
 from ..config.settings import _sdk_settings
@@ -20,6 +21,10 @@ def get_langfuse_client():
 
     if _langfuse_client is not None:
         return _langfuse_client
+
+    # Configurar OpenTelemetry service.name antes de importar Langfuse
+    if not os.getenv("OTEL_SERVICE_NAME"):
+        os.environ["OTEL_SERVICE_NAME"] = _sdk_settings.otel.service_name
 
     try:
         from langfuse import Langfuse
@@ -48,9 +53,10 @@ def get_langfuse_client():
         )
         
         logger.info(
-            "Langfuse client initialized [env=%s, release=%s, masking=%s]",
+            "Langfuse client initialized [env=%s, release=%s, service=%s, masking=%s]",
             environment,
             release,
+            _sdk_settings.otel.service_name,
             _sdk_settings.observability.enabled
         )
 

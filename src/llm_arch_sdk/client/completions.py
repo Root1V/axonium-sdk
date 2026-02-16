@@ -6,7 +6,7 @@ from .base_client import BaseClient
 from ..models.completion import CompletionResult
 from ..config.settings import _sdk_settings
 from langfuse import observe
-from llm_arch_sdk.observability.context import obs
+from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 
 logger = logging.getLogger("llm.client.completions")
 
@@ -36,12 +36,24 @@ class Completions:
         }
 
         logger.debug("llm.client.completions.create %s", payload)
+        
+        # Construir metadata automáticamente (SDK info + operación + custom)
+        sdk_metadata = build_sdk_metadata(
+            adapter=self._client.adapter_type,
+            operation="completion",
+            model=kwargs.get("model"),
+            temperature=temperature,
+            n_predict=n_predict,
+            **(trace_metadata or {})
+        )
+        
+        # Construir tags automáticamente (modelo + filtrado + custom)
+        sdk_tags = build_sdk_tags(kwargs.get("model"), *(trace_tags or []))
+        
         obs.update(
             input=prompt,
-            metadata={
-                "temperature": temperature,
-                "n_predict": n_predict,
-            }
+            metadata=sdk_metadata,
+            tags=sdk_tags
         )
 
         raw = self._client._request(
@@ -53,6 +65,17 @@ class Completions:
         logger.debug("llm.client.completions.create response %s", raw)
             
         result = CompletionResult.from_dict(raw)
+        
+        # Actualizar trace con model, usage y output para cálculo de tokens/costos en Langfuse
+        obs.update(
+            model=result.model,
+            usage={
+                "input": result.tokens_evaluated,
+                "output": result.tokens_predicted,
+                "total": result.tokens_evaluated + result.tokens_predicted,
+            },
+            output=result.content
+        )
 
         return result
         
