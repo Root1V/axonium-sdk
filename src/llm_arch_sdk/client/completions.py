@@ -65,17 +65,6 @@ class Completions:
         logger.debug("llm.client.completions.create response %s", raw)
             
         result = CompletionResult.from_dict(raw)
-        
-        # Actualizar trace con model, usage y output para cálculo de tokens/costos en Langfuse
-        obs.update(
-            model=result.model,
-            usage={
-                "input": result.tokens_evaluated,
-                "output": result.tokens_predicted,
-                "total": result.tokens_evaluated + result.tokens_predicted,
-            },
-            output=result.content
-        )
 
         return result
         
