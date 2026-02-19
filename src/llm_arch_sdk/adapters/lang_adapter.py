@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 
 from langfuse import observe
 
-from .base import BaseLLMAdapter
+from .base_llm_adapter import BaseLLMAdapter
 
 logger = logging.getLogger("llm.sdk.adapters.langchain")
 
@@ -35,4 +35,4 @@ class LangChainAdapter(BaseLLMAdapter):
 
     @observe(name="adapter.langchain.health", capture_input=False, capture_output=False)
     def health(self) -> Dict[str, Any]:
-        return {"status": "ok", "provider": "langchain"}
+        raise NotImplementedError("Health check no implementado para LangChainAdapter")

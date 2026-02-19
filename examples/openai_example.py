@@ -11,7 +11,7 @@ Este script demuestra cómo usar el adapter de OpenAI para:
 import logging
 import os
 from dotenv import load_dotenv
-from llm_arch_sdk.adapters.open_ai_adapter import OpenAIAdapter
+from llm_arch_sdk.adapters.open_ai import OpenAIAdapter
 from llm_arch_sdk.observability.bootstrap import start_trace, record_generation, record_event, set_active_trace, clear_active_trace
 
 # Configurar logging para ver los logs de Langfuse

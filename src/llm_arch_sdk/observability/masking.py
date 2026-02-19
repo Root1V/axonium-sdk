@@ -33,13 +33,6 @@ def mask_langfuse_payload(data: Any, **kwargs) -> Any:
 
     return data
 
-
-def mask_secrets(text: str) -> str:
-    if text.startswith("SECRET_"):
-        return "[REDACTED]"
-    return text
-
-
 def mask_credit_cards(text: str) -> str:
     return re.sub(r"\b(?:\d[ -]*?){13,19}\b", "[REDACTED CREDIT CARD]", text)
 

@@ -53,7 +53,6 @@ class TokenManager(httpx.Auth):
 
         # 2 Adjuntar token
         request.headers["Authorization"] = f"Bearer {self.token}"
-        logger.debug("Enviando request con token %s", request.headers["Authorization"])
         obs.update(
             metadata={"auth.token_attached": True}
         )
@@ -74,7 +73,6 @@ class TokenManager(httpx.Auth):
 
             request.headers["Authorization"] = f"Bearer {self.token}"
             request.headers[_sdk_settings.circuit_breaker.retry_header] = _sdk_settings.circuit_breaker.retry_value
-            logger.debug("Reintentando request con nuevo token", request.headers["Authorization"])
 
             yield request
 

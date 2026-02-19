@@ -20,7 +20,7 @@ Este SDK proporciona una interfaz unificada para interactuar con servidores LLM 
 
 ### Requisitos
 
-- Python >= 3.14
+- Python >= 3.13
 
 ### Instalación desde código fuente
 

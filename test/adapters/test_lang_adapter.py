@@ -2,7 +2,7 @@ import pytest
 import os
 from unittest.mock import Mock, patch, ANY
 from langchain_openai import ChatOpenAI
-from llm_arch_sdk.adapters.lang_adapter import LangChainAdapter
+from llm_arch_sdk.adapters.lang import LangChainAdapter
 from llm_arch_sdk.auth.token_manager import TokenManager
 
 

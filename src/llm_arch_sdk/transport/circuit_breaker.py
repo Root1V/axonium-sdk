@@ -1,3 +1,4 @@
+import threading
 import time
 import logging
 from enum import Enum
@@ -23,48 +24,62 @@ class CircuitBreaker:
 
     def __init__(self, failure_threshold: int = None, reset_timeout: int = None, half_open_success: int = None):
 
-        self.failure_threshold = failure_threshold or _sdk_settings.circuit_breaker.failure_threshold
-        self.reset_timeout = reset_timeout or _sdk_settings.circuit_breaker.reset_timeout
-        self.half_open_success = half_open_success or _sdk_settings.circuit_breaker.half_open_success
-
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._success_count = 0
-        self._open_until = None
+        self._cfg = _sdk_settings.circuit_breaker
+        
+        self.failure_threshold = failure_threshold or self._cfg.failure_threshold
+        self.reset_timeout = reset_timeout or self._cfg.reset_timeout
+        self.half_open_success = half_open_success or self._cfg.half_open_success
+        
+        
+        self._state: CircuitState = CircuitState.CLOSED
+        self._failure_count: int = 0
+        self._success_count: int = 0
+        self._open_until: float = None
+        
+        self._lock = threading.Lock()
+        
+    @property
+    def state(self) -> CircuitState:
+        with self._lock:
+            return self._state
 
     def allow_request(self) -> bool:
         now = time.time()
-
-        if self._state == CircuitState.OPEN:
-            if now >= self._open_until:
-                self._state = CircuitState.HALF_OPEN
-                self._success_count = 0
-                logger.warning("Circuit breaker pasando a HALF_OPEN")
-                return True
-            return False
-        return True
+        
+        with self._lock:
+            if self._state == CircuitState.OPEN:
+                if now >= self._open_until:
+                    self._state = CircuitState.HALF_OPEN
+                    self._success_count = 0
+                    logger.warning("Circuit breaker pasando a HALF_OPEN")
+                    return True
+                return False
+            return True
     
 
     def record_success(self):
-        if self._state == CircuitState.HALF_OPEN:
-            self._success_count += 1
-            if self._success_count >= self.half_open_success:
-                logger.info("Circuit breaker cerrado tras éxito en HALF_OPEN")
-                self._state = CircuitState.CLOSED
+        with self._lock:
+            if self._state == CircuitState.HALF_OPEN:
+                self._success_count += 1
+                if self._success_count >= self.half_open_success:
+                    logger.info("Circuit breaker cerrado tras éxito en HALF_OPEN")
+                    self._state = CircuitState.CLOSED
+                    self._failure_count = 0
+                    self._success_count = 0
+                    self._open_until = None
+            else:
                 self._failure_count = 0
-                self._success_count = 0
-                self._open_until = None
-        else:
-            self._failure_count = 0
 
+        
     def record_failure(self):
-        self._failure_count += 1
-        logger.warning("Fallo, registrado en circuit breaker:  %s/%s", self._failure_count, self.failure_threshold)
+        with self._lock:
+            self._failure_count += 1
+            logger.warning("Fallo, registrado en circuit breaker:  %s/%s", self._failure_count, self.failure_threshold)
 
-        if self._failure_count >= self.failure_threshold:
-            self._state = CircuitState.OPEN
-            self._open_until = time.time() + self.reset_timeout
-            logger.error(
-                "Circuit breaker ABIERTO",
-                extra={"open_until": self._open_until},
-            )
+            if self._failure_count >= self.failure_threshold:
+                self._state = CircuitState.OPEN
+                self._open_until = time.time() + self.reset_timeout
+                logger.error(
+                    "Circuit breaker ABIERTO",
+                    extra={"open_until": self._open_until},
+                )

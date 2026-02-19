@@ -8,7 +8,7 @@ from langfuse import observe
 from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 
 
-logger = logging.getLogger("llm.client.embeddings")
+logger = logging.getLogger("llama.embeddings")
 
 
 class Embeddings:
@@ -16,7 +16,7 @@ class Embeddings:
         self._client = client
 
     @observe(
-        name="llama.client.embeddings.create",
+        name="llama.embeddings.create",
         as_type="generation"
     )
     def create(
@@ -26,7 +26,7 @@ class Embeddings:
         trace_metadata: Optional[dict] = None,
         trace_tags: Optional[list[str]] = None,
     ):
-        logger.debug("llm.client.embeddings.create model=%s input=%s", model, input)
+        logger.debug("llama.embeddings.create model=%s input=%s", model, input)
         payload = {"model": model, "input": input}
         
         # Construir metadata automáticamente (SDK info + operación + custom)
@@ -53,4 +53,5 @@ class Embeddings:
                 json=payload,
             )
         except Exception as exc:
+            logger.error("Error in llama.embeddings.create: %s", exc)
             raise

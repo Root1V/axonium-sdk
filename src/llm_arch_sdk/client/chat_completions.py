@@ -8,7 +8,7 @@ from ..config.settings import _sdk_settings
 from langfuse import observe
 from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 
-logger = logging.getLogger("llm.client.chatcompletions")
+logger = logging.getLogger("llama.chatcompletions")
 
 
 class ChatCompletions:
@@ -16,7 +16,7 @@ class ChatCompletions:
         self._client = client
 
     @observe(
-        name="llama.client.chatcompletions.create",
+        name="llama.chatcompletions.create",
         as_type="generation"
     )
     def create(
@@ -33,7 +33,7 @@ class ChatCompletions:
             **kwargs,
         }
 
-        logger.debug("llm.client.chatcompletions.create %s", payload)
+        logger.debug("llama.chatcompletions.create %s", payload)
         
         # Construir metadata automáticamente (SDK info + operación + custom)
         sdk_metadata = build_sdk_metadata(
@@ -59,24 +59,11 @@ class ChatCompletions:
                 json=payload,
             )
 
-            logger.debug("llm.client.chatcompletions.create response %s", raw)
+            logger.debug("llama.chatcompletions.create response %s", raw)
 
-            result = ChatCompletionResult.from_dict(raw)
-            
-            # Actualizar trace con model, usage y output para cálculo de tokens/costos en Langfuse
-            obs.update(
-                model=result.model,
-                usage={
-                    "input": result.usage.prompt_tokens if result.usage else 0,
-                    "output": result.usage.completion_tokens if result.usage else 0,
-                    "total": result.usage.total_tokens if result.usage else 0,
-                },
-                output=result.choices[0].message.content if result.choices else None
-            )
-            
-            return result
+            return ChatCompletionResult.from_dict(raw)
         except Exception as exc:
-            logger.error("Error in chat completions: %s", exc)
+            logger.error("Error in llama.chatcompletions.create: %s", exc)
             raise
         finally:
             pass

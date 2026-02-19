@@ -8,7 +8,7 @@ from ..config.settings import _sdk_settings
 from langfuse import observe
 from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 
-logger = logging.getLogger("llm.client.completions")
+logger = logging.getLogger("llama.completions")
 
 
 class Completions:
@@ -16,7 +16,7 @@ class Completions:
         self._client = client
 
     @observe(
-        name="llama.client.completions.create",
+        name="llama.completions.create",
         as_type="generation"
     )
     def create(
@@ -35,7 +35,7 @@ class Completions:
             **kwargs,
         }
 
-        logger.debug("llm.client.completions.create %s", payload)
+        logger.debug("llama.completions.create %s", payload)
         
         # Construir metadata automáticamente (SDK info + operación + custom)
         sdk_metadata = build_sdk_metadata(
@@ -62,7 +62,7 @@ class Completions:
             json=payload,
         )
 
-        logger.debug("llm.client.completions.create response %s", raw)
+        logger.debug("llama.completions.create response %s", raw)
             
         result = CompletionResult.from_dict(raw)
 

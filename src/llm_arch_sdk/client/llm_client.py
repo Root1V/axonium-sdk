@@ -33,7 +33,7 @@ class LlmClient(BaseClient):
         self.embeddings = Embeddings(self)
     
     @observe(
-        name="llama.client.request",
+        name="llama.request",
     )
     def _request(self, method: str, endpoint: str, **kwargs):
         if not self._circuit.allow_request():
@@ -52,7 +52,7 @@ class LlmClient(BaseClient):
             )
             if resp.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
                 self._circuit.record_failure()
-                raise LlmAPIError(f"Error {resp.status_code}")
+                raise LlmAPIError(f"Error {resp.status_code}, {method} {endpoint}: {resp.text}")
 
             self._circuit.record_success()
             resp.raise_for_status()
@@ -87,6 +87,7 @@ class LlmClient(BaseClient):
                 }
             )
             raise LlmAPIError(str(e)) from e
+    
     
     @observe(
         name="llama.client.health",

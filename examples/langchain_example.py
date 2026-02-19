@@ -10,7 +10,7 @@ Este script demuestra cómo usar el adapter de LangChain para:
 import logging
 import os
 from dotenv import load_dotenv
-from llm_arch_sdk.adapters.lang_adapter import LangChainAdapter
+from llm_arch_sdk.adapters.lang import LangChainAdapter
 from langchain_core.messages import SystemMessage, HumanMessage
 
 # Configurar logging para ver los logs de Langfuse

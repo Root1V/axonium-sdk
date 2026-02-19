@@ -24,7 +24,6 @@ class ObservabilitySettings:
 
     # hooks de masking registrados por nombre
     masking_strategies: List[str] = field(default_factory=lambda: [
-        "mask_secrets",
         "mask_pii",
         "mask_credit_card",
         "mask_email_and_phone",
