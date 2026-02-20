@@ -83,7 +83,7 @@ class TokenManager(httpx.Auth):
         # Circuit breaker: ¿se permite intentar login?
         if not self._circuit.allow_request():
             obs.update(
-                metadata={"circuit": self._circuit._state.value, "blocked": True}
+                metadata={"circuit": self._circuit.state.value, "blocked": True}
             )
             raise AuthError("Circuit breaker abierto: login bloqueado")
 
@@ -111,7 +111,7 @@ class TokenManager(httpx.Auth):
             self._circuit.record_failure()
             logger.error("Timeout durante login")
             obs.update(
-                metadata={"circuit": self._circuit._state.value, "error": type(e).__name__}
+                metadata={"circuit": self._circuit.state.value, "error": type(e).__name__}
             )
             raise AuthError("Timeout durante login") from e
 
@@ -119,7 +119,7 @@ class TokenManager(httpx.Auth):
             self._circuit.record_failure()
             logger.error("Error de conexión durante login")
             obs.update(
-                metadata={"circuit": self._circuit._state.value, "error": type(e).__name__}
+                metadata={"circuit": self._circuit.state.value, "error": type(e).__name__}
             )
             raise AuthError(f"Error de conexión durante login: {e}") from e
 
@@ -130,7 +130,7 @@ class TokenManager(httpx.Auth):
                 extra={"status_code": e.response.status_code},
             )
             obs.update(
-                metadata={"circuit": self._circuit._state.value, "error": type(e).__name__}
+                metadata={"circuit": self._circuit.state.value, "error": type(e).__name__}
             )
             raise AuthError(
                 f"Error HTTP durante login: {e.response.status_code}"
@@ -140,7 +140,7 @@ class TokenManager(httpx.Auth):
             self._circuit.record_failure()
             logger.exception("Error inesperado durante login")
             obs.update(
-                metadata={"circuit": self._circuit._state.value, "error": type(e).__name__}
+                metadata={"circuit": self._circuit.state.value, "error": type(e).__name__}
             )
             raise AuthError("Error inesperado durante login") from e
     

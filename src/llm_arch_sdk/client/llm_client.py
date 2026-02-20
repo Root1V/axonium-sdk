@@ -9,7 +9,7 @@ from .embeddings import Embeddings
 from ..transport.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
 from langfuse import observe
 from ..config.settings import _sdk_settings
-from llm_arch_sdk.observability.context import obs
+from llm_arch_sdk.observability.context import obs, get_current_trace_id
 
 logger = logging.getLogger("llm.sdk.client")
 
@@ -38,12 +38,21 @@ class LlmClient(BaseClient):
     def _request(self, method: str, endpoint: str, **kwargs):
         if not self._circuit.allow_request():
             obs.update(
-                metadata={"circuit": self._circuit._state.value, "blocked": True}
+                metadata={"circuit": self._circuit.state.value, "blocked": True}
             )
             
             raise CircuitBreakerOpen("Circuit abierto para llama-server")
         
+        # Obtener trace_id de Langfuse para correlación con el servidor
+        trace_id = get_current_trace_id()
+        
         try:
+            # Agregar trace_id como header HTTP si está disponible
+            if trace_id:
+                headers = kwargs.get("headers", {})
+                headers["X-Langfuse-Trace-Id"] = trace_id
+                kwargs["headers"] = headers
+                logger.debug("Agregando trace_id a headers: %s", trace_id)
             
             resp = self._http_client.request(
                 method,
@@ -62,6 +71,7 @@ class LlmClient(BaseClient):
                     "status_code": resp.status_code,
                     "endpoint": endpoint,
                     "method": method,
+                    "trace_id": trace_id,
                 }
             )
             
@@ -74,6 +84,7 @@ class LlmClient(BaseClient):
                 metadata={
                     "status_code": e.response.status_code,
                     "endpoint": endpoint,
+                    "trace_id": trace_id,
                 }
             )
             raise LlmAPIError(f"HTTP {e.response.status_code}: {e.response.text}") from e
@@ -84,6 +95,7 @@ class LlmClient(BaseClient):
                 metadata={
                     "endpoint": endpoint,
                     "error_type": type(e).__name__,
+                    "trace_id": trace_id,
                 }
             )
             raise LlmAPIError(str(e)) from e

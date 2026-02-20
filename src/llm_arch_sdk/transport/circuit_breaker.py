@@ -44,7 +44,7 @@ class CircuitBreaker:
             return self._state
 
     def allow_request(self) -> bool:
-        now = time.time()
+        now = time.monotonic()
         
         with self._lock:
             if self._state == CircuitState.OPEN:
@@ -78,7 +78,7 @@ class CircuitBreaker:
 
             if self._failure_count >= self.failure_threshold:
                 self._state = CircuitState.OPEN
-                self._open_until = time.time() + self.reset_timeout
+                self._open_until = time.monotonic() + self.reset_timeout
                 logger.error(
                     "Circuit breaker ABIERTO",
                     extra={"open_until": self._open_until},
