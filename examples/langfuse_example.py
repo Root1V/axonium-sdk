@@ -1,3 +1,15 @@
+"""
+Ejemplo de uso del SDK con Langfuse para observabilidad.
+
+IMPORTANTE: Propagación automática de trace_id
+----------------------------------------------
+El SDK automáticamente captura el trace_id de Langfuse cuando se ejecuta dentro de
+un contexto decorado con @observe(). Este trace_id se agrega como header HTTP
+'X-Langfuse-Trace-Id' en todas las peticiones al backend LLM, permitiendo 
+correlación end-to-end entre las trazas del SDK y el servidor LLM.
+
+No se requiere ninguna configuración adicional - la propagación es automática.
+"""
 import os
 from langfuse import Langfuse, observe, propagate_attributes, get_client
 from dotenv import load_dotenv
