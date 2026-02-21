@@ -2,12 +2,13 @@ import os
 import logging
 from typing import Any, Dict, List
 
+from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 from openai import OpenAI
 from langfuse import observe
 
-from .base_llm_adapter import BaseLLMAdapter
+from .base_llm_adapter import BaseLLMAdapter, LLMAdapterType, LLMOperation
 from ..transport.auth_http_client_factory import AuthHttpClientFactory
-from ..config.settings import _sdk_settings
+from ..config.settings import get_sdk_settings
 
 
 logger = logging.getLogger("llm.sdk.adapters.openai")
@@ -22,10 +23,12 @@ class OpenAIAdapter(BaseLLMAdapter):
         self,
         base_url: str | None = None,
         timeout: float = None,
+        settings = None,
         **client_kwargs,
     ):
-        self.base_url = base_url or _sdk_settings.llm.base_url
-        self.timeout = timeout or _sdk_settings.transport.timeout_seconds
+        self._settings = settings or get_sdk_settings()
+        self.base_url = base_url or self._settings.llm.base_url
+        self.timeout = timeout or self._settings.transport.timeout_seconds
         self.client_kwargs = client_kwargs
         
         self._validate_config()
@@ -34,7 +37,7 @@ class OpenAIAdapter(BaseLLMAdapter):
 
         self._client = OpenAI(
             base_url=self.base_url,
-            api_key=_sdk_settings.llm.openai_api_key,
+            api_key=self._settings.llm.openai_api_key,
             http_client=self._http_client,
             default_headers=AuthHttpClientFactory._default_headers(),
             **self.client_kwargs,
@@ -53,6 +56,18 @@ class OpenAIAdapter(BaseLLMAdapter):
 
     @observe(name="adapter.openai.chat")
     def chat(self, model: str, messages: List[Dict[str, Any]], **kwargs):
+        sdk_metadata = build_sdk_metadata(
+            adapter=LLMAdapterType.OPENAI,
+            operation=LLMOperation.CHAT,
+            model=model
+        )
+        sdk_tags = build_sdk_tags(model)
+        obs.update(
+            input=messages,
+            metadata=sdk_metadata,
+            tags=sdk_tags
+        )
+        
         return self._client.chat.completions.create(
             model=model,
             messages=messages,
@@ -61,6 +76,17 @@ class OpenAIAdapter(BaseLLMAdapter):
 
     @observe(name="adapter.openai.completions")
     def completions(self, model: str, prompt: str, **kwargs):
+        sdk_metadata = build_sdk_metadata(
+            adapter=LLMAdapterType.OPENAI,
+            operation=LLMOperation.COMPLETIONS,
+            model=model
+        )
+        sdk_tags = build_sdk_tags(model)
+        obs.update(
+            input=prompt,
+            metadata=sdk_metadata,
+            tags=sdk_tags
+        )
         return self._client.completions.create(
             model=model,
             prompt=prompt,
@@ -69,6 +95,17 @@ class OpenAIAdapter(BaseLLMAdapter):
 
     @observe(name="adapter.openai.embeddings")
     def embeddings(self, model: str, input: Any, **kwargs):
+        sdk_metadata = build_sdk_metadata(
+            adapter=LLMAdapterType.OPENAI,
+            operation=LLMOperation.EMBEDDINGS,
+            model=model
+        )
+        sdk_tags = build_sdk_tags(model)
+        obs.update(
+            input=input,
+            metadata=sdk_metadata,
+            tags=sdk_tags
+        )
         return self._client.embeddings.create(
             model=model,
             input=input,
@@ -77,6 +114,13 @@ class OpenAIAdapter(BaseLLMAdapter):
 
     @observe(name="adapter.openai.health", capture_input=False, capture_output=False)
     def health(self) -> Dict[str, Any]:
+        sdk_metadata = build_sdk_metadata(
+            adapter=LLMAdapterType.OPENAI,
+            operation=LLMOperation.HEALTH,
+        )
+        obs.update(
+            metadata=sdk_metadata,
+        )
         raise NotImplementedError("OpenAI API no tiene endpoint de health check estándar") 
     
     def _validate_config(self):

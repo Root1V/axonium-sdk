@@ -15,49 +15,6 @@ Este SDK proporciona una interfaz unificada para interactuar con servidores LLM 
 - **Normalización de respuestas**: Estandarización de respuestas de diferentes proveedores.
 - **Cliente HTTP robusto**: Uso de httpx con configuraciones personalizables.
 - **Ejemplos con .env**: Los ejemplos cargan variables desde archivo `.env` usando python-dotenv.
-- **Observabilidad con Langfuse**: Integración nativa con Langfuse para trazabilidad distribuida.
-
-## Observabilidad y Trazabilidad
-
-### Propagación automática de trace_id
-
-El SDK incluye integración nativa con **Langfuse** para observabilidad y trazabilidad distribuida. Una característica clave es la **propagación automática del trace_id** a través de headers HTTP.
-
-#### ¿Cómo funciona?
-
-Cuando usas el SDK dentro de un contexto decorado con `@observe()` de Langfuse:
-
-1. El SDK captura automáticamente el `trace_id` del contexto activo de Langfuse
-2. Este `trace_id` se agrega como header HTTP `X-Langfuse-Trace-Id` en **todas** las peticiones al backend LLM
-3. El backend puede extraer este header y correlacionar sus propias trazas con las del SDK
-
-#### Beneficios
-
-- **Correlación end-to-end**: Conecta las trazas del SDK con las del servidor LLM
-- **Debugging facilitado**: Sigue una petición completa desde el cliente hasta el servidor y viceversa
-- **Sin configuración adicional**: La propagación es completamente automática
-- **Separación de responsabilidades**: Tags para filtrado (environment, model), metadata para detalles técnicos
-
-#### Ejemplo de uso
-
-```python
-from langfuse import observe
-from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
-
-@observe()  # El trace_id de esta función se propagará automáticamente
-def process_with_llm(prompt: str):
-    client = LlamaAdapter().client()
-    response = client.completions.create(
-        model="llama-7b",
-        prompt=prompt,
-        max_tokens=100
-    )
-    return response.content
-
-# El backend LLM recibirá el header: X-Langfuse-Trace-Id: <trace_id>
-```
-
-Para más detalles, consulta el ejemplo completo en [`examples/langfuse_example.py`](examples/langfuse_example.py).
 
 ## Instalación
 
@@ -255,18 +212,9 @@ El proyecto incluye 90 pruebas unitarias organizadas en una estructura que refle
 ### v0.4.0 (En desarrollo)
 - 🚀 Nuevo adaptador LangChainAdapter para integración con LangChain
 - 📝 Soporte para ChatOpenAI de LangChain
-- 🔍 **Propagación automática de trace_id de Langfuse como HTTP header**
-  - Captura automática del trace_id desde el contexto de Langfuse
-  - Inyección del header `X-Langfuse-Trace-Id` en todas las peticiones HTTP
-  - Correlación end-to-end entre trazas del SDK y el backend LLM
-- 📊 Separación empresarial: tags para filtrado, metadata para detalles técnicos
-- 🏷️ Auto-detección de adapter, operation y model en trazas
-- ⚙️ Configuración automática de OTEL_SERVICE_NAME basada en identidad del SDK
-- 📦 Actualización de dependencias: `python-dotenv` (antes `dotenv`)
 - ✅ 7 nuevos tests unitarios para LangChainAdapter (90 tests totales)
 - 🔄 Patrón **kwargs implementado en todos los adaptadores
 - 📚 Nuevo ejemplo: `examples/langchain_example.py`
-- 📚 Documentación mejorada con ejemplos de observabilidad
 
 ### v0.3.0
 - ✅ TokenManager ahora es **opcional** en `AuthHttpClientFactory.create()`

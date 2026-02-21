@@ -19,7 +19,6 @@ def _pii_scanner():
 
 def mask_langfuse_payload(data: Any, **kwargs) -> Any:
     if isinstance(data, str):
-        data = mask_secrets(data)
         data = mask_credit_cards(data)
         data = mask_email_and_phone(data)
         data = mask_pii(data)

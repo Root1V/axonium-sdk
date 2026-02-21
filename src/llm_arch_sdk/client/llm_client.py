@@ -8,8 +8,8 @@ from .completions import Completions
 from .embeddings import Embeddings
 from ..transport.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
 from langfuse import observe
-from ..config.settings import _sdk_settings
-from llm_arch_sdk.observability.context import obs, get_current_trace_id
+from ..config.settings import get_sdk_settings
+from llm_arch_sdk.observability.context import obs
 
 logger = logging.getLogger("llm.sdk.client")
 
@@ -22,11 +22,11 @@ class LlmClient(BaseClient):
     Cliente liviano para llama-server compatible con OpenAI-style APIs
     """
 
-    def __init__(self, base_url: str, http_client: httpx.Client ):
+    def __init__(self, base_url: str, http_client: httpx.Client, settings = None):
+        self._settings = settings or get_sdk_settings() 
         self.base_url = base_url.rstrip("/")
         self._http_client = http_client
         self._circuit = CircuitBreaker()
-        self.adapter_type = "llama"
 
         self.completions = Completions(self)
         self.chat = ChatCompletions(self)
@@ -43,16 +43,7 @@ class LlmClient(BaseClient):
             
             raise CircuitBreakerOpen("Circuit abierto para llama-server")
         
-        # Obtener trace_id de Langfuse para correlación con el servidor
-        trace_id = get_current_trace_id()
-        
         try:
-            # Agregar trace_id como header HTTP si está disponible
-            if trace_id:
-                headers = kwargs.get("headers", {})
-                headers["X-Langfuse-Trace-Id"] = trace_id
-                kwargs["headers"] = headers
-                logger.debug("Agregando trace_id a headers: %s", trace_id)
             
             resp = self._http_client.request(
                 method,
@@ -71,7 +62,6 @@ class LlmClient(BaseClient):
                     "status_code": resp.status_code,
                     "endpoint": endpoint,
                     "method": method,
-                    "trace_id": trace_id,
                 }
             )
             
@@ -84,7 +74,6 @@ class LlmClient(BaseClient):
                 metadata={
                     "status_code": e.response.status_code,
                     "endpoint": endpoint,
-                    "trace_id": trace_id,
                 }
             )
             raise LlmAPIError(f"HTTP {e.response.status_code}: {e.response.text}") from e
@@ -95,7 +84,6 @@ class LlmClient(BaseClient):
                 metadata={
                     "endpoint": endpoint,
                     "error_type": type(e).__name__,
-                    "trace_id": trace_id,
                 }
             )
             raise LlmAPIError(str(e)) from e
@@ -105,5 +93,5 @@ class LlmClient(BaseClient):
         name="llama.client.health",
     )
     def health(self):
-        return self._request("GET", _sdk_settings.llm.endpoints.health)
+        return self._request("GET", self._settings.llm.endpoints.health)
     

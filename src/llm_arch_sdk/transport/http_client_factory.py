@@ -2,7 +2,7 @@ from typing import Dict, Mapping, Optional
 import httpx
 import logging
 
-from ..config.settings import _sdk_settings
+from ..config.settings import get_sdk_settings
 
 logger = logging.getLogger("llm.sdk.transport.http_client_factory")
 
@@ -10,9 +10,10 @@ class HttpClientFactory:
 
     @classmethod
     def _default_headers(cls, extra: Optional[Mapping[str, str]] = None) -> Dict[str, str]:
+        settings = get_sdk_settings()
         headers = {
-            "Accept": _sdk_settings.identity.accept,
-            "User-Agent": _sdk_settings.identity.user_agent,
+            "Accept": settings.identity.accept,
+            "User-Agent": settings.identity.user_agent,
         }
         if extra:
             headers.update(extra)

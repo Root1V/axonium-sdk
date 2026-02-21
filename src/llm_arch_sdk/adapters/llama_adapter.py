@@ -3,11 +3,12 @@ import logging
 from typing import Any, Dict, List
 
 from langfuse import observe
+from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 
-from .base_llm_adapter import BaseLLMAdapter
+from .base_llm_adapter import BaseLLMAdapter, LLMAdapterType, LLMOperation
 from ..client.llm_client import LlmClient
 from ..transport.auth_http_client_factory import AuthHttpClientFactory
-from ..config.settings import _sdk_settings
+from ..config.settings import get_sdk_settings
 
 logger = logging.getLogger("llm.sdk.adapters.llama")
 
@@ -20,11 +21,13 @@ class LlamaAdapter(BaseLLMAdapter):
     def __init__(
         self,
         base_url: str | None = None,
-        timeout: float = 60.0,
+        timeout: float = None,
+        settings = None,
         **client_kwargs,
     ):
-        self.base_url = base_url or _sdk_settings.llm.base_url
-        self.timeout = timeout or _sdk_settings.transport.timeout_seconds
+        self._settings = settings or get_sdk_settings()
+        self.base_url = base_url or self._settings.llm.base_url
+        self.timeout = timeout or self._settings.transport.timeout_seconds
         self.client_kwargs = client_kwargs
 
         self._validate_config()
@@ -49,6 +52,19 @@ class LlamaAdapter(BaseLLMAdapter):
 
     @observe(name="adapter.llama.chat")
     def chat(self, model: str, messages: List[Dict[str, Any]], **kwargs):
+        
+        sdk_metadata = build_sdk_metadata(
+            adapter=LLMAdapterType.LLAMA,
+            operation=LLMOperation.CHAT,
+            model=model
+        )
+        sdk_tags = build_sdk_tags(model)
+        obs.update(
+            input=messages,
+            metadata=sdk_metadata,
+            tags=sdk_tags
+        )
+        
         return self._client.chat.create(
             model=model,
             messages=messages,
@@ -57,6 +73,17 @@ class LlamaAdapter(BaseLLMAdapter):
 
     @observe(name="adapter.llama.completions")
     def completions(self, model: str, prompt: str, **kwargs):
+        sdk_metadata = build_sdk_metadata(
+            adapter=LLMAdapterType.LLAMA,
+            operation=LLMOperation.COMPLETIONS,
+            model=model
+        )
+        sdk_tags = build_sdk_tags(model)
+        obs.update(
+            input=prompt,
+            metadata=sdk_metadata,
+            tags=sdk_tags
+        )   
         return self._client.completions.create(
             model=model,
             prompt=prompt,
@@ -65,6 +92,17 @@ class LlamaAdapter(BaseLLMAdapter):
 
     @observe(name="adapter.llama.embeddings")
     def embeddings(self, model: str, input: Any, **kwargs):
+        sdk_metadata = build_sdk_metadata(
+            adapter=LLMAdapterType.LLAMA,
+            operation=LLMOperation.EMBEDDINGS,
+            model=model
+        )
+        sdk_tags = build_sdk_tags(model)
+        obs.update(
+            input=input,
+            metadata=sdk_metadata,
+            tags=sdk_tags
+        )
         return self._client.embeddings.create(
             model=model,
             input=input,
@@ -73,6 +111,13 @@ class LlamaAdapter(BaseLLMAdapter):
 
     @observe(name="adapter.llama.health", capture_input=False, capture_output=False)
     def health(self) -> Dict[str, Any]:
+        sdk_metadata = build_sdk_metadata(
+            adapter=LLMAdapterType.LLAMA,
+            operation=LLMOperation.HEALTH,
+        )
+        obs.update(
+            metadata=sdk_metadata,
+        )
         return self._client.health()
     
     def _validate_config(self):

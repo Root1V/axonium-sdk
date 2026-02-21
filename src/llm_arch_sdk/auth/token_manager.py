@@ -9,7 +9,7 @@ from ..transport.http_client_factory import HttpClientFactory
 from langfuse import observe
 from llm_arch_sdk.observability.context import obs
 
-from ..config.settings import _sdk_settings
+from ..config.settings import get_sdk_settings
 
 logger = logging.getLogger("llm.sdk.auth.token_manager")
 
@@ -19,18 +19,19 @@ class AuthError(Exception):
 
 
 class TokenManager(httpx.Auth):
-    def __init__(self, timeout: float = None):
-        self.base_url = _sdk_settings.llm.base_url
-        self.username = _sdk_settings.llm.username
-        self.password = _sdk_settings.llm.password
-        self.timeout  = timeout or _sdk_settings.auth.token_timeout
-
+    def __init__(self, timeout: float = None, settings = None):
+        self._settings = settings or get_sdk_settings()
+        self.s_llm = self._settings.llm
+        self.s_auth = self._settings.auth
+        self.s_circuit = self._settings.circuit_breaker
+        self.s_timeout = timeout or self.s_auth.token_timeout
+        
         self._validate()
 
         self.token: Optional[str] = None
         self._lock = threading.Lock()
 
-        self._login_client = HttpClientFactory.create(timeout=self.timeout)
+        self._login_client = HttpClientFactory.create(timeout=self.s_timeout)
         self._circuit = CircuitBreaker()
 
     @observe(
@@ -52,7 +53,7 @@ class TokenManager(httpx.Auth):
             )
 
         # 2 Adjuntar token
-        request.headers["Authorization"] = f"Bearer {self.token}"
+        request.headers[self.s_auth.header_token] = f"{self.s_auth.token_prefix} {self.token}"
         obs.update(
             metadata={"auth.token_attached": True}
         )
@@ -61,7 +62,7 @@ class TokenManager(httpx.Auth):
         response = yield request
 
         # 4️ Retry UNA vez si token expiró
-        if response.status_code == HTTPStatus.UNAUTHORIZED and not request.headers.get(_sdk_settings.circuit_breaker.retry_header):
+        if response.status_code == HTTPStatus.UNAUTHORIZED and not request.headers.get(self.s_circuit.retry_header):
             logger.warning("401 recibido, refrescando token")
 
             obs.update(
@@ -71,8 +72,8 @@ class TokenManager(httpx.Auth):
             with self._lock:
                 self.token = self._login()
 
-            request.headers["Authorization"] = f"Bearer {self.token}"
-            request.headers[_sdk_settings.circuit_breaker.retry_header] = _sdk_settings.circuit_breaker.retry_value
+            request.headers[self.s_auth.header_token] = f"{self.s_auth.token_prefix} {self.token}"
+            request.headers[self.s_circuit.retry_header] = self.s_circuit.retry_value
 
             yield request
 
@@ -88,23 +89,23 @@ class TokenManager(httpx.Auth):
             raise AuthError("Circuit breaker abierto: login bloqueado")
 
         try:
-            login_endpoint = _sdk_settings.llm.endpoints.login
             obs.update(
-                metadata={"login.endpoint": login_endpoint}
+                metadata={"login.endpoint": self.s_llm.endpoints.login}
             )
             resp = self._login_client.post(
-                f"{self.base_url}{login_endpoint}",
-                auth=(self.username, self.password),
+                f"{self.s_llm.base_url}{self.s_llm.endpoints.login}",
+                auth=(self.s_llm.username, self.s_llm.password),
             )
             resp.raise_for_status()
 
             data = resp.json()
-            token = data.get("token")
+            token = data.get(self.s_auth.name_token)
 
             if not token:
                 raise AuthError("Login exitoso pero sin token")
 
             self._circuit.record_success()
+            
             return token
 
         except httpx.TimeoutException as e:
@@ -145,9 +146,9 @@ class TokenManager(httpx.Auth):
             raise AuthError("Error inesperado durante login") from e
     
     def _validate(self):
-        if not self.base_url:
+        if not self.s_llm.base_url:
             raise RuntimeError("LLM_BASE_URL no configurada")
-        if not self.username:
+        if not self.s_llm.username:
             raise RuntimeError("LLM_USERNAME no configurado")
-        if not self.password:
+        if not self.s_llm.password:
             raise RuntimeError("LLM_PASSWORD no configurado")

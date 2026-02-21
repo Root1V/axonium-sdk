@@ -2,7 +2,7 @@ from typing import Dict, Optional, Any
 import logging
 
 from .bootstrap import get_langfuse_client
-from ..config.settings import _sdk_settings
+from ..config.settings import get_sdk_settings
 
 
 logger = logging.getLogger("llm.sdk.observability.context")
@@ -17,6 +17,7 @@ class ObservabilityContext:
 
     def __init__(self):
         self._client = get_langfuse_client()
+        self._settings = get_sdk_settings()
 
     def update(self, **kwargs) -> None:
         """
@@ -34,7 +35,7 @@ class ObservabilityContext:
         try:
             # Default solo para user_id si no se proporciona
             if "user_id" not in kwargs:
-                kwargs["user_id"] = _sdk_settings.llm.username
+                kwargs["user_id"] = self._settings.llm.username
 
             # Pasar todo directamente a Langfuse
             self._client.update_current_trace(**kwargs)
@@ -67,11 +68,12 @@ def build_sdk_metadata(
     Returns:
         Dict con metadata técnica del SDK + metadata custom
     """
+    settings = get_sdk_settings()
     metadata = {
-        "sdk.name": _sdk_settings.identity.name,
-        "sdk.version": _sdk_settings.identity.mversion,
-        "llm.base_url": _sdk_settings.llm.base_url,
-        "llm.timeout": _sdk_settings.transport.timeout_seconds,
+        "sdk.name": settings.identity.name,
+        "sdk.version": settings.identity.mversion,
+        "llm.base_url": settings.llm.base_url,
+        "llm.timeout": settings.transport.timeout_seconds,
     }
     
     if adapter:

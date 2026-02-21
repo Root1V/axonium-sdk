@@ -2,7 +2,7 @@ import httpx
 import logging
 from ..auth.token_manager import TokenManager
 from .http_client_factory import HttpClientFactory
-from ..config.settings import _sdk_settings
+from ..config.settings import get_sdk_settings
 
 logger = logging.getLogger("llm.sdk.transport.auth_http_client_factory")
 
@@ -17,7 +17,7 @@ class AuthHttpClientFactory(HttpClientFactory):
     ) -> httpx.Client:
             
         auth = auth or TokenManager()
-        timeout = timeout or _sdk_settings.transport.timeout_seconds
+        timeout = timeout or get_sdk_settings().auth.token_timeout
 
         headers = cls._default_headers(extra_headers)
 

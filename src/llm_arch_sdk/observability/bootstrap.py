@@ -2,7 +2,7 @@ import logging
 import os
 
 logger = logging.getLogger("llm.sdk.observability.langfuse")
-from ..config.settings import _sdk_settings
+from ..config.settings import get_sdk_settings
 from .helpers import apply_masking
 
 
@@ -11,20 +11,23 @@ _langfuse_client = None
 
 def _mask_for_langfuse(data):
     """Aplica masking si está habilitado, sino retorna data sin cambios"""
-    if not _sdk_settings.observability.enabled:
+    settings = get_sdk_settings()
+    if not settings.observability.enabled:
         return data
-    return apply_masking(data, _sdk_settings.observability.masking_strategies)
+    return apply_masking(data, settings.observability.masking_strategies)
 
 
 def get_langfuse_client():
     global _langfuse_client
+    settings = get_sdk_settings()
+    s_otel = settings.otel
 
     if _langfuse_client is not None:
         return _langfuse_client
 
     # Configurar OpenTelemetry service.name antes de importar Langfuse
-    if not os.getenv("OTEL_SERVICE_NAME"):
-        os.environ["OTEL_SERVICE_NAME"] = _sdk_settings.otel.service_name
+    if not os.getenv(s_otel.env_name):
+        os.environ[s_otel.env_name] = s_otel.service_name
 
     try:
         from langfuse import Langfuse
@@ -32,32 +35,28 @@ def get_langfuse_client():
         logger.warning("Langfuse not installed: %s", exc)
         return None
 
-    public_key = _sdk_settings.langfuse.public_key
-    secret_key = _sdk_settings.langfuse.secret_key
-    host = _sdk_settings.langfuse.base_url
-    environment = _sdk_settings.langfuse.environment
-    release = _sdk_settings.langfuse.release
+    s_langfuse = settings.langfuse
 
-    if not public_key or not secret_key or not host:
+    if not s_langfuse.public_key or not s_langfuse.secret_key or not s_langfuse.base_url:
         logger.info("Langfuse disabled (missing env vars)")
         return None
 
     try:
         _langfuse_client = Langfuse(
-            public_key=public_key,
-            secret_key=secret_key,
-            host=host,
-            environment=environment,
-            release=release,
+            public_key=s_langfuse.public_key,
+            secret_key=s_langfuse.secret_key,
+            host=s_langfuse.base_url,
+            environment=s_langfuse.environment,
+            release=s_langfuse.release,
             mask=_mask_for_langfuse,
         )
         
         logger.info(
             "Langfuse client initialized [env=%s, release=%s, service=%s, masking=%s]",
-            environment,
-            release,
-            _sdk_settings.otel.service_name,
-            _sdk_settings.observability.enabled
+            s_langfuse.environment,
+            s_langfuse.release,
+            s_otel.service_name,
+            settings.observability.enabled
         )
 
     except Exception as exc:

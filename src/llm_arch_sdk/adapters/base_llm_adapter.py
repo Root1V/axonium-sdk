@@ -1,6 +1,20 @@
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import Any, Dict, List
 
+
+class LLMAdapterType(Enum):
+    LLAMA = "llama"  
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic" 
+
+
+class LLMOperation(Enum):
+    CHAT = "chat"
+    COMPLETIONS = "completions"
+    EMBEDDINGS = "embeddings"
+    HEALTH = "health"
+    
 
 class BaseLLMAdapter(ABC):
     """

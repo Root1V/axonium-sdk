@@ -73,6 +73,7 @@ class LangfuseEnv:
 @dataclass
 class OtelEnv:
     service_name: str = field(default_factory=lambda: f"{_SDK_NAME}:{version(_SDK_NAME)}")
+    env_name : str = "OTEL_SERVICE_NAME"
 
 
 
@@ -88,6 +89,9 @@ class TransportSettings:
 @dataclass
 class AuthSettings:
     token_timeout: float = 10.0
+    name_token: str = "token"
+    header_token: str = "Authorization"
+    token_prefix: str = "Bearer"
 
 # -------------------------
 # Circuit breaker

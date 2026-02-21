@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 
 from .base_client import BaseClient
-from ..config.settings import _sdk_settings
+from ..config.settings import get_sdk_settings
 from langfuse import observe
 from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 
@@ -14,6 +14,7 @@ logger = logging.getLogger("llama.embeddings")
 class Embeddings:
     def __init__(self, client: BaseClient):
         self._client = client
+        self._settings = get_sdk_settings()
 
     @observe(
         name="llama.embeddings.create",
@@ -49,7 +50,7 @@ class Embeddings:
         try:
             return self._client._request(
                 "POST",
-                _sdk_settings.llm.endpoints.embeddings,
+                self._settings.llm.endpoints.embeddings,
                 json=payload,
             )
         except Exception as exc:
