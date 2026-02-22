@@ -2,6 +2,8 @@ import httpx
 import logging
 from http import HTTPStatus
 
+from llm_arch_sdk.models.health import Health
+
 from .base_client import BaseClient
 from .chat_completions import ChatCompletions
 from .completions import Completions
@@ -93,5 +95,8 @@ class LlmClient(BaseClient):
         name="llama.client.health",
     )
     def health(self):
-        return self._request("GET", self._settings.llm.endpoints.health)
+        raw = self._request("GET", self._settings.llm.endpoints.health)
+        logger.debug("llama.client.health response %s", raw)
+
+        return Health.from_dict(raw)
     

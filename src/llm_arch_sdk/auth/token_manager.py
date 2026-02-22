@@ -34,10 +34,11 @@ class TokenManager(httpx.Auth):
         self._login_client = HttpClientFactory.create(timeout=self.s_timeout)
         self._circuit = CircuitBreaker()
 
-    @observe(
-        name="llm.auth.flow",
-    )
     def auth_flow(self, request):
+        # NOTE: @observe no puede decorar generadores (usa yield); Langfuse v3
+        # envuelve generadores en _ContextPreservedSyncGeneratorWrapper que no
+        # implementa .send(), rompiendo el protocolo de httpx.Auth.
+        # La trazabilidad de auth se cubre a través de @observe en _login.
         # 1 Asegurar token (thread-safe)
         if not self.token:
             with self._lock:

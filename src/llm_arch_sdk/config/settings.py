@@ -42,7 +42,7 @@ class LlmEndpoints:
     completions: str = "/llm/completions"
     chat_completions: str = "/llm/chat/completions"
     embeddings: str = "/v1/embeddings"
-    health: str = "/health"
+    health: str = "/llm/health"
 
 
 @dataclass

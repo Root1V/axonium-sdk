@@ -31,7 +31,7 @@ def example_health(adapter: LlamaAdapter):
     print("\n🔍 Probando Health Check...")
     try:
         health_response = adapter.health()
-        print("✅ Health check exitoso:")
+        print("✅ Health check exitoso:", health_response)
         print(f"   Estado: {health_response.status}")
         print(f"   Versión del servidor: {health_response.version}")
     except Exception as e:
@@ -42,12 +42,13 @@ def example_chat_completions(adapter: LlamaAdapter):
     try:
         # El SDK detecta automáticamente adapter/operation/model
         # Solo necesitas pasar metadata/tags de negocio si las necesitas
-        chat_response = adapter.chat(
-            model="llama-7b",  
-            messages=[
+        messages=[
                 {"role": "system", "content": "Eres un asistente útil."},
                 {"role": "user", "content": "Hola, ¿cuál es la capital de Francia?"}
-            ],
+        ]
+        
+        chat_response = adapter.chat(
+            messages=messages,
             max_tokens=100,
             temperature=0.7,
             # Opcional: metadata custom de negocio
@@ -55,26 +56,30 @@ def example_chat_completions(adapter: LlamaAdapter):
             trace_tags=["demo-user"]
         )
         print("✅ Chat completion exitoso:")
+        print(f"   Pregunta: {messages[1]['content']}")
         print(f"   Respuesta: {chat_response.choices[0].message.content}")
         print(f"   Modelo usado: {chat_response.model}")
         print(f"   Tokens usados: {chat_response.usage.total_tokens}")
     except Exception as e:
         print(f"⚠️  Chat completion falló: {e}")
+        raise e  # Re-raise para que se vea el stack trace en la demo
         
 def example_text_completions(adapter: LlamaAdapter):
     print("\n✍️  Probando Text Completions...")
     try:
         # El SDK detecta automáticamente adapter/operation/model
+        prompt="Escribe un poema corto sobre la inteligencia artificial."
+        
         completion_response = adapter.completions(
-            model="llama-7b",
-            prompt="Escribe un poema corto sobre la inteligencia artificial.",
+            prompt=prompt,
             temperature=0.7,
-            n_predict=50,
+            n_predict=100,
             # Opcional: metadata custom de negocio
             # Opcional: tags custom de negocio
             trace_tags=["creative"]
         )
         print("✅ Text completion exitoso:")
+        print(f"   Prompt: {prompt}")
         print(f"   Respuesta: {completion_response.content.strip()}")
         print(f"   Modelo usado: {completion_response.model}")
         print(f"   Tokens usados: {completion_response.tokens_predicted}")
@@ -87,7 +92,6 @@ def example_embeddings(adapter: LlamaAdapter):
     try:
         # El SDK detecta automáticamente adapter/operation/model
         response = adapter.embeddings(
-            model="llama-embedding-7b",
             input=["Inteligencia artificial", "Aprendizaje automático"],
             # Opcional: metadata custom de negocio
             # Opcional: tags custom de negocio
@@ -118,25 +122,28 @@ def main():
     print("🚀 Probando LLM Arch SDK - LLMAdapter")
 
     try:
-        # Crear adapter con parámetros personalizados
-        with propagate_attributes(session_id=new_session_id(), version="1.0"):
-            adapter = LlamaAdapter(
-                timeout=60.0,
-            )
-            print("✅ Adapter creado exitosamente")
+        adapter = LlamaAdapter(
+            model="Mixtra-7B-Instruct-v0.1.Q4_0.gguf",
+            timeout=60.0,
+        )
+        print("✅ Adapter creado exitosamente")
 
+        # propagate_attributes solo funciona como decorador en Langfuse v3
+        @propagate_attributes(session_id=new_session_id(), version="1.0")
+        def run():
             example_health(adapter)
             example_chat_completions(adapter)
             example_text_completions(adapter)
             example_embeddings(adapter)
-        
+
+        run()
+
         print("\n🎉 Prueba completada!")
 
     except Exception as e:
         print(f"❌ Error en la prueba: {e}")
-        return 1
+        raise e
 
-    return 0
 
 if __name__ == "__main__":
-    exit(main())
+    main()
