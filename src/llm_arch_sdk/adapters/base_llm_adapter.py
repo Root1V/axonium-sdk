@@ -29,7 +29,6 @@ class BaseLLMAdapter(ABC):
     @abstractmethod
     def chat(
         self,
-        model: str,
         messages: List[Dict[str, Any]],
         **kwargs,
     ) -> Any:
@@ -39,7 +38,6 @@ class BaseLLMAdapter(ABC):
     @abstractmethod
     def completions(
         self,
-        model: str,
         prompt: str,
         **kwargs,
     ) -> Any:
@@ -49,7 +47,6 @@ class BaseLLMAdapter(ABC):
     @abstractmethod
     def embeddings(
         self,
-        model: str,
         input: Any,
         **kwargs,
     ) -> Any:

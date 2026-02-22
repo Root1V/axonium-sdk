@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 from openai import OpenAI
-from langfuse import observe
+from ..observability.bootstrap import observe
 
 from .base_llm_adapter import BaseLLMAdapter, LLMAdapterType, LLMOperation
 from ..transport.auth_http_client_factory import AuthHttpClientFactory
@@ -21,11 +21,13 @@ class OpenAIAdapter(BaseLLMAdapter):
 
     def __init__(
         self,
+        model: str,
         base_url: str | None = None,
         timeout: float = None,
         settings = None,
         **client_kwargs,
     ):
+        self._model = model
         self._settings = settings or get_sdk_settings()
         self.base_url = base_url or self._settings.llm.base_url
         self.timeout = timeout or self._settings.transport.timeout_seconds
@@ -55,13 +57,13 @@ class OpenAIAdapter(BaseLLMAdapter):
     
 
     @observe(name="adapter.openai.chat")
-    def chat(self, model: str, messages: List[Dict[str, Any]], **kwargs):
+    def chat(self, messages: List[Dict[str, Any]], **kwargs):
         sdk_metadata = build_sdk_metadata(
             adapter=LLMAdapterType.OPENAI,
             operation=LLMOperation.CHAT,
-            model=model
+            model=self._model
         )
-        sdk_tags = build_sdk_tags(model)
+        sdk_tags = build_sdk_tags(self._model)
         obs.update(
             input=messages,
             metadata=sdk_metadata,
@@ -69,45 +71,45 @@ class OpenAIAdapter(BaseLLMAdapter):
         )
         
         return self._client.chat.completions.create(
-            model=model,
+            model=self._model,
             messages=messages,
             **kwargs,
         )
 
     @observe(name="adapter.openai.completions")
-    def completions(self, model: str, prompt: str, **kwargs):
+    def completions(self, prompt: str, **kwargs):
         sdk_metadata = build_sdk_metadata(
             adapter=LLMAdapterType.OPENAI,
             operation=LLMOperation.COMPLETIONS,
-            model=model
+            model=self._model
         )
-        sdk_tags = build_sdk_tags(model)
+        sdk_tags = build_sdk_tags(self._model)
         obs.update(
             input=prompt,
             metadata=sdk_metadata,
             tags=sdk_tags
         )
         return self._client.completions.create(
-            model=model,
+            model=self._model,
             prompt=prompt,
             **kwargs,
         )
 
     @observe(name="adapter.openai.embeddings")
-    def embeddings(self, model: str, input: Any, **kwargs):
+    def embeddings(self, input: Any, **kwargs):
         sdk_metadata = build_sdk_metadata(
             adapter=LLMAdapterType.OPENAI,
             operation=LLMOperation.EMBEDDINGS,
-            model=model
+            model=self._model
         )
-        sdk_tags = build_sdk_tags(model)
+        sdk_tags = build_sdk_tags(self._model)
         obs.update(
             input=input,
             metadata=sdk_metadata,
             tags=sdk_tags
         )
         return self._client.embeddings.create(
-            model=model,
+            model=self._model,
             input=input,
             **kwargs,
         )

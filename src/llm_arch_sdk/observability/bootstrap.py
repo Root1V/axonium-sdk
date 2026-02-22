@@ -1,10 +1,10 @@
 import logging
 import os
 
-logger = logging.getLogger("llm.sdk.observability.langfuse")
 from ..config.settings import get_sdk_settings
 from .helpers import apply_masking
 
+logger = logging.getLogger("llm.sdk.observability.langfuse")
 
 _langfuse_client = None
 
@@ -20,6 +20,12 @@ def _mask_for_langfuse(data):
 def get_langfuse_client():
     global _langfuse_client
     settings = get_sdk_settings()
+    
+    # Si observabilidad está deshabilitada, no inicializar Langfuse
+    if not settings.observability.enabled:
+        logger.info("Langfuse disabled (observability.enabled=False)")
+        return None
+    
     s_otel = settings.otel
 
     if _langfuse_client is not None:
@@ -64,3 +70,50 @@ def get_langfuse_client():
         _langfuse_client = None
 
     return _langfuse_client
+
+
+# -------------------------
+# Decorador condicional
+# -------------------------
+
+_observability_warning_shown = False  # Flag para mostrar advertencia solo una vez
+
+def observe(**kwargs):
+    """
+    Decorador condicional que solo aplica observabilidad si está habilitada.
+    
+    Si observability.enabled=False, retorna la función sin modificar.
+    Si observability.enabled=True, aplica el decorador @observe de Langfuse.
+    
+    IMPORTANTE: Este decorador se evalúa en tiempo de importación del módulo,
+    no en tiempo de ejecución de la función. La configuración de observabilidad
+    se lee una vez cuando se importa el módulo.
+    """
+    settings = get_sdk_settings()
+    
+    def decorator(func):
+        global _observability_warning_shown
+        
+        # Si observabilidad está deshabilitada, retornar función sin modificar
+        if not settings.observability.enabled:
+            # Mostrar advertencia INFO solo la primera vez
+            if not _observability_warning_shown:
+                logger.info(
+                    "⚠️  Observability disabled - @observe decorators are no-ops "
+                    "(change OBSERVABILITY_ENABLED=True to enable Langfuse tracing)"
+                )
+                _observability_warning_shown = True
+            
+            # Log DEBUG para cada función (para debugging detallado)
+            logger.debug("Skipping @observe for %s (observability disabled)", func.__name__)
+            return func
+        
+        # Si está habilitada, intentar importar y aplicar decorador de Langfuse
+        try:
+            from langfuse import observe as langfuse_observe
+            return langfuse_observe(**kwargs)(func)
+        except ImportError:
+            logger.warning("Langfuse not installed, skipping @observe for %s", func.__name__)
+            return func
+    
+    return decorator

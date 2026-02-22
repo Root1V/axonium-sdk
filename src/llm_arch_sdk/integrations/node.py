@@ -1,4 +1,4 @@
-from ..langchain.runnable import SDKChatRunnable, SDKCompletionsRunnable, SDKEmbeddingsRunnable
+from .runnable import SDKChatRunnable, SDKCompletionsRunnable, SDKEmbeddingsRunnable
 
 
 class ChatNode:

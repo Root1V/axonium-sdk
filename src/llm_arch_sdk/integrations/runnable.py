@@ -3,7 +3,7 @@
 from typing import Any, Dict, List, Optional, Union
 from langchain_core.runnables import Runnable
 from langchain_core.messages import BaseMessage
-from ...adapters.base_llm_adapter import BaseLLMAdapter
+from ..adapters.base_llm_adapter import BaseLLMAdapter
 
 
 class SDKChatRunnable(Runnable):

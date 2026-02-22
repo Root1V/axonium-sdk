@@ -7,12 +7,14 @@ from ..config.settings import get_sdk_settings
 
 logger = logging.getLogger("llm.sdk.observability.context")
 
+# Flag global para mostrar advertencia solo una vez
+_observability_disabled_warning_shown = False
+
 class ObservabilityContext:
     """
     Wrapper simple para update_current_trace de Langfuse.
     
-    IMPORTANTE: No genera session_id automáticamente.
-    El consumidor debe usar propagate_attributes() al inicio del flujo.
+    IMPORTANTE: El consumidor debe usar propagate_attributes() al inicio del flujo.
     """
 
     def __init__(self):
@@ -26,10 +28,17 @@ class ObservabilityContext:
         Acepta cualquier parámetro que soporte update_current_trace():
         - user_id, tags, metadata, input, output, etc.
         
-        NOTA: NO genera session_id automáticamente. Usa propagate_attributes()
-        en tu código para establecer session_id y otros atributos de contexto.
+        NOTA: Usa propagate_attributes() en tu código para establecer session_id y otros atributos de contexto.
         """
+        global _observability_disabled_warning_shown
+        
+        # Si Langfuse no está habilitado, registrar en logs
         if not self._client:
+            # Mostrar advertencia solo la primera vez
+            if not _observability_disabled_warning_shown:
+                logger.info("⚠️  Langfuse Observability disabled - use logged instead")
+                _observability_disabled_warning_shown = True
+        
             return
 
         try:

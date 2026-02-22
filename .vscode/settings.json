@@ -1,5 +1,6 @@
 {
     "chat.tools.terminal.autoApprove": {
         "git -C /Users/emericespiritusantiago/Documents/Projects/llm_arch_sdk": true
-    }
+    },
+    "python-envs.pythonProjects": []
 }

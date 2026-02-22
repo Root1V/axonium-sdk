@@ -7,7 +7,7 @@ from .chat_completions import ChatCompletions
 from .completions import Completions
 from .embeddings import Embeddings
 from ..transport.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
-from langfuse import observe
+from ..observability.bootstrap import observe
 from ..config.settings import get_sdk_settings
 from llm_arch_sdk.observability.context import obs
 

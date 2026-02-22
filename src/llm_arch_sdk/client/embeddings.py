@@ -4,7 +4,7 @@ from typing import Optional
 
 from .base_client import BaseClient
 from ..config.settings import get_sdk_settings
-from langfuse import observe
+from ..observability.bootstrap import observe
 from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 
 
@@ -32,8 +32,7 @@ class Embeddings:
         
         # Construir metadata automáticamente (SDK info + operación + custom)
         sdk_metadata = build_sdk_metadata(
-            adapter=self._client.adapter_type,
-            operation="embedding",
+            operation="embedding2",
             model=model,
             **(trace_metadata or {})
         )

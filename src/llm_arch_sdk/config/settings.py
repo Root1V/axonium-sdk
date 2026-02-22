@@ -15,7 +15,9 @@ _SDK_NAME = "llm-arch-sdk"
 
 @dataclass
 class ObservabilitySettings:
-    enabled: bool = True
+    enabled: bool = field(
+        default_factory=lambda: os.getenv("OBSERVABILITY_ENABLED", "false").lower() in ("true", "1", "yes")
+    )
 
     provider: str = "langfuse"
 

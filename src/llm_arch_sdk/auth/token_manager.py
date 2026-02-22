@@ -6,7 +6,7 @@ from typing import Optional
 
 from ..transport.circuit_breaker import CircuitBreaker
 from ..transport.http_client_factory import HttpClientFactory
-from langfuse import observe
+from ..observability.bootstrap import observe
 from llm_arch_sdk.observability.context import obs
 
 from ..config.settings import get_sdk_settings
@@ -86,6 +86,7 @@ class TokenManager(httpx.Auth):
             obs.update(
                 metadata={"circuit": self._circuit.state.value, "blocked": True}
             )
+            logger.error("Circuit breaker abierto: login bloqueado")
             raise AuthError("Circuit breaker abierto: login bloqueado")
 
         try:
@@ -102,6 +103,7 @@ class TokenManager(httpx.Auth):
             token = data.get(self.s_auth.name_token)
 
             if not token:
+                logger.error("Login exitoso pero sin token")
                 raise AuthError("Login exitoso pero sin token")
 
             self._circuit.record_success()

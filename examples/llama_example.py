@@ -18,29 +18,31 @@ from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
 from llm_arch_sdk.observability.helpers import new_session_id
 from langfuse import propagate_attributes
 
-
-# Configurar logging para ver los logs del SDK
+# Configurar logging ANTES de importar el SDK para ver todos los mensajes
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+# Reducir warnings del wrapper Langfuse
+logging.getLogger("langfuse").setLevel(logging.ERROR)
 
-def example_health(client):
+
+def example_health(adapter: LlamaAdapter):
     print("\n🔍 Probando Health Check...")
     try:
-        health_response = client.health()
+        health_response = adapter.health()
         print("✅ Health check exitoso:")
         print(f"   Estado: {health_response.status}")
         print(f"   Versión del servidor: {health_response.version}")
     except Exception as e:
         print(f"⚠️  Health check falló: {e}")
         
-def example_chat_completions(client):
+def example_chat_completions(adapter: LlamaAdapter):
     print("\n📝 Probando Chat Completions...")
     try:
         # El SDK detecta automáticamente adapter/operation/model
         # Solo necesitas pasar metadata/tags de negocio si las necesitas
-        chat_response = client.chat.create(
+        chat_response = adapter.chat(
             model="llama-7b",  
             messages=[
                 {"role": "system", "content": "Eres un asistente útil."},
@@ -59,11 +61,12 @@ def example_chat_completions(client):
     except Exception as e:
         print(f"⚠️  Chat completion falló: {e}")
         
-def example_text_completions(client):
+def example_text_completions(adapter: LlamaAdapter):
     print("\n✍️  Probando Text Completions...")
     try:
         # El SDK detecta automáticamente adapter/operation/model
-        completion_response = client.completions.create(
+        completion_response = adapter.completions(
+            model="llama-7b",
             prompt="Escribe un poema corto sobre la inteligencia artificial.",
             temperature=0.7,
             n_predict=50,
@@ -78,12 +81,12 @@ def example_text_completions(client):
     except Exception as e:
         print(f"⚠️  Text completion falló: {e}")
         
-def example_embeddings(client):
+def example_embeddings(adapter: LlamaAdapter):
     # Probar embeddings
     print("\n🧠 Probando Embeddings...")
     try:
         # El SDK detecta automáticamente adapter/operation/model
-        response = client.embeddings.create(
+        response = adapter.embeddings(
             model="llama-embedding-7b",
             input=["Inteligencia artificial", "Aprendizaje automático"],
             # Opcional: metadata custom de negocio
@@ -118,18 +121,14 @@ def main():
         # Crear adapter con parámetros personalizados
         with propagate_attributes(session_id=new_session_id(), version="1.0"):
             adapter = LlamaAdapter(
-                timeout=60.0
+                timeout=60.0,
             )
             print("✅ Adapter creado exitosamente")
 
-            # Obtener cliente
-            client = adapter.client()
-            print("✅ Cliente LLM obtenido")
-            
-            example_health(client)
-            example_chat_completions(client)
-            example_text_completions(client)
-            example_embeddings(client)
+            example_health(adapter)
+            example_chat_completions(adapter)
+            example_text_completions(adapter)
+            example_embeddings(adapter)
         
         print("\n🎉 Prueba completada!")
 

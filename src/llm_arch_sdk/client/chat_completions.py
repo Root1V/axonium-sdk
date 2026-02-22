@@ -5,7 +5,7 @@ from typing import Optional
 from .base_client import BaseClient
 from ..models.chat_completion import ChatCompletionResult
 from ..config.settings import get_sdk_settings
-from langfuse import observe
+from ..observability.bootstrap import observe
 from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 
 logger = logging.getLogger("llama.chatcompletions")
@@ -27,7 +27,7 @@ class ChatCompletions:
         trace_metadata: Optional[dict] = None,
         trace_tags: Optional[list[str]] = None,
         **kwargs,
-    ):
+    ) -> ChatCompletionResult: 
         payload = {
             "model": model,
             "messages": messages,

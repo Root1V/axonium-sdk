@@ -5,7 +5,7 @@ from typing import Optional
 from .base_client import BaseClient
 from ..models.completion import CompletionResult
 from ..config.settings import get_sdk_settings
-from langfuse import observe
+from ..observability.bootstrap import observe
 from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 
 logger = logging.getLogger("llama.completions")
@@ -40,8 +40,7 @@ class Completions:
         
         # Construir metadata automáticamente (SDK info + operación + custom)
         sdk_metadata = build_sdk_metadata(
-            adapter=self._client.adapter_type,
-            operation="completion",
+            operation="completion2",
             model=kwargs.get("model"),
             temperature=temperature,
             n_predict=n_predict,

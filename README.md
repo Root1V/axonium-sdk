@@ -95,6 +95,63 @@ LLM_USERNAME=tu_usuario
 LLM_PASSWORD=tu_contraseña
 ```
 
+### Configuración de observabilidad (opcional)
+
+El SDK incluye soporte para observabilidad con **Langfuse**, pero es completamente **opcional**. Puedes controlar esto con la variable de entorno `OBSERVABILITY_ENABLED`.
+
+#### Modo 1: Observabilidad habilitada (por defecto)
+
+```bash
+# En tu .env
+OBSERVABILITY_ENABLED=True
+
+# Configuración de Langfuse (requerido si enabled=True)
+LANGFUSE_PUBLIC_KEY=tu_public_key
+LANGFUSE_SECRET_KEY=tu_secret_key
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+LANGFUSE_TRACING_ENVIRONMENT=production
+```
+
+Con observabilidad habilitada:
+- ✅ Se crea el cliente de Langfuse
+- ✅ Los decoradores `@observe()` capturan trazas
+- ✅ Se registra metadata automática (adapter, operation, model)
+- ✅ Se aplican estrategias de masking de datos sensibles
+
+#### Modo 2: Solo logs (sin Langfuse)
+
+```bash
+# En tu .env
+OBSERVABILITY_ENABLED=False
+```
+
+Con observabilidad deshabilitada:
+- ✅ No se instancia ningún cliente de Langfuse
+- ✅ Los decoradores `@observe()` se convierten en no-op (no rompen el código)
+- ✅ `obs.update()` registra metadata/tags en logs DEBUG en lugar de silenciarlos
+- ✅ Campos sensibles (input/output) se filtran automáticamente de los logs
+- ✅ Solo se usan logs estándar de Python
+- ✅ Reduce dependencias y overhead
+- ✅ Ideal para entornos de desarrollo o pruebas sin telemetría
+
+**Ejemplo de logs cuando observabilidad está deshabilitada:**
+
+```
+DEBUG - llm.sdk.observability.context - Observability disabled - logging trace info: 
+  {'metadata': {'operation': 'chat', 'model': 'llama-7b'}, 'tags': ['production']}
+```
+
+> **Nota importante**: Incluso con observabilidad deshabilitada, el SDK deja rastro de metadata y tags en logs. Los campos sensibles como `input` y `output` se filtran automáticamente para proteger datos privados.
+
+**Ejemplo de prueba:**
+
+```bash
+# Probar con observabilidad deshabilitada
+.venv/bin/python test_observability_disabled.py
+```
+
+**Nota**: Si `OBSERVABILITY_ENABLED=False`, no es necesario configurar las variables de Langfuse.
+
 ### Ejecutar ejemplos
 
 #### Ejemplo básico con Llama
