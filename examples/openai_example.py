@@ -10,10 +10,13 @@ Este script demuestra cómo usar el adapter de OpenAI para:
 
 import logging
 from dotenv import load_dotenv
+from llm_arch_sdk.observability.helpers import new_session_id
 
 load_dotenv()  # Carga variables de entorno desde .env
 
 from llm_arch_sdk.adapters.open_ai_adapter import OpenAIAdapter
+from langfuse import propagate_attributes
+
 
 # Configurar logging para ver los logs de Langfuse
 logging.basicConfig(
@@ -29,17 +32,18 @@ def example_chat_completions(adapter: OpenAIAdapter):
     # 1. Probar Chat Completions
     print("\n📝 Probando Chat Completions...")
     try:
-        chat_response = adapter.chat(
-            model="gpt-3.5-turbo",  
-            messages=[
+        messages=[
                 {"role": "system", "content": "Eres un asistente útil."},
-                {"role": "user", "content": "Hola, ¿cuál es la capital de Francia?"}
-            ],
+                {"role": "user", "content": "Hola, ¿cuál es la capital de Perú?"}
+            ]
+        chat_response = adapter.chat(
+            messages=messages,
             max_tokens=100,
             temperature=0.7,
         )
         
         print("✅ Chat completion exitoso:")
+        print(f"   Pregunta: {messages[1]['content']}")
         print(f"   Respuesta: {chat_response.choices[0].message.content}")
         print(f"   Modelo usado: {chat_response.model}")
         print(f"   Tokens usados: {chat_response.usage.total_tokens}")
@@ -51,14 +55,15 @@ def example_text_completions(adapter: OpenAIAdapter):
     # 2. Probar Text Completions
     print("\n✍️  Probando Text Completions...")
     try:
+        prompt="Escribe un poema corto sobre la inteligencia artificial."
         completion_response = adapter.completions(
-            model="text-davinci-003", 
-            prompt="Escribe un poema corto sobre la inteligencia artificial.",
+            prompt=prompt,
             max_tokens=50,
             temperature=0.7,
         )
     
         print("✅ Text completion exitoso:")
+        print(f"Prompt: {prompt}")
         print(f"   Respuesta: {completion_response.choices[0].text.strip()}")
         print(f"   Modelo usado: {completion_response.model}")
         print(f"   Tokens usados: {completion_response.usage.total_tokens}")
@@ -72,7 +77,6 @@ def example_embeddings(adapter: OpenAIAdapter):
     
     try:
         embedding_response = adapter.embeddings(
-            model="text-embedding-ada-002", 
             input=["Inteligencia artificial", "Aprendizaje automático"],
         )
         
@@ -82,19 +86,20 @@ def example_embeddings(adapter: OpenAIAdapter):
     except Exception as e:
         print(f"⚠️  Embeddings fallaron: {e}")
    
-
+@propagate_attributes(session_id=new_session_id(), version="2.0")
 def main():
     print("🚀 Probando LLM Arch SDK con OpenAI - Ejemplo completo")
     try:
         # Crear adapter con parámetros personalizados
         adapter = OpenAIAdapter(
-            timeout=60.0,
+            model="gpt-5.4-mini",  # Especificar modelo por defecto para todas las operaciones
+            timeout=50.0,
         )
         print("✅ OpenAI Adapter creado")
-        
         example_chat_completions(adapter)
         example_text_completions(adapter)
         example_embeddings(adapter)
+        
     except Exception as e:
         print(f"❌ Error en la prueba: {e}")
         return 1

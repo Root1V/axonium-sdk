@@ -91,9 +91,6 @@ class LlmClient(BaseClient):
             raise LlmAPIError(str(e)) from e
     
     
-    @observe(
-        name="llama.client.health",
-    )
     def health(self):
         raw = self._request("GET", self._settings.llm.endpoints.health)
         logger.debug("llama.client.health response %s", raw)

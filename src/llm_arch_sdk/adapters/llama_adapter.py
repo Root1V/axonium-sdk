@@ -52,7 +52,7 @@ class LlamaAdapter(BaseLLMAdapter):
         """
         return self._client
 
-    @observe(name="adapter.llama.chat")
+    @observe(name="adapter.llama.chat", as_type="generation")
     def chat(self, messages: List[Dict[str, Any]], **kwargs):
         
         sdk_metadata = build_sdk_metadata(
@@ -73,7 +73,7 @@ class LlamaAdapter(BaseLLMAdapter):
             **kwargs,
         )
 
-    @observe(name="adapter.llama.completions")
+    @observe(name="adapter.llama.completions", as_type="generation")
     def completions(self, prompt: str, **kwargs):
         sdk_metadata = build_sdk_metadata(
             adapter=LLMAdapterType.LLAMA,
@@ -92,7 +92,7 @@ class LlamaAdapter(BaseLLMAdapter):
             **kwargs,
         )
 
-    @observe(name="adapter.llama.embeddings")
+    @observe(name="adapter.llama.embeddings", as_type="generation")
     def embeddings(self, input: Any, **kwargs):
         sdk_metadata = build_sdk_metadata(
             adapter=LLMAdapterType.LLAMA,

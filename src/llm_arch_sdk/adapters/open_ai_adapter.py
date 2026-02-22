@@ -56,7 +56,7 @@ class OpenAIAdapter(BaseLLMAdapter):
         return self._client
     
 
-    @observe(name="adapter.openai.chat")
+    @observe(name="adapter.openai.chat", as_type="generation")
     def chat(self, messages: List[Dict[str, Any]], **kwargs):
         sdk_metadata = build_sdk_metadata(
             adapter=LLMAdapterType.OPENAI,
@@ -76,7 +76,7 @@ class OpenAIAdapter(BaseLLMAdapter):
             **kwargs,
         )
 
-    @observe(name="adapter.openai.completions")
+    @observe(name="adapter.openai.completions", as_type="generation")
     def completions(self, prompt: str, **kwargs):
         sdk_metadata = build_sdk_metadata(
             adapter=LLMAdapterType.OPENAI,
@@ -95,7 +95,7 @@ class OpenAIAdapter(BaseLLMAdapter):
             **kwargs,
         )
 
-    @observe(name="adapter.openai.embeddings")
+    @observe(name="adapter.openai.embeddings", as_type="generation")
     def embeddings(self, input: Any, **kwargs):
         sdk_metadata = build_sdk_metadata(
             adapter=LLMAdapterType.OPENAI,

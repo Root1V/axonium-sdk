@@ -93,9 +93,6 @@ def example_embeddings(adapter: LlamaAdapter):
         # El SDK detecta automáticamente adapter/operation/model
         response = adapter.embeddings(
             input=["Inteligencia artificial", "Aprendizaje automático"],
-            # Opcional: metadata custom de negocio
-            # Opcional: tags custom de negocio
-            trace_tags=["explore"]
         )
         print("✅ Embeddings exitoso:")
         

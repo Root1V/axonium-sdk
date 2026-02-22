@@ -24,6 +24,11 @@ class ObservabilitySettings:
     capture_input: bool = False
     capture_output: bool = False
 
+    # Habilitar/deshabilitar masking (guardrails)
+    masking_enabled: bool = field(
+        default_factory=lambda: os.getenv("MASKING_ENABLED", "false").lower() in ("true", "1", "yes")
+    )
+
     # hooks de masking registrados por nombre
     masking_strategies: List[str] = field(default_factory=lambda: [
         "mask_pii",

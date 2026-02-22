@@ -1,16 +1,17 @@
 import json
 import logging
 from typing import List, Optional, TypedDict
+from langfuse import propagate_attributes
 from langgraph.graph import StateGraph, END
 
 from dotenv import load_dotenv
+from llm_arch_sdk.observability.helpers import new_session_id
 from pydantic import BaseModel, Field
-
 
 load_dotenv()  # Carga variables de entorno desde .env
 
 from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
-from llm_arch_sdk.integrations.llm_runnable import LLMRunnable
+from llm_arch_sdk.integrations.agent import MiniAgent
 
 # Configurar logging ANTES de importar el SDK para ver todos los mensajes
 logging.basicConfig(
@@ -38,9 +39,9 @@ class RefinedCode(BaseModel):
 class ReflectionState(TypedDict):
     """Represents the state of our reflection graph."""
     user_request: str
-    draft: Optional[dict]
-    critique: Optional[dict]
-    refined_code: Optional[dict]
+    drafter: Optional[dict]
+    critic: Optional[dict]
+    refiner: Optional[dict]
     
 class JudgeLLMEvaluation(BaseModel):
     """Schema for evaluating a piece of code."""
@@ -49,135 +50,158 @@ class JudgeLLMEvaluation(BaseModel):
     style_score: int = Field(description="Score from 1-10 on code style and readability (PEP 8). ")
     justification: str = Field(description="A brief justification for the scores.")
 
-def make_generator_node(adapter):
-    """Factory that returns a generator node bound to `adapter`."""
-    def generator_node(state):
-        print("--- 1. Generating Initial Draft ---")
-        llm = LLMRunnable(adapter=adapter, output_model=DraftCode)
-        prompt = f"""You are an expert Python programmer. Write a Python function to solve the following request.
-            Provide a simple, clear implementation and an explanation.
-            
-            Request: {state['user_request']}
-            """
-        draft = llm.invoke({"messages": [{"role": "user", "content": prompt}], "temperature": 0.7, "max_tokens": 300})
-        print("✅ Draft Generated:\n", draft)
-        return {"draft": draft.model_dump()}
-    return generator_node
+# -------------------------
+# Prompt builders para cada agente
+# -------------------------
 
-def make_critic_node(adapter):
-    """Factory that returns a critic node bound to `adapter`."""
-    def critic_node(state):
-        print("--- 2. Critiquing Draft ---")
-        critic_llm = LLMRunnable(adapter=adapter, output_model=Critique)
-        code_to_critique = state['draft']['code']
-        prompt = f"""You are an expert code reviewer and senior Python developer. Your task is to perform a thorough critique of the following code.
-            Analyze the code for:
-            1.  **Bugs and Errors:** Are there any potential runtime errors, logical flaws, or edge cases that are not handled?
-            2.  **Efficiency and Best Practices:** Is this the most efficient way to solve the problem? Does it follow standard Python conventions (PEP 8)?
-            
-            Provide a structured critique with specific, actionable suggestions.
-            
-            Code to Review:
-            ```python
-            {code_to_critique}
-            ```
-            """
-        critique = critic_llm.invoke({"messages": [{"role": "user", "content": prompt}], "temperature": 0.9, "max_tokens": 900})
-        print(f"✅ Critique : {critique}")
-        return {"critique": critique.model_dump()}
-    return critic_node
+def build_generator_prompt(state):
+    """Construye el prompt para generar código inicial."""
+    
+    return f"""You are an expert Python programmer. Write a Python function to solve the following request.
+    Provide a simple, clear implementation and an explanation.
+    
+    Request: {state['user_request']}
+    """
 
-def make_refiner_node(adapter):
-    """Factory that returns a refiner node bound to `adapter`."""
-    def refiner_node(state):
-        print("--- 3. Refining Code ---")
-        refiner_llm = LLMRunnable(adapter=adapter, output_model=RefinedCode)
-        draft_code = state['draft']['code']
-        critique_suggestions = json.dumps(state['critique'], indent=2)
-        prompt = f"""You are an expert Python programmer tasked with refining a piece of code based on a critique.
-            Your goal is to rewrite the original code, implementing all the suggested improvements from the critique.
-            
-            **Original Code:**
-            ```python
-            {draft_code}
-            ```
-            
-            **Critique and Suggestions:**
-            {critique_suggestions}
-            
-            Please provide the final, refined code and a summary of the changes you made.
-            """
-        refined_code = refiner_llm.invoke({"messages": [{"role": "user", "content": prompt}], "temperature": 0.})
-        print(f"✅ Refined Code:\n {refined_code}")
-        return {"refined_code": refined_code.model_dump()}
-    return refiner_node
+def build_critic_prompt(state):
+    """Construye el prompt para criticar código."""
+    
+    code = state['drafter']['code']
+    return f"""You are an expert code reviewer and senior Python developer. Your task is to perform a thorough critique of the following code.
+    Analyze the code for:
+    1.  **Bugs and Errors:** Are there any potential runtime errors, logical flaws, or edge cases that are not handled?
+    2.  **Efficiency and Best Practices:** Is this the most efficient way to solve the problem? Does it follow standard Python conventions (PEP 8)?
+    
+    Provide a structured critique with specific, actionable suggestions.
+    
+    Code to Review:
+    ```python
+    {code}
+    ```
+    """
 
-def evaluate_code(adapter, code_to_evaluate: str):
-    print("--- 4. Evaluating Code ---")
-    judge_llm = LLMRunnable(adapter=adapter, output_model=JudgeLLMEvaluation)
-    prompt = f"""You are an expert judge of Python code. Evaluate the following function on a scale of 1-10 for correctness, efficiency, and style. Provide a brief justification.
+def build_refiner_prompt(state):
+    """Construye el prompt para refinar código basado en crítica."""
+    
+    draft_code = state['drafter']['code']
+    critique = json.dumps(state['critic'], indent=2)
+    return f"""You are an expert Python programmer tasked with refining a piece of code based on a critique.
+    Your goal is to rewrite the original code, implementing all the suggested improvements from the critique.
+    
+    **Original Code:**
+    ```python
+    {draft_code}
+    ```
+    
+    **Critique and Suggestions:**
+    {critique}
+    
+    Please provide the final, refined code and a summary of the changes you made.
+    """
+
+def build_evaluator_prompt(code_to_evaluate: str):
+    """Retorna una función que construye el prompt de evaluación."""
+    def _builder(state):
+        # Para el evaluador, el código viene como parámetro externo, no del state
+        return f"""You are an expert judge of Python code. Evaluate the following function on a scale of 1-10 for correctness, efficiency, and style. Provide a brief justification.
         
         Code:
         ```python
         {code_to_evaluate}
         ```
-    """
-    judge_evaluation = judge_llm.invoke({"messages": [{"role": "user", "content": prompt}], "temperature": 0.})
-    print(f"✅ Judge Evaluation:\n {judge_evaluation}")
-    return judge_evaluation
+        """
+    return _builder
     
 
-
+@propagate_attributes(session_id=new_session_id(), version="3.0")
 def main():
-    print("🚀 Probando LLM Arch SDK con OpenAI - Ejemplo completo")
+    print("🚀 Probando LLM Arch SDK con LangGraph - Patrón LLMAgent")
     try:
-        # Crear adapter con parámetros personalizados
+        # Crear adapter
+        adapter = LlamaAdapter(model="llama-7b")        
+        
+        # Crear agentes LLM (mucho más conciso que las factories)
+        agent_drafter = MiniAgent(
+            adapter=adapter,
+            name="drafter",
+            output_model=DraftCode,
+            prompt_builder=build_generator_prompt,
+            temperature=0.7,
+            max_tokens=300
+        )
+        
+        agent_critic = MiniAgent(
+            adapter=adapter,
+            name="critic",
+            output_model=Critique,
+            prompt_builder=build_critic_prompt,
+            temperature=0.9,
+            max_tokens=900
+        )
+        
+        agent_refiner = MiniAgent(
+            adapter=adapter,
+            name="refiner",
+            output_model=RefinedCode,
+            prompt_builder=build_refiner_prompt,
+            temperature=0.0
+        )
+        
+        # Construir grafo
         graph_builder = StateGraph(ReflectionState)
         
-        # Create adapter and compile the graph
-        adapter = LlamaAdapter(model ="llama-7b")        
-
-        # Bind adapter to node functions via factories
-        graph_builder.add_node("generator", make_generator_node(adapter))
-        graph_builder.add_node("critic", make_critic_node(adapter))
-        graph_builder.add_node("refiner", make_refiner_node(adapter))
+        # Agregar agentes como nodos (nombre especificado UNA vez)
+        graph_builder.add_node("drafter", agent_drafter)
+        graph_builder.add_node("critic", agent_critic)
+        graph_builder.add_node("refiner", agent_refiner)
         
-        # Define the workflow edges
-        graph_builder.set_entry_point("generator")
-        graph_builder.add_edge("generator", "critic")
+        # Definir flujo
+        graph_builder.set_entry_point("drafter")
+        graph_builder.add_edge("drafter", "critic")
         graph_builder.add_edge("critic", "refiner")
         graph_builder.add_edge("refiner", END)
         
-
-        # Compile the graph
+        # Compilar y ejecutar
         reflection_app = graph_builder.compile()
-        print("Reflection graph compiled successfully!")
+        print("✅ Reflection graph compiled successfully!")
         
         user_request = "Write a Python function to find the nth Fibonacci number."
-        initial_input = {"user_request": user_request}
-        
-        # Corrected: This loop correctly captures the final, fully-populated state
         final_state = None
-        for state_update in reflection_app.stream(initial_input, stream_mode="values"):
+        for state_update in reflection_app.stream({"user_request": user_request}, stream_mode="values"):
             final_state = state_update
 
         print("\n✅ Reflection workflow complete!")
         
-        if final_state and 'draft' in final_state and 'refined_code' in final_state:
-            print("--- Evaluating Initial Draft ---")
-            initial_draft_evaluation = evaluate_code(adapter, final_state['draft']['code'])
-            print(initial_draft_evaluation.model_dump()) # Corrected: use .model_dump()
+        # Evaluación (nota: evaluator es diferente porque no usa state directamente)
+        if final_state and 'drafter' in final_state and 'refiner' in final_state:
+            print("\n--- Evaluating Initial Draft ---")
+            agent_draft_evaluator = MiniAgent(
+                adapter=adapter,
+                name="evaluator.draft",
+                output_model=JudgeLLMEvaluation,
+                prompt_builder=build_evaluator_prompt(final_state['drafter']['code']),
+                temperature=0.0
+            )
+            draft_eval = agent_draft_evaluator({})  # state vacío porque el código ya está en el prompt
+            print(json.dumps(draft_eval['evaluator.draft'], indent=2))
 
             print("\n--- Evaluating Refined Code ---")
-            refined_code_evaluation = evaluate_code(adapter, final_state['refined_code']['refined_code'])
-            print(refined_code_evaluation.model_dump()) # Corrected: use .model_dump()
+            agent_refined_evaluator = MiniAgent(
+                adapter=adapter,
+                name="evaluator.refined",
+                output_model=JudgeLLMEvaluation,
+                prompt_builder=build_evaluator_prompt(final_state['refiner']['refined_code']),
+                temperature=0.0
+            )
+            refined_eval = agent_refined_evaluator({})
+            print(json.dumps(refined_eval['evaluator.refined'], indent=2))
         else:
             print("Error: Cannot perform evaluation because the `final_state` is incomplete.")
-        
-        
 
     except Exception as e:
         print(f"❌ Error en la prueba: {e}")
+        import traceback
+        traceback.print_exc()
         return 1
     return 0
 

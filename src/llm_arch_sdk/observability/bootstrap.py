@@ -12,7 +12,7 @@ _langfuse_client = None
 def _mask_for_langfuse(data):
     """Aplica masking si está habilitado, sino retorna data sin cambios"""
     settings = get_sdk_settings()
-    if not settings.observability.enabled:
+    if not settings.observability.masking_enabled:
         return data
     return apply_masking(data, settings.observability.masking_strategies)
 

@@ -11,6 +11,8 @@ Asegúrate de tener un .env con las credenciales necesarias.
 
 import logging
 from dotenv import load_dotenv
+from langfuse import propagate_attributes
+from llm_arch_sdk.observability.helpers import new_session_id
 from pydantic import BaseModel, Field
 from typing import List
 import json
@@ -116,7 +118,7 @@ def refiner_node(adapter, state):
     
     return {"refined_code": refined_code.model_dump()} # Corrected: use .model_dump()
 
-
+@propagate_attributes(session_id=new_session_id(), version="2.5")
 def main():
     print("🚀 Probando Agentes con LLM Arch SDK - LLMAdapter")
     
