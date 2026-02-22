@@ -3,7 +3,7 @@ import logging
 from typing import Any, Dict, List
 
 from ..observability.bootstrap import observe
-from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
+from ..observability.context import obs, build_sdk_metadata, build_sdk_tags
 
 from .base_llm_adapter import BaseLLMAdapter, LLMAdapterType, LLMOperation
 from ..client.llm_client import LlmClient

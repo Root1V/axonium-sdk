@@ -1,9 +1,9 @@
 import os
 import logging
 from typing import Any, Dict, List
-
-from llm_arch_sdk.observability.context import obs, build_sdk_metadata, build_sdk_tags
 from openai import OpenAI
+
+from ..observability.context import obs, build_sdk_metadata, build_sdk_tags
 from ..observability.bootstrap import observe
 
 from .base_llm_adapter import BaseLLMAdapter, LLMAdapterType, LLMOperation

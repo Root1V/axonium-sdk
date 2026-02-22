@@ -7,7 +7,7 @@ from typing import Optional
 from ..transport.circuit_breaker import CircuitBreaker
 from ..transport.http_client_factory import HttpClientFactory
 from ..observability.bootstrap import observe
-from llm_arch_sdk.observability.context import obs
+from ..observability.context import obs
 
 from ..config.settings import get_sdk_settings
 

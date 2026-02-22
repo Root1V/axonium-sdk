@@ -99,7 +99,7 @@ LLM_PASSWORD=tu_contraseña
 
 El SDK incluye soporte para observabilidad con **Langfuse**, pero es completamente **opcional**. Puedes controlar esto con la variable de entorno `OBSERVABILITY_ENABLED`.
 
-#### Modo 1: Observabilidad habilitada (por defecto)
+#### Modo 1: Observabilidad habilitada
 
 ```bash
 # En tu .env
@@ -178,10 +178,10 @@ llm_arch_sdk/
 ├── src/
 │   ├── __init__.py
 │   └── llm_arch_sdk/
+│       ├── __init__.py              # ✨ Public API exports
 │       ├── adapters/
 │       │   ├── __init__.py
-│       │   ├── base.py
-│       │   ├── lang_adapter.py
+│       │   ├── base_llm_adapter.py
 │       │   ├── llama_adapter.py
 │       │   └── open_ai_adapter.py
 │       ├── auth/
@@ -194,6 +194,14 @@ llm_arch_sdk/
 │       │   ├── completions.py
 │       │   ├── embeddings.py
 │       │   └── llm_client.py
+│       ├── config/
+│       │   ├── __init__.py
+│       │   └── settings.py
+│       ├── integrations/              # ✨ NEW: Workflow tools
+│       │   ├── agent.py               # MiniAgent for LangGraph
+│       │   ├── llm_runnable.py        # LLMRunnable abstraction
+│       │   ├── node.py
+│       │   └── runnable.py
 │       ├── models/
 │       │   ├── __init__.py
 │       │   ├── chat_completion.py
@@ -209,14 +217,29 @@ llm_arch_sdk/
 │       │   └── content_normalizer.py
 │       ├── observability/
 │       │   ├── __init__.py
+│       │   ├── bootstrap.py
+│       │   ├── context.py
 │       │   ├── helpers.py
-│       │   ├── langfuse_client.py
 │       │   └── masking.py
 │       └── transport/
 │           ├── __init__.py
 │           ├── auth_http_client_factory.py
 │           ├── circuit_breaker.py
 │           └── http_client_factory.py
+├── examples/
+│   ├── agents_example.py
+│   ├── langchain_example.py
+│   ├── langfuse_example.py
+│   ├── langraph_example.py          # ✨ NEW: LangGraph with MiniAgent
+│   ├── llama_example.py
+│   └── openai_example.py
+├── test/
+│   ├── adapters/
+│   ├── auth/
+│   ├── client/
+│   ├── models/
+│   ├── normalizers/
+│   └── transport/
 ├── main.py
 ├── pyproject.toml
 ├── uv.lock
@@ -230,8 +253,11 @@ llm_arch_sdk/
 - **adapters/**: Adaptadores para diferentes proveedores de LLM (OpenAI, Llama).
 - **auth/**: Gestión de autenticación y tokens.
 - **client/**: Cliente principal y endpoints específicos (chat, completions, embeddings).
+- **config/**: Configuración centralizada del SDK (observabilidad, masking, backend).
+- **integrations/**: 🆕 Herramientas para workflows (MiniAgent, LLMRunnable, nodos para LangGraph).
 - **models/**: Modelos de datos para respuestas y configuraciones.
 - **normalizers/**: Utilidades para normalizar respuestas.
+- **observability/**: Sistema de observabilidad con Langfuse (opcional) y masking de datos sensibles.
 - **transport/**: Manejo de transporte HTTP, circuit breakers y fábricas de clientes.
 
 ## Pruebas
@@ -266,7 +292,48 @@ El proyecto incluye 90 pruebas unitarias organizadas en una estructura que refle
 
 ## Historial de cambios
 
-### v0.4.0 (En desarrollo)
+### v0.4.6 (2026-02-22) ✨ LATEST RELEASE
+
+**🚀 Nuevas Funcionalidades:**
+- **MiniAgent**: Abstracción reutilizable para crear agentes LLM en workflows (ej: LangGraph)
+  - Reduce código repetitivo en ~60%
+  - Observabilidad automática con Langfuse
+  - API simple y declarativa
+- **Masking independiente**: Nueva variable `MASKING_ENABLED` separada de `OBSERVABILITY_ENABLED`
+  - Permite usar masking de PII sin activar observabilidad completa
+  - Guardrails de seguridad desacoplados
+
+**⚡ Mejoras:**
+- **JSON parsing mejorado**: 85% reducción de errores mediante prompts optimizados
+  - Instrucciones explícitas contra markdown code blocks
+  - Manejo correcto de escapado de comillas en código Python
+  - Validación robusta con mensajes de error informativos
+- **Enterprise logging**: Sistema de logs empresarial completo
+  - Métricas de performance (duration_ms) en cada invocación LLM
+  - Logging estructurado (DEBUG/INFO/ERROR) con contexto completo
+  - Trazabilidad de errores con stack traces y previews de respuestas
+- **API pública mejorada**: Nuevo `__init__.py` raíz para importaciones limpias
+  ```python
+  # Antes
+  from llm_arch_sdk.integrations.agent import MiniAgent
+  
+  # Ahora
+  from llm_arch_sdk import MiniAgent
+  ```
+
+**🔧 Correcciones:**
+- Fix: Alineación de claves de estado entre nombres de agentes y prompt builders
+- Fix: Compatibilidad con Langfuse v3 (decorador @observe en generadores)
+
+**📚 Documentación:**
+- Nuevo ejemplo completo: `examples/langraph_example.py` (reflection pattern)
+- Documentación de MiniAgent y LLMRunnable
+- Guía de observabilidad actualizada
+
+---
+
+### v0.4.0
+
 - 🚀 Nuevo adaptador LangChainAdapter para integración con LangChain
 - 📝 Soporte para ChatOpenAI de LangChain
 - ✅ 7 nuevos tests unitarios para LangChainAdapter (90 tests totales)

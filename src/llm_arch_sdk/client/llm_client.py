@@ -2,7 +2,7 @@ import httpx
 import logging
 from http import HTTPStatus
 
-from llm_arch_sdk.models.health import Health
+from ..models.health import Health
 
 from .base_client import BaseClient
 from .chat_completions import ChatCompletions
@@ -11,7 +11,7 @@ from .embeddings import Embeddings
 from ..transport.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
 from ..observability.bootstrap import observe
 from ..config.settings import get_sdk_settings
-from llm_arch_sdk.observability.context import obs
+from ..observability.context import obs
 
 logger = logging.getLogger("llm.sdk.client")
 

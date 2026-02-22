@@ -1,9 +1,11 @@
 import logging
 import time
 from typing import Optional, Type, TypeVar
-from llm_arch_sdk.adapters.base_llm_adapter import BaseLLMAdapter
 from pydantic import BaseModel, ValidationError
 import json
+
+from ..adapters.base_llm_adapter import BaseLLMAdapter
+
 
 logger = logging.getLogger("llm.integrations.runnable")
 

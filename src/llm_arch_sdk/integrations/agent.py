@@ -11,9 +11,9 @@ Encapsula el patrón común:
 import logging
 import time
 from typing import Callable, Type, Any, Dict
-from llm_arch_sdk.adapters.base_llm_adapter import BaseLLMAdapter
 from pydantic import BaseModel
 
+from ..adapters.base_llm_adapter import BaseLLMAdapter
 from .llm_runnable import LLMRunnable
 from ..observability.bootstrap import observe
 from ..observability.context import obs
