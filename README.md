@@ -51,32 +51,34 @@ Este SDK proporciona una interfaz unificada para interactuar con servidores LLM 
    uv build
    ```
 
-### Instalación en el cliente desde repositorio local
+### Instalación desde versión específica (para proyectos que consumen el SDK)
 
-1. Clona el respoitorio en la version que requieras
-```
-git fetch --tags && git checkout v0.3.0
+Si necesitas instalar una versión específica del SDK en tu proyecto:
+
+1. Clona el repositorio en la versión que requieras
+```bash
+git fetch --tags && git checkout v0.4.6
 ```
 
-2. Crea el paquete del sdk
-```
+2. Crea el paquete del SDK
+```bash
 uv build
 ```
 
-3. Copia el sdk compilado a la carpeta de repo (opcional)
-```
-cp /llm_arch_sdk/dist/llm_arch_sdk-0.3.0* /opt/python-repo/
+3. Copia el SDK compilado a la carpeta de repositorio (opcional)
+```bash
+cp /llm_arch_sdk/dist/llm_arch_sdk-0.4.6* /opt/python-repo/
 ```
 
-4. Agrega el sdk en tu proyecto y sincroniza las dependencias
-```
+4. Agrega el SDK en tu proyecto y sincroniza las dependencias
+```bash
 uv add --find-links /opt/python-repo/ llm-arch-sdk
 uv sync --find-links /opt/python-repo/
 ```
 
-5. Otra alternativa de instalacion usando "pip"
-```
-pip install --find-links=/opt/python-repo llm_arch_sdk
+5. Alternativa usando `pip`
+```bash
+pip install --find-links=/opt/python-repo llm-arch-sdk
 ```
 
 ## Ejemplos de uso
@@ -143,33 +145,56 @@ DEBUG - llm.sdk.observability.context - Observability disabled - logging trace i
 
 > **Nota importante**: Incluso con observabilidad deshabilitada, el SDK deja rastro de metadata y tags en logs. Los campos sensibles como `input` y `output` se filtran automáticamente para proteger datos privados.
 
-**Ejemplo de prueba:**
-
-```bash
-# Probar con observabilidad deshabilitada
-.venv/bin/python test_observability_disabled.py
-```
-
 **Nota**: Si `OBSERVABILITY_ENABLED=False`, no es necesario configurar las variables de Langfuse.
 
 ### Ejecutar ejemplos
 
-#### Ejemplo básico con Llama
-```bash
-uv run python examples/basic_usage.py
-```
+La carpeta `examples/` contiene 4 ejemplos demostrativos que cubren diferentes casos de uso:
 
-#### Ejemplo con OpenAI
+#### 1. Ejemplo básico con LlamaAdapter
+```bash
+uv run python examples/llama_example.py
+```
+**Qué hace:** Demuestra el uso completo del `LlamaAdapter` para:
+- Health check del servidor LLM
+- Chat completions (conversaciones)
+- Text completions (generación de texto)
+- Embeddings (vectorización de texto)
+
+#### 2. Ejemplo con OpenAIAdapter
 ```bash
 uv run python examples/openai_example.py
 ```
+**Qué hace:** Muestra cómo usar el `OpenAIAdapter` para conectarse a APIs compatibles con OpenAI:
+- Chat completions con diferentes modelos
+- Text completions
+- Generación de embeddings
+- Manejo de errores y configuración personalizada
 
-#### Ejemplo con LangChain
+#### 3. Ejemplo de Agentes con Structured Output
 ```bash
-uv run python examples/langchain_example.py
+uv run python examples/agents_example.py
 ```
+**Qué hace:** Demuestra el patrón de agentes simples con `LLMRunnable`:
+- Generación de código con structured output (Pydantic models)
+- Validación automática de respuestas JSON
+- Pipeline de múltiples agentes (generador → crítico → refinador)
+- Estado compartido entre agentes
 
-Estos ejemplos incluyen manejo de errores y funcionan tanto con servidores reales como con configuraciones de prueba.
+#### 4. Ejemplo avanzado con LangGraph (Reflection Pattern)
+```bash
+uv run python examples/langraph_example.py
+```
+**Qué hace:** Ejemplo completo de workflow empresarial usando `MiniAgent` y LangGraph:
+- Patrón de reflexión: draft → critique → refine
+- Workflow orquestado con StateGraph
+- 5 nodos: drafter, critic, refiner, 2 evaluadores
+- Observabilidad automática con Langfuse
+- Estado tipado con TypedDict
+
+---
+
+**💡 Tip:** Todos los ejemplos incluyen manejo robusto de errores y funcionan tanto con servidores reales como en modo de prueba.
 
 ## Estructura del Proyecto
 
@@ -227,12 +252,11 @@ llm_arch_sdk/
 │           ├── circuit_breaker.py
 │           └── http_client_factory.py
 ├── examples/
-│   ├── agents_example.py
-│   ├── langchain_example.py
-│   ├── langfuse_example.py
-│   ├── langraph_example.py          # ✨ NEW: LangGraph with MiniAgent
-│   ├── llama_example.py
-│   └── openai_example.py
+│   ├── .env                         # Variables de entorno
+│   ├── agents_example.py            # Pipeline de agentes con LLMRunnable
+│   ├── langraph_example.py          # ✨ LangGraph workflow con MiniAgent
+│   ├── llama_example.py             # Uso completo de LlamaAdapter
+│   └── openai_example.py            # Uso de OpenAIAdapter
 ├── test/
 │   ├── adapters/
 │   ├── auth/
