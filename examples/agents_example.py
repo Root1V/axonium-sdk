@@ -121,6 +121,8 @@ def main():
     print("🚀 Probando Agentes con LLM Arch SDK - LLMAdapter")
     
     try:
+        adapter = LlamaAdapter(model ="llama-7b") 
+        
         state = {"user_request": "Escribe una función en Python que calcule el factorial de un número."}
         state.update(generator_node(adapter, state))
         state.update(critic_node(adapter, state))
