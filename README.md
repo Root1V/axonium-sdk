@@ -1,10 +1,12 @@
 # LLM Arch SDK
 
-**SDK Python para integración de Large Language Models con soporte multi-provider, observabilidad y capacidades enterprise.**
+**SDK Python para integración de Large Language Models con soporte multi-provider, observabilidad y características de nivel enterprise.**
 
 ## Descripción
 
 LLM Arch SDK es una biblioteca Python diseñada para simplificar la integración con múltiples proveedores de LLM (OpenAI, Llama y otros compatibles). Proporciona una interfaz unificada con gestión automática de autenticación, observabilidad opcional mediante Langfuse, validación de structured outputs y patrones de resiliencia para aplicaciones en producción.
+
+**Nivel enterprise:** Circuit breaker para protección contra fallos, autenticación con renovación automática de tokens, enmascaramiento de PII, trazabilidad completa de invocaciones mediante Langfuse, y logging estructurado con métricas de performance.
 
 **Ideal para:** Aplicaciones que requieren integración con múltiples LLMs, trazabilidad de invocaciones, manejo robusto de errores y validación de respuestas estructuradas.
 
@@ -39,11 +41,11 @@ LLM Arch SDK es una biblioteca Python diseñada para simplificar la integración
 - Gestión de autenticación y circuit breakers integrados
 
 **Para entornos de producción:**
-- Trazabilidad completa de invocaciones LLM con metadata automática
-- Enmascaramiento de PII configurable
-- Circuit breakers y timeouts para resiliencia
-- Métricas de performance y cost tracking
-- Configuración centralizada y testing exhaustivo
+- Trazabilidad completa de invocaciones LLM con metadata automática (duration_ms, token_usage, model, operation)
+- Enmascaramiento de PII configurable para cumplimiento normativo
+- Circuit breakers y timeouts para resiliencia ante fallos
+- Métricas de performance en cada invocación
+- Configuración centralizada y testing exhaustivo (103 tests)
 
 ---
 
@@ -51,7 +53,6 @@ LLM Arch SDK es una biblioteca Python diseñada para simplificar la integración
 
 ```python
 from llm_arch_sdk import OpenAIAdapter
-from llm_arch_sdk.client import LLMClient
 
 # 1. Crear un adapter para tu proveedor LLM
 adapter = OpenAIAdapter(
@@ -59,11 +60,8 @@ adapter = OpenAIAdapter(
     base_url="https://api.openai.com"
 )
 
-# 2. Crear cliente LLM
-client = LLMClient(adapter=adapter)
-
-# 3. Usar chat completions
-response = client.chat.create(
+# 2. Usar chat directamente desde el adapter
+response = adapter.chat(
     messages=[
         {"role": "system", "content": "Eres un asistente útil."},
         {"role": "user", "content": "¿Qué es Python?"}
@@ -179,8 +177,7 @@ LANGFUSE_TRACING_ENVIRONMENT=production
 Características:
 - Trazas completas de cada invocación LLM con jerarquía
 - Metadata automática (adapter, operation, model, duration_ms, token_usage)
-- Cost tracking basado en tokens consumidos
-- Error analytics con stack traces
+- Análisis de errores con stack traces completos
 - Masking de PII aplicado automáticamente en traces
 - Dashboard en Langfuse para análisis y debugging
 
