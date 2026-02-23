@@ -111,6 +111,10 @@ class TokenManager(httpx.Auth):
             
             return token
 
+        except AuthError:
+            # Re-raise AuthError without wrapping it
+            raise
+
         except httpx.TimeoutException as e:
             self._circuit.record_failure()
             logger.error("Timeout durante login")

@@ -24,7 +24,7 @@ class TestCompletions:
         mock_client._request.return_value = mock_response
 
         completions = Completions(mock_client)
-        result = completions.create(prompt="Hello world")
+        result = completions.create(prompt="Hello world", temperature=0.7, n_predict=100)
 
         assert isinstance(result, CompletionResult)
         assert result.index == 0
@@ -88,7 +88,7 @@ class TestCompletions:
         mock_client._request.return_value = mock_response
 
         completions = Completions(mock_client)
-        result = completions.create(prompt="")
+        result = completions.create(prompt="", temperature=0.7)
 
         assert result.index == 0
         assert result.content == ""
@@ -99,4 +99,4 @@ class TestCompletions:
 
         completions = Completions(mock_client)
         with pytest.raises(Exception, match="Network Error"):
-            completions.create(prompt="Test")
+            completions.create(prompt="Test", temperature=0.7)

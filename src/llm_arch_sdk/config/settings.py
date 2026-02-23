@@ -110,7 +110,7 @@ class CircuitBreakerSettings:
     reset_timeout: int = 30
     half_open_success: int = 1
     retry_header: str = "X-Retry"
-    retry_value: int = 1
+    retry_value: str = "1"
 
 
 # -------------------------

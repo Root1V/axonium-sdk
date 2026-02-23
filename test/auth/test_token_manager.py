@@ -3,45 +3,46 @@ import httpx
 import os
 from unittest.mock import Mock, patch
 from llm_arch_sdk.auth.token_manager import TokenManager, AuthError
+from llm_arch_sdk.config.settings import SdkSettings, LlmBackendEnv
 
 
 class TestTokenManager:
-    @patch.dict(os.environ, {
-        'LLM_BASE_URL': 'http://localhost:8000',
-        'LLM_USERNAME': 'testuser',
-        'LLM_PASSWORD': 'testpass'
-    })
     def test_init_success(self):
-        manager = TokenManager()
-        assert manager.base_url == 'http://localhost:8000'
-        assert manager.username == 'testuser'
-        assert manager.password == 'testpass'
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(
+            base_url='http://localhost:8000',
+            username='testuser',
+            password='testpass'
+        )
+        manager = TokenManager(settings=settings)
+        assert manager.s_llm.base_url == 'http://localhost:8000'
+        assert manager.s_llm.username == 'testuser'
+        assert manager.s_llm.password == 'testpass'
         assert manager.token is None
-        assert manager.timeout == 10.0
+        assert manager.s_timeout == 10.0
 
-    @patch.dict(os.environ, {}, clear=True)
     def test_init_missing_env_vars(self):
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(base_url=None)
         with pytest.raises(RuntimeError, match="LLM_BASE_URL no configurada"):
-            TokenManager()
+            TokenManager(settings=settings)
 
-    @patch.dict(os.environ, {'LLM_BASE_URL': 'http://localhost:8000'}, clear=True)
     def test_init_missing_username(self):
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(base_url='http://localhost:8000', username=None)
         with pytest.raises(RuntimeError, match="LLM_USERNAME no configurado"):
-            TokenManager()
+            TokenManager(settings=settings)
 
-    @patch.dict(os.environ, {
-        'LLM_BASE_URL': 'http://localhost:8000',
-        'LLM_USERNAME': 'testuser'
-    }, clear=True)
     def test_init_missing_password(self):
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(
+            base_url='http://localhost:8000',
+            username='testuser',
+            password=None
+        )
         with pytest.raises(RuntimeError, match="LLM_PASSWORD no configurado"):
-            TokenManager()
+            TokenManager(settings=settings)
 
-    @patch.dict(os.environ, {
-        'LLM_BASE_URL': 'http://localhost:8000',
-        'LLM_USERNAME': 'testuser',
-        'LLM_PASSWORD': 'testpass'
-    })
     @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
     def test_login_success(self, mock_factory):
         mock_client = Mock()
@@ -50,7 +51,13 @@ class TestTokenManager:
         mock_response.json.return_value = {'token': 'test_token'}
         mock_client.post.return_value = mock_response
 
-        manager = TokenManager()
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(
+            base_url='http://localhost:8000',
+            username='testuser',
+            password='testpass'
+        )
+        manager = TokenManager(settings=settings)
         token = manager._login()
 
         assert token == 'test_token'
@@ -59,11 +66,6 @@ class TestTokenManager:
             auth=('testuser', 'testpass')
         )
 
-    @patch.dict(os.environ, {
-        'LLM_BASE_URL': 'http://localhost:8000',
-        'LLM_USERNAME': 'testuser',
-        'LLM_PASSWORD': 'testpass'
-    })
     @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
     def test_login_no_token_in_response(self, mock_factory):
         mock_client = Mock()
@@ -72,30 +74,32 @@ class TestTokenManager:
         mock_response.json.return_value = {}
         mock_client.post.return_value = mock_response
 
-        manager = TokenManager()
-        with pytest.raises(AuthError, match="Error inesperado durante login"):
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(
+            base_url='http://localhost:8000',
+            username='testuser',
+            password='testpass'
+        )
+        manager = TokenManager(settings=settings)
+        with pytest.raises(AuthError, match="Login exitoso pero sin token"):
             manager._login()
 
-    @patch.dict(os.environ, {
-        'LLM_BASE_URL': 'http://localhost:8000',
-        'LLM_USERNAME': 'testuser',
-        'LLM_PASSWORD': 'testpass'
-    })
     @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
     def test_login_timeout(self, mock_factory):
         mock_client = Mock()
         mock_factory.create.return_value = mock_client
         mock_client.post.side_effect = httpx.TimeoutException("Timeout")
 
-        manager = TokenManager()
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(
+            base_url='http://localhost:8000',
+            username='testuser',
+            password='testpass'
+        )
+        manager = TokenManager(settings=settings)
         with pytest.raises(AuthError, match="Timeout durante login"):
             manager._login()
 
-    @patch.dict(os.environ, {
-        'LLM_BASE_URL': 'http://localhost:8000',
-        'LLM_USERNAME': 'testuser',
-        'LLM_PASSWORD': 'testpass'
-    })
     @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
     def test_login_http_error(self, mock_factory):
         mock_client = Mock()
@@ -107,32 +111,34 @@ class TestTokenManager:
         )
         mock_client.post.return_value = mock_response
 
-        manager = TokenManager()
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(
+            base_url='http://localhost:8000',
+            username='testuser',
+            password='testpass'
+        )
+        manager = TokenManager(settings=settings)
         with pytest.raises(AuthError, match="Error HTTP durante login: 500"):
             manager._login()
 
-    @patch.dict(os.environ, {
-        'LLM_BASE_URL': 'http://localhost:8000',
-        'LLM_USERNAME': 'testuser',
-        'LLM_PASSWORD': 'testpass'
-    })
     @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
     def test_login_circuit_breaker_open(self, mock_factory):
         mock_client = Mock()
         mock_factory.create.return_value = mock_client
 
-        manager = TokenManager()
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(
+            base_url='http://localhost:8000',
+            username='testuser',
+            password='testpass'
+        )
+        manager = TokenManager(settings=settings)
         # Simulate circuit breaker open
         manager._circuit.allow_request = Mock(return_value=False)
 
         with pytest.raises(AuthError, match="Circuit breaker abierto: login bloqueado"):
             manager._login()
 
-    @patch.dict(os.environ, {
-        'LLM_BASE_URL': 'http://localhost:8000',
-        'LLM_USERNAME': 'testuser',
-        'LLM_PASSWORD': 'testpass'
-    })
     @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
     def test_auth_flow_first_request(self, mock_factory):
         mock_client = Mock()
@@ -141,7 +147,13 @@ class TestTokenManager:
         mock_response.json.return_value = {'token': 'test_token'}
         mock_client.post.return_value = mock_response
 
-        manager = TokenManager()
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(
+            base_url='http://localhost:8000',
+            username='testuser',
+            password='testpass'
+        )
+        manager = TokenManager(settings=settings)
         request = httpx.Request("GET", "http://api.example.com/test")
 
         # Simulate auth_flow
@@ -159,11 +171,6 @@ class TestTokenManager:
         except StopIteration:
             pass
 
-    @patch.dict(os.environ, {
-        'LLM_BASE_URL': 'http://localhost:8000',
-        'LLM_USERNAME': 'testuser',
-        'LLM_PASSWORD': 'testpass'
-    })
     @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
     def test_auth_flow_401_retry(self, mock_factory):
         mock_client = Mock()
@@ -178,7 +185,13 @@ class TestTokenManager:
 
         mock_client.post.side_effect = [mock_response1, mock_response2]
 
-        manager = TokenManager()
+        settings = SdkSettings()
+        settings.llm = LlmBackendEnv(
+            base_url='http://localhost:8000',
+            username='testuser',
+            password='testpass'
+        )
+        manager = TokenManager(settings=settings)
         request = httpx.Request("GET", "http://api.example.com/test")
 
         flow = manager.auth_flow(request)

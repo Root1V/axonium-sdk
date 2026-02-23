@@ -87,7 +87,7 @@ class TestCircuitBreaker:
         assert cb._failure_count == 2
         assert cb._state == CircuitState.CLOSED
 
-    @patch('time.time')
+    @patch('llm_arch_sdk.transport.circuit_breaker.time.monotonic')
     def test_record_failure_at_threshold(self, mock_time):
         mock_time.return_value = 100
         cb = CircuitBreaker(failure_threshold=3, reset_timeout=30)
