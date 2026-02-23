@@ -534,6 +534,19 @@ You can also open an issue to:
 - Suggest an enhancement
 - Propose a new feature or architecture improvement
 
+## Reconocimiento
+
+Si encuentras útil LLM Arch SDK en tu trabajo, considera:
+- ⭐ Dar una estrella al repositorio
+- 📢 Compartir el proyecto con tu equipo
+- 🤝 Contribuir mejoras o reportar issues
+
+Para referencias en documentación técnica:
+- **Proyecto**: LLM Arch SDK
+- **Repositorio**: https://github.com/Root1V/llm-arch-sdk
+- **Autor**: Emeric Espiritu Santiago
+- **Licencia**: MIT
+
 ## Licencia
 
 Este proyecto está bajo la Licencia MIT. Ver el archivo [LICENSE](LICENSE) para más detalles.
