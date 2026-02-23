@@ -1,6 +1,6 @@
 # LLM Arch SDK
 
-**SDK Python para integración de Large Language Models con soporte multi-provider y observabilidad.**
+SDK Python para integración multi-provider de LLMs con autenticación gestionada, circuit breaker, observabilidad y abstracciones para agentes.
 
 ## Descripción
 
@@ -58,14 +58,14 @@ El SDK está diseñado con una arquitectura en capas que separa responsabilidade
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Public API Layer                            │
-│  LLMClient │ Adapters (OpenAI, Llama) │ Integrations           │
+│  LLMClient │ Adapters (OpenAI, Llama) │ Integrations            │
 └─────────────────────────────────────────────────────────────────┘
                               │
                 ┌─────────────┼─────────────┐
                 ▼             ▼             ▼
 ┌──────────────────┐  ┌──────────────┐  ┌──────────────────┐
 │  Core Services   │  │ Observability│  │   Validation     │
-│                  │  │               │  │                  │
+│                  │  │              │  │                  │
 │ • Auth Manager   │  │ • Langfuse   │  │ • Pydantic       │
 │ • HTTP Client    │  │ • Logging    │  │ • JSON Parser    │
 │ • Circuit Breaker│  │ • Masking    │  │ • Normalizers    │
@@ -74,13 +74,13 @@ El SDK está diseñado con una arquitectura en capas que separa responsabilidade
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Transport Layer                            │
-│         httpx Client │ Connection Pooling │ Retry Logic        │
+│         httpx Client │ Connection Pooling │ Retry Logic         │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    External LLM APIs                            │
-│         OpenAI │ Llama Server │ Compatible APIs                │
+│         OpenAI │ Llama Server │ Compatible APIs                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

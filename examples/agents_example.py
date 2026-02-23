@@ -12,7 +12,6 @@ Asegúrate de tener un .env con las credenciales necesarias.
 import logging
 from dotenv import load_dotenv
 from langfuse import propagate_attributes
-from llm_arch_sdk.observability.helpers import new_session_id
 from pydantic import BaseModel, Field
 from typing import List
 import json
@@ -21,6 +20,7 @@ load_dotenv()  # Carga variables de entorno desde .env
 
 from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
 from llm_arch_sdk.integrations.llm_runnable import LLMRunnable
+from llm_arch_sdk.observability.helpers import new_session_id
 
 
 # Configurar logging ANTES de importar el SDK para ver todos los mensajes
