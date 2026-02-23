@@ -261,6 +261,7 @@ llm_arch_sdk/
 │   ├── adapters/
 │   ├── auth/
 │   ├── client/
+│   ├── integrations/              # ✨ Tests para MiniAgent y LLMRunnable
 │   ├── models/
 │   ├── normalizers/
 │   └── transport/
@@ -292,7 +293,9 @@ Para ejecutar las pruebas:
 uv run pytest test/
 ```
 
-El proyecto incluye 90 pruebas unitarias organizadas en una estructura que refleja el código fuente, facilitando el mantenimiento y la localización de tests relacionados con módulos específicos.
+**Estado actual: ✅ 103/103 tests pasando**
+
+El proyecto incluye 103 pruebas unitarias organizadas en una estructura que refleja el código fuente, facilitando el mantenimiento y la localización de tests relacionados con módulos específicos.
 
 ### Estructura de pruebas
 
@@ -300,19 +303,36 @@ El proyecto incluye 90 pruebas unitarias organizadas en una estructura que refle
 - `test/auth/`: Tests para autenticación y gestión de tokens
 - `test/transport/`: Tests para circuit breaker y transporte HTTP
 - `test/adapters/`: Tests para adaptadores de proveedores (Llama, OpenAI)
+- `test/integrations/`: ✨ Tests para MiniAgent y LLMRunnable (20 tests)
 - `test/models/`: Tests para modelos de datos y parsing JSON
 - `test/normalizers/`: Tests para normalización de contenido
 
 ### Cobertura de pruebas
 
-- **Cobertura de pruebas**: 90 tests unitarios
-- **TokenManager**: Autenticación, renovación de tokens, circuit breaker.
-- **CircuitBreaker**: Estados CLOSED/OPEN/HALF_OPEN, timeouts.
-- **Clientes**: ChatCompletions, Completions, Embeddings.
-- **Adaptadores**: LlamaAdapter, OpenAIAdapter, LangChainAdapter.
-- **Modelos**: Parsing de respuestas JSON, validación de datos.
-- **Normalizadores**: Detección de completitud semántica, limpieza de texto.
-- **Transporte**: Manejo de HTTP, errores, timeouts.
+- **Total**: 103 tests unitarios (100% pasando)
+- **TokenManager**: Autenticación, renovación de tokens, circuit breaker
+- **CircuitBreaker**: Estados CLOSED/OPEN/HALF_OPEN, timeouts, time.monotonic
+- **Clientes**: ChatCompletions, Completions, Embeddings
+- **Adaptadores**: LlamaAdapter, OpenAIAdapter (con model requerido)
+- **Integrations**: 
+  - **MiniAgent** (10 tests): Inicialización, prompt building, ejecución, parámetros LLM, callable interface, error handling, state updates
+  - **LLMRunnable** (10 tests): Structured output, schema injection, JSON parsing, validación, múltiples invocaciones
+- **Modelos**: Parsing de respuestas JSON, validación de datos
+- **Normalizadores**: Detección de completitud semántica, limpieza de texto
+- **Transporte**: Manejo de HTTP, errores, timeouts
+
+### Cambios recientes en tests
+
+**v0.4.6 (2026-02-22):**
+- ✅ **20 nuevos tests** para `test/integrations/`
+  - 10 tests para MiniAgent (inicialización, execution flow, parámetros, error handling)
+  - 10 tests para LLMRunnable (structured output, schema injection, JSON parsing)
+- 🔧 **Correcciones de compatibilidad**:
+  - Adapters: Parámetro `model` ahora requerido en OpenAIAdapter y LlamaAdapter
+  - Completions: Parámetro `temperature` requerido en `create()`
+  - TokenManager: Tests usan settings custom en lugar de patch.dict de env vars
+  - CircuitBreaker: Mock correcto de `time.monotonic` (en lugar de `time.time`)
+  - Settings: `retry_value` cambiado de `int` a `str` para compatibilidad con httpx.Headers
 
 ## Historial de cambios
 
@@ -360,7 +380,7 @@ El proyecto incluye 90 pruebas unitarias organizadas en una estructura que refle
 
 - 🚀 Nuevo adaptador LangChainAdapter para integración con LangChain
 - 📝 Soporte para ChatOpenAI de LangChain
-- ✅ 7 nuevos tests unitarios para LangChainAdapter (90 tests totales)
+- ✅ 7 nuevos tests unitarios para LangChainAdapter
 - 🔄 Patrón **kwargs implementado en todos los adaptadores
 - 📚 Nuevo ejemplo: `examples/langchain_example.py`
 
@@ -368,7 +388,7 @@ El proyecto incluye 90 pruebas unitarias organizadas en una estructura que refle
 - ✅ TokenManager ahora es **opcional** en `AuthHttpClientFactory.create()`
 - ✅ Se crea automáticamente una instancia si no se proporciona
 - ✅ Ejemplos actualizados para usar `.env` con `python-dotenv`
-- ✅ Todos los 83 tests pasan correctamente
+- ✅ Tests verificados y funcionando correctamente
 
 ### v0.2.0
 - 🔧 Refactor: Consolidación de manejo de headers y mejora de herencia en HTTP client factories
@@ -381,7 +401,7 @@ El proyecto incluye 90 pruebas unitarias organizadas en una estructura que refle
 - ✅ Adaptadores para Llama y OpenAI
 - ✅ Cliente HTTP robusto con httpx
 - ✅ Normalización de respuestas
-- ✅ 83 tests unitarios
+- ✅ Suite de tests unitarios completa
 - ✅ Documentación y ejemplos de uso
 
 ## Contribución
