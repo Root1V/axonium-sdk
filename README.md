@@ -551,6 +551,3 @@ Para referencias en documentación técnica:
 
 Este proyecto está bajo la Licencia MIT. Ver el archivo [LICENSE](LICENSE) para más detalles.
 
-## Autor
-
-Emeric Espiritu Santiago
