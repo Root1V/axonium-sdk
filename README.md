@@ -1,12 +1,18 @@
 # LLM Arch SDK
 
-**SDK Python para integración de Large Language Models con soporte multi-provider, observabilidad y características de nivel enterprise.**
+**SDK Python para integración de Large Language Models con soporte multi-provider y observabilidad.**
 
 ## Descripción
 
-LLM Arch SDK es una biblioteca Python diseñada para simplificar la integración con múltiples proveedores de LLM (OpenAI, Llama y otros compatibles). Proporciona una interfaz unificada con gestión automática de autenticación, observabilidad opcional mediante Langfuse, validación de structured outputs y patrones de resiliencia para aplicaciones en producción.
+LLM Arch SDK es una biblioteca Python diseñada para simplificar la integración con múltiples proveedores de LLM (OpenAI, Llama y otros compatibles). Proporciona una interfaz unificada con las siguientes capacidades:
 
-**Nivel enterprise:** Circuit breaker para protección contra fallos, autenticación con renovación automática de tokens, enmascaramiento de PII, trazabilidad completa de invocaciones mediante Langfuse, y logging estructurado con métricas de performance.
+- **Circuit Breaker**: Protección automática contra fallos en cascada con estados CLOSED/OPEN/HALF_OPEN
+- **Autenticación gestionada**: Renovación automática de tokens con retry logic y circuit breaking en endpoints de auth
+- **Enmascaramiento de PII**: Sistema configurable para proteger datos sensibles (PII, tarjetas de crédito, emails)
+- **Trazabilidad completa**: Integración opcional con Langfuse para tracking de invocaciones con metadata (duration_ms, token_usage, model, operation)
+- **Logging estructurado**: Métricas de performance y contexto completo en cada invocación
+- **Validación de outputs**: Structured outputs con validación automática mediante Pydantic models
+- **Resiliencia**: Retry logic, timeouts configurables y manejo robusto de errores
 
 **Ideal para:** Aplicaciones que requieren integración con múltiples LLMs, trazabilidad de invocaciones, manejo robusto de errores y validación de respuestas estructuradas.
 
@@ -24,28 +30,98 @@ LLM Arch SDK es una biblioteca Python diseñada para simplificar la integración
 - **Type Safety**: Type hints completos en toda la biblioteca
 - **Testing**: 103 tests unitarios con 100% de aprobación
 
-## Ventajas
+## Ventajas clave
 
-**Comparado con usar APIs de LLM directamente:**
-- Interfaz unificada que permite cambiar entre proveedores sin reescribir código
-- Validación automática de structured outputs mediante Pydantic
-- Observabilidad integrada con Langfuse (opcional)
-- Patrones de resiliencia incluidos: circuit breaker, retry logic, error handling
-- Enmascaramiento automático de PII en logs y trazas
+- **Abstracción multi-provider**: Interfaz unificada que permite cambiar entre proveedores (OpenAI, Llama, etc.) sin reescribir código
+- **Validación automática**: Structured outputs con validación mediante Pydantic models y JSON parsing robusto
+- **Observabilidad integrada**: Soporte opcional para Langfuse con trazas automáticas, o logging estructurado como fallback
+- **Patrones de resiliencia**: Circuit breaker, retry logic, timeouts configurables y error handling robusto
+- **Seguridad**: Enmascaramiento automático de PII en logs y trazas para cumplimiento normativo
+- **Trazabilidad**: Metadata automática en cada invocación (duration_ms, token_usage, model, operation)
+- **Type safety**: Type hints completos en toda la biblioteca para mejor soporte de IDEs
+- **Testing robusto**: 103 tests unitarios con 100% de aprobación
+- **Configuración centralizada**: Sistema basado en variables de entorno o custom settings
+- **Compatible**: Funciona standalone o integrado con frameworks como LangChain/LangGraph
 
-**Comparado con LangChain:**
-- Biblioteca más liviana y enfocada
-- Type safety completo con mejor soporte de IDEs
-- Suite de tests unitarios robusta (103 tests)
-- Compatible con LangChain/LangGraph cuando sea necesario
-- Gestión de autenticación y circuit breakers integrados
+---
 
-**Para entornos de producción:**
-- Trazabilidad completa de invocaciones LLM con metadata automática (duration_ms, token_usage, model, operation)
-- Enmascaramiento de PII configurable para cumplimiento normativo
-- Circuit breakers y timeouts para resiliencia ante fallos
-- Métricas de performance en cada invocación
-- Configuración centralizada y testing exhaustivo (103 tests)
+## Arquitectura
+
+El SDK está diseñado con una arquitectura en capas que separa responsabilidades y facilita la extensibilidad:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Application Layer                        │
+│                   (Tu código usando el SDK)                     │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Public API Layer                            │
+│  LLMClient │ Adapters (OpenAI, Llama) │ Integrations           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                ┌─────────────┼─────────────┐
+                ▼             ▼             ▼
+┌──────────────────┐  ┌──────────────┐  ┌──────────────────┐
+│  Core Services   │  │ Observability│  │   Validation     │
+│                  │  │               │  │                  │
+│ • Auth Manager   │  │ • Langfuse   │  │ • Pydantic       │
+│ • HTTP Client    │  │ • Logging    │  │ • JSON Parser    │
+│ • Circuit Breaker│  │ • Masking    │  │ • Normalizers    │
+└──────────────────┘  └──────────────┘  └──────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Transport Layer                            │
+│         httpx Client │ Connection Pooling │ Retry Logic        │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    External LLM APIs                            │
+│         OpenAI │ Llama Server │ Compatible APIs                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Componentes principales
+
+**1. Adapters (Capa de abstracción)**
+- Interfaz unificada para diferentes proveedores LLM
+- Normalización de requests/responses entre providers
+- Implementaciones: `OpenAIAdapter`, `LlamaAdapter`
+
+**2. Transport (Capa de comunicación)**
+- Cliente HTTP basado en httpx con connection pooling
+- Circuit breaker para protección contra fallos
+- Retry logic configurable con backoff exponencial
+- Factories para crear clientes con/sin autenticación
+
+**3. Auth (Gestión de autenticación)**
+- `TokenManager`: Gestión automática de tokens de acceso
+- Renovación automática con circuit breaking en endpoints de auth
+- Thread-safe para uso concurrente
+
+**4. Observability (Trazabilidad y monitoreo)**
+- Integración opcional con Langfuse para traces distribuidos
+- Logging estructurado con metadata completa
+- Sistema de masking para PII (correos, tarjetas, etc.)
+- Contexto global para injection de metadata custom
+
+**5. Models (Validación de datos)**
+- Modelos Pydantic para parsing robusto de respuestas JSON
+- Validación automática de tipos y constraints
+- Modelos: `ChatCompletion`, `Completion`, `Usage`, `Timings`
+
+**6. Config (Configuración)**
+- Sistema centralizado basado en dataclasses
+- Soporte para variables de entorno y custom settings
+- Control de observabilidad, masking, circuit breaker, endpoints
+
+**7. Integrations (Abstracciones de alto nivel)**
+- `MiniAgent`: Building block para workflows de agentes
+- `LLMRunnable`: Wrapper para invocaciones con structured output
+- Compatible con LangGraph, LangChain y frameworks custom
 
 ---
 
