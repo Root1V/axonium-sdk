@@ -58,7 +58,7 @@ El SDK está diseñado con una arquitectura en capas que separa responsabilidade
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Public API Layer                            │
-│  LLMClient │ Adapters (OpenAI, Llama) │ Integrations            │
+│  LLMClient │ Adapters (OpenAI, Llama) │ Agents                  │
 └─────────────────────────────────────────────────────────────────┘
                               │
                 ┌─────────────┼─────────────┐
@@ -67,7 +67,7 @@ El SDK está diseñado con una arquitectura en capas que separa responsabilidade
 │  Core Services   │  │ Observability│  │   Validation     │
 │                  │  │              │  │                  │
 │ • Auth Manager   │  │ • Langfuse   │  │ • Pydantic       │
-│ • HTTP Client    │  │ • Logging    │  │ • JSON Parser    │
+│ • Runnable       │  │ • Logging    │  │ • JSON Parser    │
 │ • Circuit Breaker│  │ • Masking    │  │ • Normalizers    │
 └──────────────────┘  └──────────────┘  └──────────────────┘
                               │
