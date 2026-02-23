@@ -1,111 +1,80 @@
 # LLM Arch SDK
 
-**SDK empresarial para integración de Large Language Models con capacidades de production-ready, observabilidad y orquestación de workflows.**
+**SDK Python para integración de Large Language Models con soporte multi-provider, observabilidad y capacidades enterprise.**
 
 ## Descripción
 
-LLM Arch SDK es una biblioteca Python de nivel empresarial diseñada para construir aplicaciones LLM robustas y escalables. Proporciona una capa de abstracción unificada sobre múltiples proveedores de LLM (OpenAI, Llama, etc.) con características avanzadas de observabilidad, structured output validation, workflow orchestration y enterprise-grade security.
+LLM Arch SDK es una biblioteca Python diseñada para simplificar la integración con múltiples proveedores de LLM (OpenAI, Llama y otros compatibles). Proporciona una interfaz unificada con gestión automática de autenticación, observabilidad opcional mediante Langfuse, validación de structured outputs y patrones de resiliencia para aplicaciones en producción.
 
-**Caso de uso ideal:** Aplicaciones enterprise que requieren integración multi-LLM, trazabilidad completa, manejo robusto de errores, structured outputs validados y workflows complejos de agentes.
+**Ideal para:** Aplicaciones que requieren integración con múltiples LLMs, trazabilidad de invocaciones, manejo robusto de errores y validación de respuestas estructuradas.
 
-## Características
+## Características principales
 
-### 🚀 Core Features
-
-- **Multi-Provider Adapters**: Interfaz unificada para OpenAI, Llama y cualquier API compatible
-- **Structured Output**: Validación automática de respuestas JSON con Pydantic models
-- **Smart JSON Parsing**: Sistema robusto con 85% reducción de errores de parsing
-- **Automatic Authentication**: TokenManager con renovación automática de tokens y retry logic
-- **Circuit Breaker Pattern**: Protección inteligente contra fallos en cascada (CLOSED/OPEN/HALF_OPEN)
-- **Response Normalization**: Estandarización automática de respuestas entre diferentes proveedores
-
-### 🏢 Enterprise Features
-
-- **Production-Ready Observability**: Integración opcional con Langfuse para trazabilidad completa
-  - Métricas automáticas de performance (latency, tokens, cost)
-  - Logging estructurado con contexto completo
-  - Stack traces y error previews para debugging
-- **PII Masking**: Sistema independiente de masking para datos sensibles (PII, tarjetas, emails)
-- **Configurable Settings**: Configuración centralizada via variables de entorno o settings custom
-- **HTTP Client Factory**: Cliente httpx robusto con retry, timeout y connection pooling
-
-### 🤖 Workflow Orchestration
-
-- **MiniAgent**: Abstracción declarativa para crear agentes LLM reutilizables
-  - Reduce código boilerplate en ~60%
-  - Compatible con LangGraph, LangChain y frameworks custom
-  - Observabilidad automática por agente
-- **LLMRunnable**: Wrapper de alto nivel para invocaciones LLM con structured output
-  - Schema injection automática en prompts
-  - Validación de JSON con mensajes de error claros
-  - Soporte para pipelines de múltiples agentes
-
-### 🛠️ Developer Experience
-
-- **Clean Public API**: Importaciones simples (`from llm_arch_sdk import MiniAgent`)
+- **Multi-Provider Adapters**: Interfaz unificada para OpenAI, Llama y APIs compatibles con OpenAI
+- **Structured Output Validation**: Validación automática de respuestas JSON mediante Pydantic models
+- **Automatic Authentication**: Gestión de tokens con renovación automática y retry logic
+- **Circuit Breaker Pattern**: Protección contra fallos en cascada con estados CLOSED/OPEN/HALF_OPEN
+- **Observability Integration**: Soporte opcional para Langfuse con trazas automáticas, métricas de performance y logging estructurado
+- **PII Masking**: Sistema configurable de enmascaramiento para datos sensibles (PII, tarjetas de crédito, emails)
+- **Response Normalization**: Estandarización de respuestas entre diferentes proveedores
+- **HTTP Client Factory**: Cliente HTTP basado en httpx con retry, timeout y connection pooling
+- **Configuration Management**: Sistema centralizado via variables de entorno o custom settings
 - **Type Safety**: Type hints completos en toda la biblioteca
-- **Comprehensive Testing**: 103 tests unitarios (100% passing) con alta cobertura
-- **Rich Examples**: 4 ejemplos completos desde básico hasta workflows empresariales con LangGraph
-- **Environment-based Config**: Soporte nativo para `.env` con python-dotenv
+- **Testing**: 103 tests unitarios con 100% de aprobación
 
-## ¿Por qué usar LLM Arch SDK?
+## Ventajas
 
-### 🎯 **Comparado con usar OpenAI/Anthropic directamente:**
-- ✅ **Abstracción multi-provider**: Cambia entre OpenAI, Llama y otros sin reescribir código
-- ✅ **Structured outputs validados**: Pydantic models + JSON parsing robusto (85% menos errores)
-- ✅ **Observabilidad enterprise**: Trazas automáticas con Langfuse, métricas y logging estructurado
-- ✅ **Resilience patterns**: Circuit breaker, retry logic y error handling incorporados
-- ✅ **Security by default**: Masking automático de PII en logs y traces
+**Comparado con usar APIs de LLM directamente:**
+- Interfaz unificada que permite cambiar entre proveedores sin reescribir código
+- Validación automática de structured outputs mediante Pydantic
+- Observabilidad integrada con Langfuse (opcional)
+- Patrones de resiliencia incluidos: circuit breaker, retry logic, error handling
+- Enmascaramiento automático de PII en logs y trazas
 
-### 🎯 **Comparado con LangChain:**
-- ✅ **Más ligero y simple**: Sin overhead de abstracciones complejas
-- ✅ **Type-safe**: Type hints completos, mejor autocompletado en IDEs
-- ✅ **Testing sólido**: 103 tests unitarios vs dependencia de integration tests
-- ✅ **Flexible**: Funciona standalone o integrado con LangGraph/LangChain
-- ✅ **Production-ready**: Circuit breakers, auth management, enterprise logging incorporados
+**Comparado con LangChain:**
+- Biblioteca más liviana y enfocada
+- Type safety completo con mejor soporte de IDEs
+- Suite de tests unitarios robusta (103 tests)
+- Compatible con LangChain/LangGraph cuando sea necesario
+- Gestión de autenticación y circuit breakers integrados
 
-### 🎯 **Para equipos enterprise:**
-- 📊 **Trazabilidad completa**: Desde request hasta respuesta con metadata automática
-- 🔐 **Compliance**: Masking de PII configurable (GDPR, HIPAA, SOC2)
-- 🛡️ **Resilience**: Circuit breakers, timeouts, automatic retries
-- 📈 **Observabilidad**: Métricas de performance, cost tracking, error analytics
-- 🔧 **Mantenible**: API limpia, tests completos, documentación exhaustiva
+**Para entornos de producción:**
+- Trazabilidad completa de invocaciones LLM con metadata automática
+- Enmascaramiento de PII configurable
+- Circuit breakers y timeouts para resiliencia
+- Métricas de performance y cost tracking
+- Configuración centralizada y testing exhaustivo
 
 ---
 
 ## Quick Start
 
 ```python
-from llm_arch_sdk import OpenAIAdapter, LLMRunnable
-from pydantic import BaseModel
+from llm_arch_sdk import OpenAIAdapter
+from llm_arch_sdk.client import LLMClient
 
-# 1. Define tu structured output
-class CodeReview(BaseModel):
-    rating: int  # 1-5
-    issues: list[str]
-    suggestions: list[str]
+# 1. Crear un adapter para tu proveedor LLM
+adapter = OpenAIAdapter(
+    model="gpt-4",
+    base_url="https://api.openai.com"
+)
 
-# 2. Crea el adapter y runnable
-adapter = OpenAIAdapter(model="gpt-4", base_url="https://api.openai.com")
-reviewer = LLMRunnable(adapter=adapter, output_model=CodeReview)
+# 2. Crear cliente LLM
+client = LLMClient(adapter=adapter)
 
-# 3. Invoca con validación automática
-result = reviewer.invoke({
-    "messages": [{"role": "user", "content": "Review: def add(a,b): return a+b"}]
-})
+# 3. Usar chat completions
+response = client.chat.create(
+    messages=[
+        {"role": "system", "content": "Eres un asistente útil."},
+        {"role": "user", "content": "¿Qué es Python?"}
+    ],
+    temperature=0.7
+)
 
-print(f"Rating: {result.rating}/5")  # Type-safe!
-print(f"Issues: {result.issues}")    # Validated!
+print(response.choices[0].message.content)
 ```
 
-**¿Qué acabas de lograr?**
-- ✅ Structured output validado con Pydantic
-- ✅ JSON parsing robusto (sin errores de formato)
-- ✅ Type safety completo en tu código
-- ✅ Schema injection automática en el prompt
-- ✅ Error handling incorporado
-
-**Para workflows más complejos:** Ver [ejemplo 4: LangGraph](#4--ejemplo-avanzado-con-langgraph-reflection-pattern)
+**Para ejemplos más avanzados:** Ver carpeta [examples/](examples/)
 
 ---
 
@@ -192,11 +161,9 @@ LLM_PASSWORD=tu_contraseña
 
 ### Configuración de observabilidad (opcional)
 
-El SDK incluye un **sistema de observabilidad empresarial de dos niveles** que se adapta a tus necesidades:
+El SDK incluye integración opcional con Langfuse para observabilidad y trazabilidad de invocaciones LLM.
 
-#### 🔍 Modo 1: Observabilidad completa con Langfuse (Production)
-
-**Cuándo usar:** Ambientes de producción que requieren trazabilidad completa, métricas de performance y análisis de costos.
+**Modo con Langfuse (recomendado para producción):**
 
 ```bash
 # En tu .env
@@ -209,121 +176,71 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 LANGFUSE_TRACING_ENVIRONMENT=production
 ```
 
-**Qué obtienes:**
-- ✅ **Trazas completas** de cada invocación LLM con jerarquía padre-hijo
-- ✅ **Metadata automática** (adapter, operation, model, duration_ms, token_usage)
-- ✅ **Cost tracking** basado en tokens consumidos por modelo
-- ✅ **Error analytics** con stack traces y previews de respuestas
-- ✅ **Masking de PII** aplicado automáticamente en traces
-- ✅ **Dashboard en Langfuse** para análisis visual y debugging
+Características:
+- Trazas completas de cada invocación LLM con jerarquía
+- Metadata automática (adapter, operation, model, duration_ms, token_usage)
+- Cost tracking basado en tokens consumidos
+- Error analytics con stack traces
+- Masking de PII aplicado automáticamente en traces
+- Dashboard en Langfuse para análisis y debugging
 
-**Ejemplo de trace:**
-```
-Generation: adapter.openai.chat
-├─ Metadata: {model: gpt-4, operation: chat, duration_ms: 1243}
-├─ Input: [masked if PII detected]
-├─ Output: {"response": "...", "tokens": 234}
-└─ Tags: [production, llm-arch-sdk:0.4.6]
-```
-
----
-
-#### 📝 Modo 2: Logs estructurados (Development)
-
-**Cuándo usar:** Ambientes de desarrollo/testing donde no necesitas telemetría centralizada pero sí visibilidad local.
+**Modo sin Langfuse (desarrollo/testing):**
 
 ```bash
 # En tu .env
 OBSERVABILITY_ENABLED=False
 ```
 
-**Qué obtienes:**
-- ✅ No se instancia ningún cliente de Langfuse (faster startup)
-- ✅ **Decoradores @observe()** no rompen el código (graceful degradation)
-- ✅ **Logs DEBUG** con metadata completa en stdout
-- ✅ **Masking de PII** aplicado en logs para seguridad
-- ✅ Métricas de performance en logs (duration_ms por invocación)
-- ✅ Ideal para desarrollo local sin overhead de telemetría
-
-**Ejemplo de logs:**
-
-```
-DEBUG - llm.sdk.observability.context - Observability disabled - logging trace info: 
-  {'metadata': {'operation': 'chat', 'model': 'llama-7b'}, 'tags': ['production']}
-```
-
-> **Nota importante**: Incluso con observabilidad deshabilitada, el SDK deja rastro de metadata y tags en logs. Los campos sensibles como `input` y `output` se filtran automáticamente para proteger datos privados.
+Características:
+- No se instancia cliente de Langfuse
+- Logs estructurados con metadata en stdout
+- Masking de PII aplicado en logs
+- Métricas de performance en logs
 
 **Nota**: Si `OBSERVABILITY_ENABLED=False`, no es necesario configurar las variables de Langfuse.
 
 ### Ejecutar ejemplos
 
-La carpeta `examples/` contiene **4 ejemplos progresivos** que cubren desde casos básicos hasta workflows empresariales complejos:
+La carpeta `examples/` contiene 4 ejemplos que demuestran diferentes capacidades del SDK:
 
-#### 1. 🟢 Ejemplo básico con LlamaAdapter
+#### 1. Ejemplo básico con LlamaAdapter
 ```bash
 uv run python examples/llama_example.py
 ```
-**Nivel:** Beginner | **Tiempo:** 5 min  
-**Qué aprenderás:** Uso fundamental del SDK sin complejidad adicional
+Demuestra el uso fundamental del SDK:
 - Health check del servidor LLM
-- Chat completions (conversaciones)
-- Text completions (generación de texto)
-- Embeddings (vectorización de texto)
+- Chat completions
+- Text completions
+- Embeddings
 
-**Ideal para:** Entender la API básica del SDK y probar conectividad
-
----
-
-#### 2. 🟡 Ejemplo con OpenAIAdapter  
+#### 2. Ejemplo con OpenAIAdapter  
 ```bash
 uv run python examples/openai_example.py
 ```
-**Nivel:** Beginner | **Tiempo:** 5 min  
-**Qué aprenderás:** Cómo cambiar de provider sin modificar tu código
+Muestra cómo cambiar de provider:
 - Uso de OpenAIAdapter (compatible con cualquier API OpenAI-like)
-- Chat completions con diferentes modelos
-- Text completions
+- Chat y text completions
 - Generación de embeddings
-- Manejo de errores y configuración personalizada
+- Configuración personalizada
 
-**Ideal para:** Multi-provider scenarios, testing con diferentes backends
-
----
-
-#### 3. 🟠 Ejemplo de Agentes con Structured Output
+#### 3. Ejemplo de Agentes con Structured Output
 ```bash
 uv run python examples/agents_example.py
 ```
-**Nivel:** Intermediate | **Tiempo:** 10 min  
-**Qué aprenderás:** Structured outputs y pipelines de agentes simples
-- **LLMRunnable** para structured output con Pydantic models
-- Validación automática de respuestas JSON
-- Pipeline de múltiples agentes: generador → crítico → refinador
-- Estado compartido entre agentes (dict-based)
+Demuestra structured outputs y pipelines:
+- Validación automática de respuestas JSON con Pydantic
+- Pipeline de múltiples agentes
+- Estado compartido entre agentes
 
-**Ideal para:** Aplicaciones que requieren outputs validados y análisis multi-paso
-
----
-
-#### 4. 🔴 Ejemplo avanzado con LangGraph (Reflection Pattern)
+#### 4. Ejemplo avanzado con LangGraph
 ```bash
 uv run python examples/langraph_example.py
 ```
-**Nivel:** Advanced | **Tiempo:** 15 min  
-**Qué aprenderás:** Workflows empresariales complejos con orquestación
-- **MiniAgent** como building block reutilizable
-- **LangGraph StateGraph** para workflow orchestration
-- Patrón de reflexión: draft → critique → refine (con loops condicionales)
-- 5 nodos coordinados: drafter, critic, refiner, 2 evaluadores
-- Observabilidad automática con Langfuse (traces por agente)
-- Estado tipado con TypedDict para type safety
-
-**Ideal para:** Sistemas de agentes empresariales, workflows complejos con decisiones condicionales
-
----
-
-**💡 Tip:** Los ejemplos están ordenados por complejidad. Si eres nuevo, empieza por el 1 y avanza progresivamente. Todos incluyen manejo robusto de errores y funcionan tanto con servidores reales como en modo de prueba.
+Workflow complejo con orquestación:
+- Integración con LangGraph StateGraph
+- Patrón de reflexión (draft → critique → refine)
+- Múltiples nodos coordinados
+- Observabilidad automática
 
 ## Estructura del Proyecto
 
@@ -332,7 +249,7 @@ llm_arch_sdk/
 ├── src/
 │   ├── __init__.py
 │   └── llm_arch_sdk/
-│       ├── __init__.py              # ✨ Public API exports
+│       ├── __init__.py              # Public API exports
 │       ├── adapters/
 │       │   ├── __init__.py
 │       │   ├── base_llm_adapter.py
@@ -351,9 +268,9 @@ llm_arch_sdk/
 │       ├── config/
 │       │   ├── __init__.py
 │       │   └── settings.py
-│       ├── integrations/              # ✨ NEW: Workflow tools
-│       │   ├── agent.py               # MiniAgent for LangGraph
-│       │   ├── llm_runnable.py        # LLMRunnable abstraction
+│       ├── integrations/              # Workflow abstractions
+│       │   ├── agent.py               # MiniAgent
+│       │   ├── llm_runnable.py        # LLMRunnable
 │       │   ├── node.py
 │       │   └── runnable.py
 │       ├── models/
@@ -404,26 +321,33 @@ llm_arch_sdk/
 
 ### Descripción de módulos
 
-- **adapters/**: Adaptadores multi-provider con interfaz unificada (OpenAI, Llama). Cada adapter maneja autenticación, retry logic y normalización específica del proveedor.
-- **auth/**: Sistema robusto de autenticación con TokenManager que maneja renovación automática, circuit breaking en login y gestión thread-safe de tokens.
+- **adapters/**: Implementaciones de adapters para diferentes proveedores LLM (OpenAI, Llama). Cada adapter implementa la interfaz base y maneja autenticación, retry logic y normalización específica del proveedor.
+
+- **auth/**: Sistema de autenticación con TokenManager que gestiona tokens de acceso, renovación automática y circuit breaking para endpoints de autenticación. Thread-safe para uso concurrente.
+
 - **client/**: Cliente HTTP con endpoints especializados (chat, completions, embeddings) construidos sobre httpx. Incluye manejo de errores, timeouts y connection pooling.
-- **config/**: Sistema de configuración centralizado basado en dataclasses. Soporta env vars, settings custom y valores por defecto sensatos. Controla observabilidad, masking, circuit breaker y endpoints.
-- **integrations/**: 🆕 **Toolkit de workflow orchestration** con abstracciones de alto nivel:
-  - `MiniAgent`: Agente reutilizable con observabilidad automática
-  - `LLMRunnable`: Wrapper para invocaciones con structured output
-  - `node.py`, `runnable.py`: Building blocks para workflows complejos
-- **models/**: Modelos Pydantic para parsing robusto de respuestas JSON. Incluye ChatCompletion, Completion, Usage, Timings y GenerationSettings con validación automática.
-- **normalizers/**: Utilidades inteligentes para procesamiento de texto:
+
+- **config/**: Sistema de configuración centralizado basado en dataclasses. Soporta variables de entorno y settings custom. Controla observabilidad, masking, circuit breaker y endpoints.
+
+- **integrations/**: Abstracciones adicionales para workflows y structured outputs:
+  - `agent.py`: MiniAgent para integración con frameworks de workflows
+  - `llm_runnable.py`: Wrapper para invocaciones con validación Pydantic
+  - `node.py`, `runnable.py`: Building blocks reutilizables
+
+- **models/**: Modelos Pydantic para parsing y validación de respuestas JSON. Incluye ChatCompletion, Completion, Usage, Timings y GenerationSettings.
+
+- **normalizers/**: Utilidades para procesamiento de texto:
   - `CompletionDetector`: Detecta si una respuesta está semánticamente completa
-  - `ContentNormalizer`: Limpia artefactos (asteriscos, whitespace, etc.)
-- **observability/**: Sistema de observabilidad empresarial con:
-  - Integración opcional con Langfuse para traces
-  - Contexto global con metadata injection (`obs.update()`)
+  - `ContentNormalizer`: Limpia artefactos de formato (asteriscos, whitespace, etc.)
+
+- **observability/**: Sistema de observabilidad con integración opcional a Langfuse:
+  - Bootstrap y contexto global para metadata injection
   - Sistema de masking configurable para PII
-  - Fallback a logs estructurados cuando observability está disabled
-- **transport/**: Capa de transporte robusta con:
-  - `CircuitBreaker`: Implementación completa del patrón con estados y timeouts
-  - `AuthHttpClientFactory`: Factory que crea clientes httpx con autenticación
+  - Fallback a logs estructurados cuando observability está deshabilitada
+
+- **transport/**: Capa de transporte HTTP:
+  - `CircuitBreaker`: Implementación del patrón circuit breaker con estados (CLOSED/OPEN/HALF_OPEN)
+  - `AuthHttpClientFactory`: Factory para clientes httpx con autenticación
   - `HttpClientFactory`: Factory base para clientes sin auth
 
 ## Pruebas
@@ -434,70 +358,35 @@ Para ejecutar las pruebas:
 uv run pytest test/
 ```
 
-**Estado actual: ✅ 103/103 tests pasando**
+**Estado actual: 103/103 tests aprobados**
 
-El proyecto incluye 103 pruebas unitarias organizadas en una estructura que refleja el código fuente, facilitando el mantenimiento y la localización de tests relacionados con módulos específicos.
-
-### Estructura de pruebas
+El proyecto incluye 103 pruebas unitarias organizadas por módulos:
 
 - `test/client/`: Tests para clientes y endpoints (chat, completions, embeddings)
 - `test/auth/`: Tests para autenticación y gestión de tokens
 - `test/transport/`: Tests para circuit breaker y transporte HTTP
 - `test/adapters/`: Tests para adaptadores de proveedores (Llama, OpenAI)
-- `test/integrations/`: ✨ Tests para MiniAgent y LLMRunnable (20 tests)
+- `test/integrations/`: Tests para abstracciones de workflows
 - `test/models/`: Tests para modelos de datos y parsing JSON
 - `test/normalizers/`: Tests para normalización de contenido
 
-### Cobertura de pruebas
-
-- **Total**: 103 tests unitarios (100% pasando)
-- **TokenManager**: Autenticación, renovación de tokens, circuit breaker
-- **CircuitBreaker**: Estados CLOSED/OPEN/HALF_OPEN, timeouts, time.monotonic
-- **Clientes**: ChatCompletions, Completions, Embeddings
-- **Adaptadores**: LlamaAdapter, OpenAIAdapter (con model requerido)
-- **Integrations**: 
-  - **MiniAgent** (10 tests): Inicialización, prompt building, ejecución, parámetros LLM, callable interface, error handling, state updates
-  - **LLMRunnable** (10 tests): Structured output, schema injection, JSON parsing, validación, múltiples invocaciones
-- **Modelos**: Parsing de respuestas JSON, validación de datos
-- **Normalizadores**: Detección de completitud semántica, limpieza de texto
-- **Transporte**: Manejo de HTTP, errores, timeouts
-
-### Cambios recientes en tests
-
-**v0.4.6 (2026-02-22):**
-- ✅ **20 nuevos tests** para `test/integrations/`
-  - 10 tests para MiniAgent (inicialización, execution flow, parámetros, error handling)
-  - 10 tests para LLMRunnable (structured output, schema injection, JSON parsing)
-- 🔧 **Correcciones de compatibilidad**:
-  - Adapters: Parámetro `model` ahora requerido en OpenAIAdapter y LlamaAdapter
-  - Completions: Parámetro `temperature` requerido en `create()`
-  - TokenManager: Tests usan settings custom en lugar de patch.dict de env vars
-  - CircuitBreaker: Mock correcto de `time.monotonic` (en lugar de `time.time`)
-  - Settings: `retry_value` cambiado de `int` a `str` para compatibilidad con httpx.Headers
+Cobertura de funcionalidades:
+- Autenticación y renovación de tokens
+- Circuit breaker con estados CLOSED/OPEN/HALF_OPEN
+- Clientes HTTP y endpoints especializados
+- Adaptadores multi-provider
+- Parsing y validación de respuestas JSON
+- Normalización de contenido
+- Manejo de errores y timeouts
 
 ## Historial de cambios
 
-### v0.4.6 (2026-02-22) ✨ LATEST RELEASE
+### v0.4.6 (2026-02-22)
 
-**🚀 Nuevas Funcionalidades:**
-- **MiniAgent**: Abstracción reutilizable para crear agentes LLM en workflows (ej: LangGraph)
-  - Reduce código repetitivo en ~60%
-  - Observabilidad automática con Langfuse
-  - API simple y declarativa
-- **Masking independiente**: Nueva variable `MASKING_ENABLED` separada de `OBSERVABILITY_ENABLED`
-  - Permite usar masking de PII sin activar observabilidad completa
-  - Guardrails de seguridad desacoplados
-
-**⚡ Mejoras:**
-- **JSON parsing mejorado**: 85% reducción de errores mediante prompts optimizados
-  - Instrucciones explícitas contra markdown code blocks
-  - Manejo correcto de escapado de comillas en código Python
-  - Validación robusta con mensajes de error informativos
-- **Enterprise logging**: Sistema de logs empresarial completo
-  - Métricas de performance (duration_ms) en cada invocación LLM
-  - Logging estructurado (DEBUG/INFO/ERROR) con contexto completo
-  - Trazabilidad de errores con stack traces y previews de respuestas
-- **API pública mejorada**: Nuevo `__init__.py` raíz para importaciones limpias
+**Nuevas funcionalidades:**
+- Abstracciones para workflows: MiniAgent y LLMRunnable para simplificar integraciones
+- Masking independiente: Nueva variable `MASKING_ENABLED` separada de `OBSERVABILITY_ENABLED`
+- API pública mejorada: Nuevo `__init__.py` raíz para importaciones simplificadas
   ```python
   # Antes
   from llm_arch_sdk.integrations.agent import MiniAgent
@@ -506,14 +395,18 @@ El proyecto incluye 103 pruebas unitarias organizadas en una estructura que refl
   from llm_arch_sdk import MiniAgent
   ```
 
-**🔧 Correcciones:**
+**Mejoras:**
+- JSON parsing mejorado con prompts optimizados y manejo de edge cases
+- Sistema de logging estructurado con métricas de performance (duration_ms)
+- Trazabilidad de errores con stack traces y previews de respuestas
+
+**Correcciones:**
 - Fix: Alineación de claves de estado entre nombres de agentes y prompt builders
 - Fix: Compatibilidad con Langfuse v3 (decorador @observe en generadores)
 
-**📚 Documentación:**
-- Nuevo ejemplo completo: `examples/langraph_example.py` (reflection pattern)
-- Documentación de MiniAgent y LLMRunnable
-- Guía de observabilidad actualizada
+**Documentación:**
+- Nuevo ejemplo: `examples/langraph_example.py` con patrón de reflexión
+- Documentación de observabilidad actualizada
 
 ---
 
@@ -545,13 +438,28 @@ El proyecto incluye 103 pruebas unitarias organizadas en una estructura que refl
 - ✅ Suite de tests unitarios completa
 - ✅ Documentación y ejemplos de uso
 
-## Contribución
+## 🤝 How to Contribute
 
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit tus cambios (`git commit -am 'Agrega nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
-5. Abre un Pull Request
+Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are greatly appreciated.
+
+1. **Fork the repository**
+2. **Create a new branch** for your feature or bug fix:
+   ```bash
+   git checkout -b feature/new-architecture
+   # or
+   git checkout -b bugfix/fix-typo
+   ```
+3. **Make your changes**: Please ensure the code is well-commented and follows the project's code style
+4. **Run the tests** to ensure everything works:
+   ```bash
+   uv run pytest test/
+   ```
+5. **Submit a pull request** with a detailed description of your changes
+
+You can also open an issue to:
+- Report a bug
+- Suggest an enhancement
+- Propose a new feature or architecture improvement
 
 ## Licencia
 
