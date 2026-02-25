@@ -1,13 +1,22 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
 import os
-from importlib.metadata import version
+from importlib.metadata import version, PackageNotFoundError
 
 # -------------------------
 # Constantes compartidas
 # -------------------------
 
-_SDK_NAME = "llm-arch-sdk"
+_SDK_NAME = "axonium"
+
+
+def _resolve_sdk_version() -> str:
+    for distribution_name in (_SDK_NAME, "llm-arch-sdk"):
+        try:
+            return version(distribution_name)
+        except PackageNotFoundError:
+            continue
+    return "0.0.0"
 
 # -------------------------
 # Observability
@@ -70,7 +79,7 @@ class LangfuseEnv:
     secret_key: Optional[str] = os.getenv("LANGFUSE_SECRET_KEY")
     base_url: Optional[str] = os.getenv("LANGFUSE_BASE_URL")
     environment: Optional[str] = os.getenv("LANGFUSE_TRACING_ENVIRONMENT")
-    release: str = field(default_factory=lambda: version(_SDK_NAME))
+    release: str = field(default_factory=_resolve_sdk_version)
 
 
 # -------------------------
@@ -79,7 +88,7 @@ class LangfuseEnv:
 
 @dataclass
 class OtelEnv:
-    service_name: str = field(default_factory=lambda: f"{_SDK_NAME}:{version(_SDK_NAME)}")
+    service_name: str = field(default_factory=lambda: f"{_SDK_NAME}:{_resolve_sdk_version()}")
     env_name : str = "OTEL_SERVICE_NAME"
 
 
@@ -120,7 +129,7 @@ class CircuitBreakerSettings:
 @dataclass
 class SdkIdentitySettings:
     name: str = _SDK_NAME
-    mversion: str = field(default_factory=lambda: version(_SDK_NAME))
+    mversion: str = field(default_factory=_resolve_sdk_version)
     accept: str = "application/json"
     
     @property

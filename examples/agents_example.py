@@ -18,9 +18,9 @@ import json
 
 load_dotenv()  # Carga variables de entorno desde .env
 
-from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
-from llm_arch_sdk.integrations.llm_runnable import LLMRunnable
-from llm_arch_sdk.observability.helpers import new_session_id
+from axonium.adapters.llama_adapter import LlamaAdapter
+from axonium.integrations.llm_runnable import LLMRunnable
+from axonium.observability.helpers import new_session_id
 
 
 # Configurar logging ANTES de importar el SDK para ver todos los mensajes

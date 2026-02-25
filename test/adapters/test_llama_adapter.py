@@ -1,13 +1,13 @@
 import pytest
 import os
 from unittest.mock import Mock, patch
-from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
-from llm_arch_sdk.client.llm_client import LlmClient
-from llm_arch_sdk.config.settings import SdkSettings, LlmBackendEnv
+from axonium.adapters.llama_adapter import LlamaAdapter
+from axonium.client.llm_client import LlmClient
+from axonium.config.settings import SdkSettings, LlmBackendEnv
 
 
 class TestLlamaAdapter:
-    @patch('llm_arch_sdk.adapters.llama_adapter.AuthHttpClientFactory')
+    @patch('axonium.adapters.llama_adapter.AuthHttpClientFactory')
     def test_init_with_env_var(self, mock_auth_factory):
         mock_http_client = Mock()
         mock_auth_factory.create.return_value = mock_http_client
@@ -23,7 +23,7 @@ class TestLlamaAdapter:
         )
 
     def test_init_with_custom_base_url(self):
-        with patch('llm_arch_sdk.adapters.llama_adapter.AuthHttpClientFactory') as mock_auth_factory:
+        with patch('axonium.adapters.llama_adapter.AuthHttpClientFactory') as mock_auth_factory:
 
             mock_http_client = Mock()
             mock_auth_factory.create.return_value = mock_http_client
@@ -42,8 +42,8 @@ class TestLlamaAdapter:
         with pytest.raises(RuntimeError, match="LLM_BASE_URL no configurada"):
             LlamaAdapter(model="test-model", settings=settings)
 
-    @patch('llm_arch_sdk.adapters.llama_adapter.AuthHttpClientFactory')
-    @patch('llm_arch_sdk.adapters.llama_adapter.LlmClient')
+    @patch('axonium.adapters.llama_adapter.AuthHttpClientFactory')
+    @patch('axonium.adapters.llama_adapter.LlmClient')
     def test_client_lazy_initialization(self, mock_llm_client_class, mock_auth_factory):
         mock_http_client = Mock()
         mock_auth_factory.create.return_value = mock_http_client
@@ -68,8 +68,8 @@ class TestLlamaAdapter:
         )
 
     @patch.dict(os.environ, {'LLM_BASE_URL': 'http://localhost:8000'}, clear=True)
-    @patch('llm_arch_sdk.adapters.llama_adapter.AuthHttpClientFactory')
-    @patch('llm_arch_sdk.adapters.llama_adapter.LlmClient')
+    @patch('axonium.adapters.llama_adapter.AuthHttpClientFactory')
+    @patch('axonium.adapters.llama_adapter.LlmClient')
     def test_client_initialization_params(self, mock_llm_client_class, mock_auth_factory):
         mock_http_client = Mock()
         mock_auth_factory.create.return_value = mock_http_client

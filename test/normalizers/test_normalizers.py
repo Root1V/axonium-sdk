@@ -1,5 +1,5 @@
-from llm_arch_sdk.normalizers.completion_detector import CompletionDetector
-from llm_arch_sdk.normalizers.content_normalizer import ContentNormalizer
+from axonium.normalizers.completion_detector import CompletionDetector
+from axonium.normalizers.content_normalizer import ContentNormalizer
 
 
 class TestCompletionDetector:

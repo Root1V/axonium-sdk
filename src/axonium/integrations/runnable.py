@@ -1,4 +1,4 @@
-# llm_arch_sdk/integrations/langchain/runnable.py
+# axonium/integrations/langchain/runnable.py
 
 from typing import Any, Dict, List, Optional, Union
 from langchain_core.runnables import Runnable
@@ -43,7 +43,7 @@ class SDKChatRunnable(Runnable):
 
 class SDKCompletionsRunnable(Runnable):
     """
-    Bridge entre LangChain y llm-arch-sdk para text completions.
+    Bridge entre LangChain y Axonium para text completions.
 
     Responsabilidad única:
     - normalizar prompt
@@ -105,7 +105,7 @@ class SDKCompletionsRunnable(Runnable):
 
 class SDKEmbeddingsRunnable(Runnable):
     """
-    Bridge entre LangChain y llm-arch-sdk para embeddings.
+    Bridge entre LangChain y Axonium para embeddings.
 
     Responsabilidad única:
     - normalizar input

@@ -1,10 +1,10 @@
-# LLM Arch SDK
+# Axonium
 
 SDK Python para integración multi-provider de LLMs con autenticación gestionada, circuit breaker, observabilidad y abstracciones para agentes.
 
 ## Descripción
 
-LLM Arch SDK es una biblioteca Python diseñada para simplificar la integración con múltiples proveedores de LLM (OpenAI, Llama y otros compatibles). Proporciona una interfaz unificada con las siguientes capacidades:
+Axonium es una biblioteca Python diseñada para simplificar la integración con múltiples proveedores de LLM (OpenAI, Llama y otros compatibles). Proporciona una interfaz unificada con las siguientes capacidades:
 
 - **Circuit Breaker**: Protección automática contra fallos en cascada con estados CLOSED/OPEN/HALF_OPEN
 - **Autenticación gestionada**: Renovación automática de tokens con retry logic y circuit breaking en endpoints de auth
@@ -47,41 +47,79 @@ LLM Arch SDK es una biblioteca Python diseñada para simplificar la integración
 
 ## Arquitectura
 
-El SDK está diseñado con una arquitectura en capas que separa responsabilidades y facilita la extensibilidad:
+### C4 - Context
 
+Diagrama de contexto del sistema (C4 Nivel 1) en ASCII:
+
+```text
+                  +-------------------------------------+
+                  | Aplicación Consumidora              |
+                  | (sistema externo)                   |
+                  +-----------------+-------------------+
+                                    | usa
+                                    v
++-------------------+---------------------------------------------------------+
+|                    Axonium SDK (biblioteca Python)                          |
++-------------------+---------------------------------------+-----------------+
+          | autenticación           |                       | inferencia
+          v                         |                       v
+   +-----------+----------------+   |      +----------------+---------+
+   | LLM-Security Server        |   |      | Llama-server             |
+   | login + emisión de token   |   |      | inferencia de modelos    |
+   +----------------------------+   |      +--------------------------+
+                                    | 
+                                    v trazas, métricas, metadata
+                        +-----------+----------------+
+                        | Langfuse Server            |
+                        | trazabilidad y observación |
+                        +----------------------------+
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Application Layer                        │
-│                   (Tu código usando el SDK)                     │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     Public API Layer                            │
-│  LLMClient │ Adapters (OpenAI, Llama) │ Agents                  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                ┌─────────────┼─────────────┐
-                ▼             ▼             ▼
-┌──────────────────┐  ┌──────────────┐  ┌──────────────────┐
-│  Core Services   │  │ Observability│  │   Validation     │
-│                  │  │              │  │                  │
-│ • Auth Manager   │  │ • Langfuse   │  │ • Pydantic       │
-│ • Runnable       │  │ • Logging    │  │ • JSON Parser    │
-│ • Circuit Breaker│  │ • Masking    │  │ • Normalizers    │
-└──────────────────┘  └──────────────┘  └──────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Transport Layer                            │
-│         httpx Client │ Connection Pooling │ Retry Logic         │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    External LLM APIs                            │
-│         OpenAI │ Llama Server │ Compatible APIs                 │
-└─────────────────────────────────────────────────────────────────┘
+
+### C4 - Container
+
+Diagrama de contenedores (C4 Nivel 2):
+
+```text
++----------------------------------------------------------------------------------+
+|                         Aplicación Consumidora                                   |
+|                   (código de negocio: workflows/APIs/jobs)                       |
++-------------------------------------------+--------------------------------------+
+                                            |
+                                            |
++-------------------------------------------+--------------------------------------+
+|                    Axonium SDK            |                                      |
+|                                           v                                      |
+|  +------------------------+      +--------+---------------+                      |
+|  | Models/Normalizers     |<-----| Adapters               |                      |
+|  | DTOs + validación.     |      | OpenAIAdapter/Llama    |                      |
+|  +------------------------+      +-----------+------------+                      |
+|                                              |                                   |
+|                                              v                                   |
+|                                  +-----------+------------+                      |
+|                                  | Client + Transport     |-----+                |
+|                                  | LlmClient/httpx/retry  |     |                |
+|                                  | circuit breaker        |     |                |
+|                                  +-----------+------------+     |                |
+|                                              |                  |                |
+|                                              v                  |                |
+|                                  +-----------+------------+     |                |
+|                                  | Auth                   |     |                |
+|                                  | TokenManager           |     |                |
+|                                  +------------------------+     |                |
+|                                                                 |                |
+|  +------------------------+       +---------------------+       |                |
+|  | Config                 |<------| Observability       |<-+----+                |
+|  | settings/env           |       | context/masking     |                        |
+|  +------------------------+       +---------------------+                        |
++----------------------------------------------------------------------------------+
+                 |                             |                           |              
+                 v                             v                           v
+   +-------------+-------------+    +----------+-----------+    +----------+--------+
+   | LLM-Security              |    | LLM Gateway          |    | Langfuse Server   |
+   | (login/token)             |    | Local Inference      |    | Trace/Span        |
+   +---------------------------+    +----------------------+    +----------+--------+
+                                                    
+                                             
 ```
 
 ### Componentes principales
@@ -128,7 +166,7 @@ El SDK está diseñado con una arquitectura en capas que separa responsabilidade
 ## Quick Start
 
 ```python
-from llm_arch_sdk import OpenAIAdapter
+from axonium import OpenAIAdapter
 
 # 1. Crear un adapter para tu proveedor LLM
 adapter = OpenAIAdapter(
@@ -163,7 +201,7 @@ print(response.choices[0].message.content)
 1. Clona el repositorio:
    ```bash
    git clone https://github.com/Root1V/llm-arch-sdk.git
-   cd llm_arch_sdk
+   cd axonium
    ```
 
 2. Instala las dependencias:
@@ -203,18 +241,18 @@ uv build
 
 3. Copia el SDK compilado a la carpeta de repositorio (opcional)
 ```bash
-cp /llm_arch_sdk/dist/llm_arch_sdk-0.4.6* /opt/python-repo/
+cp /axonium/dist/axonium-0.4.6* /opt/python-repo/
 ```
 
 4. Agrega el SDK en tu proyecto y sincroniza las dependencias
 ```bash
-uv add --find-links /opt/python-repo/ llm-arch-sdk
+uv add --find-links /opt/python-repo/ axonium
 uv sync --find-links /opt/python-repo/
 ```
 
 5. Alternativa usando `pip`
 ```bash
-pip install --find-links=/opt/python-repo llm-arch-sdk
+pip install --find-links=/opt/python-repo axonium
 ```
 
 ## Ejemplos de uso
@@ -318,10 +356,10 @@ Workflow complejo con orquestación:
 ## Estructura del Proyecto
 
 ```
-llm_arch_sdk/
+axonium/
 ├── src/
 │   ├── __init__.py
-│   └── llm_arch_sdk/
+│   └── axonium/
 │       ├── __init__.py              # Public API exports
 │       ├── adapters/
 │       │   ├── __init__.py
@@ -462,10 +500,10 @@ Cobertura de funcionalidades:
 - API pública mejorada: Nuevo `__init__.py` raíz para importaciones simplificadas
   ```python
   # Antes
-  from llm_arch_sdk.integrations.agent import MiniAgent
+   from axonium.integrations.agent import MiniAgent
   
   # Ahora
-  from llm_arch_sdk import MiniAgent
+   from axonium import MiniAgent
   ```
 
 **Mejoras:**
@@ -536,13 +574,13 @@ You can also open an issue to:
 
 ## Reconocimiento
 
-Si encuentras útil LLM Arch SDK en tu trabajo, considera:
+Si encuentras útil Axonium en tu trabajo, considera:
 - ⭐ Dar una estrella al repositorio
 - 📢 Compartir el proyecto con tu equipo
 - 🤝 Contribuir mejoras o reportar issues
 
 Para referencias en documentación técnica:
-- **Proyecto**: LLM Arch SDK
+- **Proyecto**: Axonium
 - **Repositorio**: https://github.com/Root1V/llm-arch-sdk
 - **Autor**: Emeric Espiritu Santiago
 - **Licencia**: MIT

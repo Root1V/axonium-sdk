@@ -61,7 +61,7 @@ El SDK **detecta automáticamente** la siguiente información:
 ### Uso Simple
 
 ```python
-from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
+from axonium.adapters.llama_adapter import LlamaAdapter
 from langfuse import propagate_attributes
 
 # 1. Establecer contexto global (session, user, etc)
@@ -88,7 +88,7 @@ response = client.chat.create(
 
 ```json
 {
-  "sdk.name": "llm-arch-sdk",
+  "sdk.name": "axonium",
   "sdk.version": "0.4.0-dev",
   "llm.base_url": "https://api.example.com",
   "llm.timeout": 30,

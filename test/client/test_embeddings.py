@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import Mock
-from llm_arch_sdk.client.embeddings import Embeddings
+from axonium.client.embeddings import Embeddings
 
 
 class TestEmbeddings:

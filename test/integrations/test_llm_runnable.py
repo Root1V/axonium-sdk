@@ -3,8 +3,8 @@ import json
 from unittest.mock import Mock, MagicMock
 from pydantic import BaseModel, Field, ValidationError
 
-from llm_arch_sdk.integrations.llm_runnable import LLMRunnable
-from llm_arch_sdk.adapters.base_llm_adapter import BaseLLMAdapter
+from axonium.integrations.llm_runnable import LLMRunnable
+from axonium.adapters.base_llm_adapter import BaseLLMAdapter
 
 
 class TestModel(BaseModel):

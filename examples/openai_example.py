@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 
 load_dotenv()  # Carga variables de entorno desde .env
 
-from llm_arch_sdk.adapters.open_ai_adapter import OpenAIAdapter
-from llm_arch_sdk.observability.helpers import new_session_id
+from axonium.adapters.open_ai_adapter import OpenAIAdapter
+from axonium.observability.helpers import new_session_id
 from langfuse import propagate_attributes
 
 

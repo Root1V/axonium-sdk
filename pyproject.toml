@@ -1,5 +1,5 @@
 [project]
-name = "llm-arch-sdk"
+name = "axonium"
 version = "0.5.0"
 description = "SDK para consumir llama-server con autenticación y renovación de tokens"
 readme = "README.md"

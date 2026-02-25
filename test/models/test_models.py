@@ -1,9 +1,9 @@
-from llm_arch_sdk.models.chat_completion import ChatMessage, ChatChoice, ChatCompletionResult
-from llm_arch_sdk.models.completion import CompletionResult
-from llm_arch_sdk.models.usage import Usage
-from llm_arch_sdk.models.timings import Timings
-from llm_arch_sdk.models.stop_type import StopType
-from llm_arch_sdk.models.generation_settings import GenerationSettings
+from axonium.models.chat_completion import ChatMessage, ChatChoice, ChatCompletionResult
+from axonium.models.completion import CompletionResult
+from axonium.models.usage import Usage
+from axonium.models.timings import Timings
+from axonium.models.stop_type import StopType
+from axonium.models.generation_settings import GenerationSettings
 
 
 class TestChatCompletionModels:

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock
-from llm_arch_sdk.client.chat_completions import ChatCompletions
-from llm_arch_sdk.models.chat_completion import ChatCompletionResult
+from axonium.client.chat_completions import ChatCompletions
+from axonium.models.chat_completion import ChatCompletionResult
 
 
 class TestChatCompletions:

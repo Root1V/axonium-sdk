@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock
-from llm_arch_sdk.client.completions import Completions
-from llm_arch_sdk.models.completion import CompletionResult
+from axonium.client.completions import Completions
+from axonium.models.completion import CompletionResult
 
 
 class TestCompletions:

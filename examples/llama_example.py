@@ -14,8 +14,8 @@ from dotenv import load_dotenv
 
 load_dotenv()  # Carga variables de entorno desde .env
 
-from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
-from llm_arch_sdk.observability.helpers import new_session_id
+from axonium.adapters.llama_adapter import LlamaAdapter
+from axonium.observability.helpers import new_session_id
 from langfuse import propagate_attributes
 
 # Configurar logging ANTES de importar el SDK para ver todos los mensajes

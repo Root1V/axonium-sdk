@@ -3,8 +3,8 @@ from unittest.mock import Mock, MagicMock, patch
 from pydantic import BaseModel, Field
 from typing import Dict, Any
 
-from llm_arch_sdk.integrations.agent import MiniAgent
-from llm_arch_sdk.adapters.base_llm_adapter import BaseLLMAdapter
+from axonium.integrations.agent import MiniAgent
+from axonium.adapters.base_llm_adapter import BaseLLMAdapter
 
 
 class TestOutputModel(BaseModel):
@@ -42,7 +42,7 @@ class TestMiniAgent:
         prompt_builder.__name__ = "test_prompt_builder"
         
         # Mock the LLMRunnable
-        with patch('llm_arch_sdk.integrations.agent.LLMRunnable') as mock_runnable_class:
+        with patch('axonium.integrations.agent.LLMRunnable') as mock_runnable_class:
             mock_runnable = Mock()
             mock_result = Mock()
             mock_result.model_dump.return_value = {"result": "test", "score": 10}
@@ -70,7 +70,7 @@ class TestMiniAgent:
             return f"Process: {state['input']}"
         
         # Mock LLMRunnable
-        with patch('llm_arch_sdk.integrations.agent.LLMRunnable') as mock_runnable_class:
+        with patch('axonium.integrations.agent.LLMRunnable') as mock_runnable_class:
             mock_runnable = Mock()
             mock_result = Mock()
             mock_result.model_dump.return_value = {"result": "processed", "score": 95}
@@ -107,7 +107,7 @@ class TestMiniAgent:
         prompt_builder = Mock(return_value="test")
         prompt_builder.__name__ = "test_prompt_builder"
         
-        with patch('llm_arch_sdk.integrations.agent.LLMRunnable') as mock_runnable_class:
+        with patch('axonium.integrations.agent.LLMRunnable') as mock_runnable_class:
             mock_runnable = Mock()
             mock_result = Mock()
             mock_result.model_dump.return_value = {"result": "ok", "score": 1}
@@ -137,7 +137,7 @@ class TestMiniAgent:
         adapter = Mock(spec=BaseLLMAdapter)
         prompt_builder = Mock(return_value="prompt")
         
-        with patch('llm_arch_sdk.integrations.agent.LLMRunnable'):
+        with patch('axonium.integrations.agent.LLMRunnable'):
             agent = MiniAgent(
                 adapter=adapter,
                 name="test",
@@ -154,7 +154,7 @@ class TestMiniAgent:
         prompt_builder = Mock(return_value="prompt")
         prompt_builder.__name__ = "test_prompt_builder"
         
-        with patch('llm_arch_sdk.integrations.agent.LLMRunnable') as mock_runnable_class:
+        with patch('axonium.integrations.agent.LLMRunnable') as mock_runnable_class:
             mock_runnable = Mock()
             mock_runnable.invoke.side_effect = ValueError("LLM error")
             mock_runnable_class.return_value = mock_runnable
@@ -175,7 +175,7 @@ class TestMiniAgent:
         prompt_builder = Mock(return_value="prompt")
         prompt_builder.__name__ = "test_prompt_builder"
         
-        with patch('llm_arch_sdk.integrations.agent.LLMRunnable') as mock_runnable_class:
+        with patch('axonium.integrations.agent.LLMRunnable') as mock_runnable_class:
             mock_runnable = Mock()
             mock_result = Mock()
             mock_result.model_dump.return_value = {"result": "test", "score": 42}

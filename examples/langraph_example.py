@@ -9,9 +9,9 @@ from pydantic import BaseModel, Field
 
 load_dotenv()  # Carga variables de entorno desde .env
 
-from llm_arch_sdk.adapters.llama_adapter import LlamaAdapter
-from llm_arch_sdk.integrations.agent import MiniAgent
-from llm_arch_sdk.observability.helpers import new_session_id
+from axonium.adapters.llama_adapter import LlamaAdapter
+from axonium.integrations.agent import MiniAgent
+from axonium.observability.helpers import new_session_id
 
 
 # Configurar logging ANTES de importar el SDK para ver todos los mensajes

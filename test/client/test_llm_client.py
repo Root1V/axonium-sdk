@@ -1,8 +1,8 @@
 import pytest
 import httpx
 from unittest.mock import Mock
-from llm_arch_sdk.client.llm_client import LlmClient, LlmAPIError
-from llm_arch_sdk.transport.circuit_breaker import CircuitBreakerOpen
+from axonium.client.llm_client import LlmClient, LlmAPIError
+from axonium.transport.circuit_breaker import CircuitBreakerOpen
 
 @pytest.fixture
 def mock_http_client():

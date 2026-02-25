@@ -2,8 +2,8 @@ import pytest
 import os
 from unittest.mock import Mock, patch, ANY
 from langchain_openai import ChatOpenAI
-from llm_arch_sdk.adapters.lang import LangChainAdapter
-from llm_arch_sdk.auth.token_manager import TokenManager
+from axonium.adapters.lang import LangChainAdapter
+from axonium.auth.token_manager import TokenManager
 
 
 class TestLangChainAdapter:
@@ -49,7 +49,7 @@ class TestLangChainAdapter:
 
     @patch.dict(os.environ, {'LLM_BASE_URL': 'http://localhost:8000', 'LLM_USERNAME': 'test', 'LLM_PASSWORD': 'test'}, clear=True)
     @patch.object(TokenManager, '_login')
-    @patch('llm_arch_sdk.adapters.lang_adapter.ChatOpenAI')
+    @patch('axonium.adapters.lang_adapter.ChatOpenAI')
     def test_client_lazy_initialization(self, mock_chatOpenai_class, mock_login):
         mock_login.return_value = None
         mock_chatOpenai_instance = Mock(spec=ChatOpenAI)
@@ -72,7 +72,7 @@ class TestLangChainAdapter:
 
     @patch.dict(os.environ, {'LLM_BASE_URL': 'http://custom.api.com', 'LLM_USERNAME': 'test', 'LLM_PASSWORD': 'test'}, clear=True)
     @patch.object(TokenManager, '_login')
-    @patch('llm_arch_sdk.adapters.lang_adapter.ChatOpenAI')
+    @patch('axonium.adapters.lang_adapter.ChatOpenAI')
     def test_client_initialization_params(self, mock_chatOpenai_class, mock_login):
         mock_login.return_value = None
         mock_chatOpenai_instance = Mock(spec=ChatOpenAI)

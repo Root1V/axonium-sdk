@@ -1,11 +1,11 @@
 """
-LLM Arch SDK - Enterprise LLM Integration Framework
+Axonium - Enterprise LLM Integration Framework
 
 A powerful SDK for consuming LLM servers with automatic authentication,
 token renewal, circuit breakers, and observability.
 
 Basic Usage:
-    >>> from llm_arch_sdk import LlamaAdapter, MiniAgent
+    >>> from axonium import LlamaAdapter, MiniAgent
     >>> 
     >>> # Create adapter
     >>> adapter = LlamaAdapter(model="llama-7b")

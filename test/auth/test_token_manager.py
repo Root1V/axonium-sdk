@@ -2,8 +2,8 @@ import pytest
 import httpx
 import os
 from unittest.mock import Mock, patch
-from llm_arch_sdk.auth.token_manager import TokenManager, AuthError
-from llm_arch_sdk.config.settings import SdkSettings, LlmBackendEnv
+from axonium.auth.token_manager import TokenManager, AuthError
+from axonium.config.settings import SdkSettings, LlmBackendEnv
 
 
 class TestTokenManager:
@@ -43,7 +43,7 @@ class TestTokenManager:
         with pytest.raises(RuntimeError, match="LLM_PASSWORD no configurado"):
             TokenManager(settings=settings)
 
-    @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
+    @patch('axonium.auth.token_manager.HttpClientFactory')
     def test_login_success(self, mock_factory):
         mock_client = Mock()
         mock_factory.create.return_value = mock_client
@@ -66,7 +66,7 @@ class TestTokenManager:
             auth=('testuser', 'testpass')
         )
 
-    @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
+    @patch('axonium.auth.token_manager.HttpClientFactory')
     def test_login_no_token_in_response(self, mock_factory):
         mock_client = Mock()
         mock_factory.create.return_value = mock_client
@@ -84,7 +84,7 @@ class TestTokenManager:
         with pytest.raises(AuthError, match="Login exitoso pero sin token"):
             manager._login()
 
-    @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
+    @patch('axonium.auth.token_manager.HttpClientFactory')
     def test_login_timeout(self, mock_factory):
         mock_client = Mock()
         mock_factory.create.return_value = mock_client
@@ -100,7 +100,7 @@ class TestTokenManager:
         with pytest.raises(AuthError, match="Timeout durante login"):
             manager._login()
 
-    @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
+    @patch('axonium.auth.token_manager.HttpClientFactory')
     def test_login_http_error(self, mock_factory):
         mock_client = Mock()
         mock_factory.create.return_value = mock_client
@@ -121,7 +121,7 @@ class TestTokenManager:
         with pytest.raises(AuthError, match="Error HTTP durante login: 500"):
             manager._login()
 
-    @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
+    @patch('axonium.auth.token_manager.HttpClientFactory')
     def test_login_circuit_breaker_open(self, mock_factory):
         mock_client = Mock()
         mock_factory.create.return_value = mock_client
@@ -139,7 +139,7 @@ class TestTokenManager:
         with pytest.raises(AuthError, match="Circuit breaker abierto: login bloqueado"):
             manager._login()
 
-    @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
+    @patch('axonium.auth.token_manager.HttpClientFactory')
     def test_auth_flow_first_request(self, mock_factory):
         mock_client = Mock()
         mock_factory.create.return_value = mock_client
@@ -171,7 +171,7 @@ class TestTokenManager:
         except StopIteration:
             pass
 
-    @patch('llm_arch_sdk.auth.token_manager.HttpClientFactory')
+    @patch('axonium.auth.token_manager.HttpClientFactory')
     def test_auth_flow_401_retry(self, mock_factory):
         mock_client = Mock()
         mock_factory.create.return_value = mock_client
