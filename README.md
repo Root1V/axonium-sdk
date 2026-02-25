@@ -43,13 +43,21 @@ Axonium es una biblioteca Python diseñada para simplificar la integración con 
 - **Configuración centralizada**: Sistema basado en variables de entorno o custom settings
 - **Compatible**: Funciona standalone o integrado con frameworks como LangChain/LangGraph
 
+## Dependencias
+Axonium se integra con componentes externos para operar un flujo LLM local con seguridad y trazabilidad end-to-end.
+
+- **[LLM Security](https://github.com/Root1V/llm-security.git)**: API de seguridad para autenticación y autorización, con generación y renovación automática de tokens.
+- **[LLM Inference](https://github.com/Root1V/LLMOps_Local_Agent.git)**: Servidor de inferencia local basado en llama-server para exponer modelos LLM y servir modelos cuantizados.
+- **[Langfuse Server](https://github.com/langfuse/langfuse.git)**: Plataforma de observabilidad y trazabilidad para registrar invocaciones, spans y métricas de modelos LLM y agentes.
+
+
 ---
 
 ## Arquitectura
 
 ### C4 - Context
 
-Diagrama de contexto del sistema (C4 Nivel 1) en ASCII:
+Diagrama de contexto del sistema (C4 Nivel 1):
 
 ```text
                   +-------------------------------------+
@@ -91,7 +99,7 @@ Diagrama de contenedores (C4 Nivel 2):
 +----------------------------------------------+-----------------------------------+
 |  Axonium SDK                                 |                                   |
 |                                              v                                   |
-|  +------------------------+      +--------+---------------+                      |
+|  +------------------------+      +-----------+------------+                      |
 |  | Models/Normalizers     |<-----| Adapters               |                      |
 |  | DTOs + validación.     |      | OpenAIAdapter/Llama    |                      |
 |  +------------------------+      +-----------+------------+                      |
@@ -119,68 +127,28 @@ Diagrama de contenedores (C4 Nivel 2):
    +-------------+-------------+    +----------+-----------+    +----------+--------+
    | LLM-Security              |    | LLM Gateway          |    | Langfuse Server   |
    | (login/token)             |    | Local Inference      |    | Trace/Span        |
-   +---------------------------+    +----------------------+    +----------+--------+
+   +---------------------------+    +----------------------+    +-------------------+
                                                     
                                              
 ```
-
-### Componentes principales
-
-**1. Adapters (Capa de abstracción)**
-- Interfaz unificada para diferentes proveedores LLM
-- Normalización de requests/responses entre providers
-- Implementaciones: `OpenAIAdapter`, `LlamaAdapter`
-
-**2. Transport (Capa de comunicación)**
-- Cliente HTTP basado en httpx con connection pooling
-- Circuit breaker para protección contra fallos
-- Retry logic configurable con backoff exponencial
-- Factories para crear clientes con/sin autenticación
-
-**3. Auth (Gestión de autenticación)**
-- `TokenManager`: Gestión automática de tokens de acceso
-- Renovación automática con circuit breaking en endpoints de auth
-- Thread-safe para uso concurrente
-
-**4. Observability (Trazabilidad y monitoreo)**
-- Integración opcional con Langfuse para traces distribuidos
-- Logging estructurado con metadata completa
-- Sistema de masking para PII (correos, tarjetas, etc.)
-- Contexto global para injection de metadata custom
-
-**5. Models (Validación de datos)**
-- Modelos Pydantic para parsing robusto de respuestas JSON
-- Validación automática de tipos y constraints
-- Modelos: `ChatCompletion`, `Completion`, `Usage`, `Timings`
-
-**6. Config (Configuración)**
-- Sistema centralizado basado en dataclasses
-- Soporte para variables de entorno y custom settings
-- Control de observabilidad, masking, circuit breaker, endpoints
-
-**7. Integrations (Abstracciones de alto nivel)**
-- `MiniAgent`: Building block para workflows de agentes
-- `LLMRunnable`: Wrapper para invocaciones con structured output
-- Compatible con LangGraph, LangChain y frameworks custom
-
 ---
 
 ## Quick Start
 
 ```python
-from axonium import OpenAIAdapter
+from axonium import LlamaAdapter
 
 # 1. Crear un adapter para tu proveedor LLM
-adapter = OpenAIAdapter(
-    model="gpt-4",
-    base_url="https://api.openai.com"
-)
+adapter = LlamaAdapter(
+            model="Mixtra-7B-Instruct-v0.1.Q4_0.gguf",
+            timeout=60.0,
+        )
 
 # 2. Usar chat directamente desde el adapter
 response = adapter.chat(
     messages=[
         {"role": "system", "content": "Eres un asistente útil."},
-        {"role": "user", "content": "¿Qué es Python?"}
+        {"role": "user", "content": "¿Qué funcion cumple el Axon?"}
     ],
     temperature=0.7
 )
@@ -202,7 +170,7 @@ print(response.choices[0].message.content)
 
 1. Clona el repositorio:
    ```bash
-   git clone https://github.com/Root1V/llm-arch-sdk.git
+   git clone https://github.com/Root1V/axonium-sdk.git
    cd axonium
    ```
 
@@ -227,13 +195,13 @@ print(response.choices[0].message.content)
    uv build
    ```
 
-### Instalación desde versión específica (para proyectos que consumen el SDK)
+### Instalación de una versión específica
 
 Si necesitas instalar una versión específica del SDK en tu proyecto:
 
 1. Clona el repositorio en la versión que requieras
 ```bash
-git fetch --tags && git checkout v0.4.6
+git fetch --tags && git checkout v0.5.0
 ```
 
 2. Crea el paquete del SDK
@@ -243,7 +211,7 @@ uv build
 
 3. Copia el SDK compilado a la carpeta de repositorio (opcional)
 ```bash
-cp /axonium/dist/axonium-0.4.6* /opt/python-repo/
+cp /axonium/dist/axonium-0.5.0* /opt/python-repo/
 ```
 
 4. Agrega el SDK en tu proyecto y sincroniza las dependencias
