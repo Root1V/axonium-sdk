@@ -229,7 +229,7 @@ Si necesitas instalar una versión específica del SDK en tu proyecto:
 
 1. Clona el repositorio en la versión que requieras
 ```bash
-git fetch --tags && git checkout v0.5.0
+git fetch --tags && git checkout v0.6.0
 ```
 
 2. Crea el paquete del SDK
@@ -239,7 +239,7 @@ uv build
 
 3. Copia el SDK compilado a la carpeta de repositorio (opcional)
 ```bash
-cp /axonium/dist/axonium-0.5.0* /opt/python-repo/
+cp /axonium/dist/axonium-0.6.0* /opt/python-repo/
 ```
 
 4. Agrega el SDK en tu proyecto y sincroniza las dependencias
@@ -500,7 +500,7 @@ Cobertura de funcionalidades:
 
 ## Historial de cambios
 
-### v0.4.7 (2026-02-28)
+### v0.6.0 (2026-02-28)
 
 **Nuevas funcionalidades:**
 - `async_chat`: Método asíncrono nativo disponible en `LlamaAdapter` y `OpenAIAdapter`
