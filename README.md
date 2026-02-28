@@ -19,13 +19,14 @@ Axonium es una biblioteca Python diseñada para simplificar la integración con 
 ## Características principales
 
 - **Multi-Provider Adapters**: Interfaz unificada para OpenAI, Llama y APIs compatibles con OpenAI
+- **Async Chat Support**: Método `async_chat` nativo en todos los adapters para invocaciones asíncronas y concurrentes
 - **Structured Output Validation**: Validación automática de respuestas JSON mediante Pydantic models
 - **Automatic Authentication**: Gestión de tokens con renovación automática y retry logic
 - **Circuit Breaker Pattern**: Protección contra fallos en cascada con estados CLOSED/OPEN/HALF_OPEN
 - **Observability Integration**: Soporte opcional para Langfuse con trazas automáticas, métricas de performance y logging estructurado
 - **PII Masking**: Sistema configurable de enmascaramiento para datos sensibles (PII, tarjetas de crédito, emails)
 - **Response Normalization**: Estandarización de respuestas entre diferentes proveedores
-- **HTTP Client Factory**: Cliente HTTP basado en httpx con retry, timeout y connection pooling
+- **HTTP Client Factory**: Cliente HTTP basado en httpx (sync y async) con retry, timeout y connection pooling
 - **Configuration Management**: Sistema centralizado via variables de entorno o custom settings
 - **Type Safety**: Type hints completos en toda la biblioteca
 - **Testing**: 103 tests unitarios con 100% de aprobación
@@ -33,6 +34,7 @@ Axonium es una biblioteca Python diseñada para simplificar la integración con 
 ## Ventajas clave
 
 - **Abstracción multi-provider**: Interfaz unificada que permite cambiar entre proveedores (OpenAI, Llama, etc.) sin reescribir código
+- **Async nativo**: `async_chat` disponible en todos los adapters para llamadas no bloqueantes y ejecución concurrente con `asyncio.gather`
 - **Validación automática**: Structured outputs con validación mediante Pydantic models y JSON parsing robusto
 - **Observabilidad integrada**: Soporte opcional para Langfuse con trazas automáticas, o logging estructurado como fallback
 - **Patrones de resiliencia**: Circuit breaker, retry logic, timeouts configurables y error handling robusto
@@ -135,25 +137,51 @@ Diagrama de contenedores (C4 Nivel 2):
 
 ## Quick Start
 
+**Chat síncrono:**
 ```python
 from axonium import LlamaAdapter
 
-# 1. Crear un adapter para tu proveedor LLM
 adapter = LlamaAdapter(
-            model="Mixtra-7B-Instruct-v0.1.Q4_0.gguf",
-            timeout=60.0,
-        )
+    model="Mixtra-7B-Instruct-v0.1.Q4_0.gguf",
+    timeout=60.0,
+)
 
-# 2. Usar chat directamente desde el adapter
 response = adapter.chat(
     messages=[
         {"role": "system", "content": "Eres un asistente útil."},
-        {"role": "user", "content": "¿Qué funcion cumple el Axon?"}
+        {"role": "user", "content": "¿Qué función cumple el Axon?"}
     ],
     temperature=0.7
 )
 
 print(response.choices[0].message.content)
+```
+
+**Chat asíncrono:**
+```python
+import asyncio
+from axonium import LlamaAdapter
+
+adapter = LlamaAdapter(model="Mixtra-7B-Instruct-v0.1.Q4_0.gguf", timeout=60.0)
+
+async def main():
+    # Llamada individual
+    response = await adapter.async_chat(
+        messages=[{"role": "user", "content": "¿Qué función cumple el Axon?"}],
+        temperature=0.7
+    )
+    print(response.choices[0].message.content)
+
+    # Múltiples llamadas en paralelo
+    tasks = [
+        adapter.async_chat(messages=[{"role": "user", "content": q}])
+        for q in ["¿Capital de Francia?", "¿Capital de Japón?", "¿Capital de México?"]
+    ]
+    resultados = await asyncio.gather(*tasks)
+    for r in resultados:
+        print(r.choices[0].message.content)
+
+asyncio.run(main())
 ```
 
 **Para ejemplos más avanzados:** Ver carpeta [examples/](examples/)
@@ -323,6 +351,15 @@ Workflow complejo con orquestación:
 - Múltiples nodos coordinados
 - Observabilidad automática
 
+#### 5. Ejemplo de async_chat
+```bash
+uv run python examples/async_chat_example.py
+```
+Demuestra el uso asíncrono nativo del SDK:
+- Llamada asíncrona individual con `LlamaAdapter` y `OpenAIAdapter`
+- Llamadas concurrentes con `asyncio.gather` para mayor throughput
+- Trazabilidad automática en cada invocación async
+
 ## Estructura del Proyecto
 
 ```
@@ -381,6 +418,7 @@ axonium/
 ├── examples/
 │   ├── .env                         # Variables de entorno
 │   ├── agents_example.py            # Pipeline de agentes con LLMRunnable
+│   ├── async_chat_example.py        # ✨ async_chat individual y concurrente
 │   ├── langraph_example.py          # ✨ LangGraph workflow con MiniAgent
 │   ├── llama_example.py             # Uso completo de LlamaAdapter
 │   └── openai_example.py            # Uso de OpenAIAdapter
@@ -461,6 +499,23 @@ Cobertura de funcionalidades:
 - Manejo de errores y timeouts
 
 ## Historial de cambios
+
+### v0.4.7 (2026-02-28)
+
+**Nuevas funcionalidades:**
+- `async_chat`: Método asíncrono nativo disponible en `LlamaAdapter` y `OpenAIAdapter`
+  - Llamadas no bloqueantes con `await adapter.async_chat(messages)`
+  - Soporte para concurrencia con `asyncio.gather` para múltiples invocaciones en paralelo
+  - Trazabilidad automática incluida (`@observe(name="adapter.*.async_chat")`)
+- `AuthHttpClientFactory.create_async()`: Factory que retorna `httpx.AsyncClient` para transporte async
+- `LlmClient._async_request()`: Método async con circuit breaker integrado
+- `ChatCompletions.async_create()`: Endpoint async para `LlmClient`
+- `AsyncOpenAI` integrado en `OpenAIAdapter` para llamadas async nativas vía SDK oficial
+
+**Ejemplos:**
+- Nuevo ejemplo: `examples/async_chat_example.py` con casos de uso individual y concurrente
+
+---
 
 ### v0.4.6 (2026-02-22)
 
