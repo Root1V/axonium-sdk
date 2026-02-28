@@ -36,6 +36,15 @@ class BaseLLMAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def async_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        **kwargs,
+    ) -> Any:
+        """Async chat-style completion (messages)."""
+        raise NotImplementedError
+
+    @abstractmethod
     def completions(
         self,
         prompt: str,

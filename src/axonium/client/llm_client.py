@@ -24,10 +24,11 @@ class LlmClient(BaseClient):
     Cliente liviano para llama-server compatible con OpenAI-style APIs
     """
 
-    def __init__(self, base_url: str, http_client: httpx.Client, settings = None):
+    def __init__(self, base_url: str, http_client: httpx.Client, async_http_client: httpx.AsyncClient = None, settings = None):
         self._settings = settings or get_sdk_settings() 
         self.base_url = base_url.rstrip("/")
         self._http_client = http_client
+        self._async_http_client = async_http_client
         self._circuit = CircuitBreaker()
 
         self.completions = Completions(self)
@@ -96,4 +97,56 @@ class LlmClient(BaseClient):
         logger.debug("llama.client.health response %s", raw)
 
         return Health.from_dict(raw)
-    
+
+    @observe(name="llama.async_request")
+    async def _async_request(self, method: str, endpoint: str, **kwargs):
+        if self._async_http_client is None:
+            raise RuntimeError(
+                "async_http_client no configurado. Pasa un httpx.AsyncClient al constructor de LlmClient."
+            )
+
+        if not self._circuit.allow_request():
+            raise CircuitBreakerOpen("Circuit abierto para llama-server")
+
+        try:
+            resp = await self._async_http_client.request(
+                method,
+                f"{self.base_url}{endpoint}",
+                **kwargs,
+            )
+            if resp.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
+                self._circuit.record_failure()
+                raise LlmAPIError(f"Error {resp.status_code}, {method} {endpoint}: {resp.text}")
+
+            self._circuit.record_success()
+            resp.raise_for_status()
+
+            obs.update(
+                metadata={
+                    "status_code": resp.status_code,
+                    "endpoint": endpoint,
+                    "method": method,
+                }
+            )
+
+            return resp.json()
+
+        except httpx.HTTPStatusError as e:
+            self._circuit.record_failure()
+            obs.update(
+                metadata={
+                    "status_code": e.response.status_code,
+                    "endpoint": endpoint,
+                }
+            )
+            raise LlmAPIError(f"HTTP {e.response.status_code}: {e.response.text}") from e
+
+        except (httpx.TimeoutException, httpx.RequestError) as e:
+            self._circuit.record_failure()
+            obs.update(
+                metadata={
+                    "endpoint": endpoint,
+                    "error_type": type(e).__name__,
+                }
+            )
+            raise LlmAPIError(str(e)) from e

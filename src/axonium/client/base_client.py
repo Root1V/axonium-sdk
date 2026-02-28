@@ -6,3 +6,7 @@ class BaseClient(ABC):
     @abstractmethod
     def _request(self, method: str, endpoint: str, **kwargs) -> Any:
         pass
+
+    @abstractmethod
+    async def _async_request(self, method: str, endpoint: str, **kwargs) -> Any:
+        pass

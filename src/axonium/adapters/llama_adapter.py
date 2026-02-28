@@ -35,9 +35,11 @@ class LlamaAdapter(BaseLLMAdapter):
         self._validate_config()
 
         self._http_client = AuthHttpClientFactory.create(timeout=self.timeout)
+        self._async_http_client = AuthHttpClientFactory.create_async(timeout=self.timeout)
         self._client = LlmClient(
             base_url=self.base_url,
             http_client=self._http_client,
+            async_http_client=self._async_http_client,
             **self.client_kwargs
         )
 
@@ -68,6 +70,26 @@ class LlamaAdapter(BaseLLMAdapter):
         )
         
         return self._client.chat.create(
+            model=self._model,
+            messages=messages,
+            **kwargs,
+        )
+
+    @observe(name="adapter.llama.async_chat", as_type="generation")
+    async def async_chat(self, messages: List[Dict[str, Any]], **kwargs):
+        sdk_metadata = build_sdk_metadata(
+            adapter=LLMAdapterType.LLAMA,
+            operation=LLMOperation.CHAT,
+            model=self._model
+        )
+        sdk_tags = build_sdk_tags(self._model)
+        obs.update(
+            input=messages,
+            metadata=sdk_metadata,
+            tags=sdk_tags
+        )
+
+        return await self._client.chat.async_create(
             model=self._model,
             messages=messages,
             **kwargs,

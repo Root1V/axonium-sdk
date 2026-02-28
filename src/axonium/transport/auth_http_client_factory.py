@@ -28,3 +28,24 @@ class AuthHttpClientFactory(HttpClientFactory):
             timeout=timeout,
             headers=headers,
         )
+
+    @classmethod
+    def create_async(
+        cls,
+        auth: TokenManager = None,
+        timeout: float = None,
+        extra_headers: dict = None,
+    ) -> httpx.AsyncClient:
+
+        auth = auth or TokenManager()
+        timeout = timeout or get_sdk_settings().auth.token_timeout
+
+        headers = cls._default_headers(extra_headers)
+
+        logger.debug("Creando httpx.AsyncClient con Autenticacion común para LLM")
+
+        return httpx.AsyncClient(
+            auth=auth,
+            timeout=timeout,
+            headers=headers,
+        )

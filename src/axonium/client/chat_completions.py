@@ -40,4 +40,32 @@ class ChatCompletions:
         except Exception as exc:
             logger.error("Error in llama.chatcompletions.create: %s", exc)
             raise
+
+    async def async_create(
+        self,
+        model: str,
+        messages: list,
+        **kwargs,
+    ) -> ChatCompletionResult:
+        payload = {
+            "model": model,
+            "messages": messages,
+            **kwargs,
+        }
+
+        logger.debug("llama.chatcompletions.async_create %s", payload)
+
+        try:
+            raw = await self._client._async_request(
+                "POST",
+                self._settings.llm.endpoints.chat_completions,
+                json=payload,
+            )
+
+            logger.debug("llama.chatcompletions.async_create response %s", raw)
+
+            return ChatCompletionResult.from_dict(raw)
+        except Exception as exc:
+            logger.error("Error in llama.chatcompletions.async_create: %s", exc)
+            raise
       

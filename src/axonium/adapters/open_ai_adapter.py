@@ -1,7 +1,7 @@
 import os
 import logging
 from typing import Any, Dict, List
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 from ..observability.context import obs, build_sdk_metadata, build_sdk_tags
 from ..observability.bootstrap import observe
@@ -36,11 +36,20 @@ class OpenAIAdapter(BaseLLMAdapter):
         self._validate_config()
 
         self._http_client = AuthHttpClientFactory.create(timeout=self.timeout)
+        self._async_http_client = AuthHttpClientFactory.create_async(timeout=self.timeout)
 
         self._client = OpenAI(
             base_url=self.base_url,
             api_key=self._settings.llm.openai_api_key,
             http_client=self._http_client,
+            default_headers=AuthHttpClientFactory._default_headers(),
+            **self.client_kwargs,
+        )
+
+        self._async_client = AsyncOpenAI(
+            base_url=self.base_url,
+            api_key=self._settings.llm.openai_api_key,
+            http_client=self._async_http_client,
             default_headers=AuthHttpClientFactory._default_headers(),
             **self.client_kwargs,
         )
@@ -71,6 +80,26 @@ class OpenAIAdapter(BaseLLMAdapter):
         )
         
         return self._client.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            **kwargs,
+        )
+
+    @observe(name="adapter.openai.async_chat", as_type="generation")
+    async def async_chat(self, messages: List[Dict[str, Any]], **kwargs):
+        sdk_metadata = build_sdk_metadata(
+            adapter=LLMAdapterType.OPENAI,
+            operation=LLMOperation.CHAT,
+            model=self._model
+        )
+        sdk_tags = build_sdk_tags(self._model)
+        obs.update(
+            input=messages,
+            metadata=sdk_metadata,
+            tags=sdk_tags
+        )
+
+        return await self._async_client.chat.completions.create(
             model=self._model,
             messages=messages,
             **kwargs,
