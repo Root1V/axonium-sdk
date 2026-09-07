@@ -29,7 +29,7 @@ Environment Variables:
 For more information, see: https://github.com/Root1V/llm-arch-sdk
 """
 
-__version__ = "0.4.6"
+__version__ = "0.6.0"
 
 # ==========================================
 # Public API - Adapters
