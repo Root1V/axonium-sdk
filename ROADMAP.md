@@ -31,7 +31,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | RM-23 | PyPI + TestPyPI pending publishers, GitHub environments | ⛔ | Owner action; needs the PyPI/GitHub accounts |
 | RM-24 | TestPyPI dry run | 📋 | After RM-23 |
 | RM-25 | Publish `python/v1.0.0rc1` | 📋 | After RM-24; a PyPI version cannot be reused |
-| RM-26 | Integration tests against a real deployment | ⛔ | Needs §9 base URLs, TLS chain and test credentials |
+| RM-26 | Integration tests against a real deployment | ✅ | Validated by hand against a local gateway; not yet automated |
 | RM-27 | Go SDK | 📋 | Contract already defined by RM-18 |
 | RM-28 | Rust SDK | 📋 | Contract already defined by RM-18 |
 | RM-29 | Optional caller-supplied `X-Trace-ID` | 📋 | Only adopted in legacy-mode deployments, and only as UUID4 |
@@ -44,3 +44,6 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | RM-36 | Response normalizers | 🚫 | Spanish-heuristic hacks tied to one backend's output |
 | RM-37 | Client-side circuit breaker | 🚫 | The gateway runs one with better information |
 | RM-38 | `v0.6` compatibility layer | 🚫 | No production consumers to migrate |
+| RM-39 | Automate the integration suite behind `AXONIUM_INTEGRATION=1` | 📋 | Manual today; keep it out of default CI |
+| RM-40 | Client-side modality check before sending | 📋 | Gateway accepts chat on an embedding model and returns garbage |
+| RM-41 | First-class access to `reasoning_content` | 📋 | Reasoning models leave `content` empty; field is preserved but undocumented |

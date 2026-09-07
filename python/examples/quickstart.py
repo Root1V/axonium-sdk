@@ -35,12 +35,20 @@ def main() -> None:
             print("This token has no model grants; ask the operator to add model:<id> scopes.")
             return
 
-        model = mine.ids[0]
+        text_models = [m.id for m in mine if m.modality == "text"]
+        if not text_models:
+            print("This token has no text model to chat with.")
+            return
+
+        model = text_models[0]
         try:
             completion = client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": "Reply with exactly: pong"}],
-                max_tokens=16,
+                # Generous on purpose. A reasoning model spends its budget thinking before it
+                # emits any content, so a small limit returns an empty string and
+                # finish_reason="length" rather than a short answer.
+                max_tokens=512,
             )
         except UnknownModelError:
             print(f"{model} is not registered on this gateway.")
@@ -51,7 +59,18 @@ def main() -> None:
             print(f"Denied: {exc}")
             return
 
-        print(f"\n{model} says: {completion.content}")
+        if completion.content:
+            print(f"\n{model} says: {completion.content}")
+        else:
+            # Unmodeled fields are preserved rather than dropped, so a reasoning model's output
+            # is still reachable even though this SDK does not model `reasoning_content`.
+            raw = completion.choices[0].message.model_dump() if completion.choices else {}
+            reasoning = raw.get("reasoning_content")
+            reason = completion.choices[0].finish_reason if completion.choices else None
+            print(f"\n{model} returned no content (finish_reason={reason!r}).")
+            if reasoning:
+                print(f"It was still reasoning: {reasoning[:120]}...")
+                print("Raise max_tokens to give it room to finish.")
 
         if completion.usage:
             print(f"Tokens: {completion.usage.total_tokens}")

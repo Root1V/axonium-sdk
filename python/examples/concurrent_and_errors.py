@@ -34,7 +34,9 @@ async def ask(client: AsyncAxonium, model: str, question: str) -> str:
         completion = await client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": question}],
-            max_tokens=32,
+            # Generous on purpose: a reasoning model spends its budget thinking before it emits
+            # any content, so a tight limit yields an empty string rather than a short answer.
+            max_tokens=512,
         )
     except RateLimitError as exc:
         # Already retried according to the policy; reaching here means the budget is still spent.
