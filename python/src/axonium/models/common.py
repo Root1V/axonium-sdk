@@ -9,15 +9,34 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, PrivateAttr
 
-__all__ = ["RateLimitSnapshot", "ResponseMeta", "Usage"]
+__all__ = ["APIObject", "RateLimitSnapshot", "ResponseMeta", "Usage"]
 
 
 class _Passthrough(BaseModel):
     """Base for backend-shaped payloads: tolerant on input, preserving unknown fields."""
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+
+class APIObject(_Passthrough):
+    """A top-level response body, carrying the correlation metadata of the response it came from.
+
+    ``meta`` is a private attribute rather than a field so that it cannot collide with a payload
+    key of the same name, and so it stays out of ``model_dump()`` — it describes the HTTP exchange,
+    not the resource.
+    """
+
+    _meta: ResponseMeta | None = PrivateAttr(default=None)
+
+    @property
+    def meta(self) -> ResponseMeta | None:
+        """Request and trace IDs, and the rate-limit budget, as of this response."""
+        return self._meta
+
+    def _attach(self, meta: ResponseMeta) -> None:
+        self._meta = meta
 
 
 class Usage(_Passthrough):
