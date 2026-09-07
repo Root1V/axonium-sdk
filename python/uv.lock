@@ -95,7 +95,6 @@ wheels = [
 
 [[package]]
 name = "axonium"
-version = "1.0.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },

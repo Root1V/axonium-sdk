@@ -3,6 +3,7 @@
 See ``spec/prometheus-gateway.md`` in the repository for the API contract this package implements.
 """
 
+from axonium._version import __version__
 from axonium.auth import TokenClaims, TokenSet
 from axonium.client import AsyncAxonium, Axonium
 from axonium.config import AxoniumConfig, Timeouts
@@ -65,8 +66,6 @@ from axonium.models.requests import (
 )
 from axonium.streaming import AsyncChatCompletionStream, ChatCompletionStream
 from axonium.transport.retry import CooldownRegistry, RetryPolicy
-
-__version__ = "1.0.0.dev0"
 
 __all__ = [
     "APIError",

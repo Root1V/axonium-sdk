@@ -2,8 +2,8 @@
 
 Python SDK for the Prometheus Gateway inference API.
 
-> **Status: in development.** The package skeleton is in place; the client is being implemented
-> phase by phase. Not yet published to PyPI.
+> **Status: release candidate.** The client is feature-complete against the current gateway
+> contract. Not yet published to PyPI.
 
 ## Installation
 
@@ -18,6 +18,60 @@ pip install "axonium[otel]"
 ```
 
 Requires Python 3.10+.
+
+## Quick start
+
+```python
+from axonium import Axonium
+
+with Axonium() as client:
+    print(client.models.mine().ids)  # what this token can actually call
+
+    completion = client.chat.completions.create(
+        model="llama3-8b-q4",
+        messages=[{"role": "user", "content": "Hello"}],
+    )
+    print(completion.content)
+```
+
+Streaming is a separate method, because it needs a different scope and is never retried
+automatically:
+
+```python
+with client.chat.completions.stream(model="llama3-8b-q4", messages=messages) as stream:
+    for chunk in stream:
+        print(chunk.content or "", end="", flush=True)
+    print(stream.usage())
+```
+
+`AsyncAxonium` mirrors the whole surface — same names, same behavior, with `await`, `async with`
+and `async for`.
+
+Runnable examples are in [`examples/`](examples/).
+
+## What the client does for you
+
+**Authentication.** Tokens are obtained with OAuth2 `client_credentials` and refreshed *ahead* of
+expiry, so a request never fails just to discover its token died. The lifetime comes from the
+server — its `Date` header and the token's `exp` claim are both server-side readings, so no clock
+skew between your machine and the platform can shorten or extend it. Concurrent callers share one
+refresh rather than each triggering their own.
+
+**Typed errors.** Every gateway error maps to its own exception class, so you branch on the type
+rather than string-matching a human-readable message. The token endpoint's errors are a separate
+branch of the hierarchy, since their shape and meaning differ — `except APIError` will not swallow
+an authentication failure.
+
+**Retries that will not double-bill you.** This API has no idempotency mechanism: a retried
+generation is a new billable one, not a replay. So retries happen only where the platform tells us
+no generation occurred — a rate limit, or a circuit breaker that fast-failed without reaching a
+model. A `502` may have reached one, so retrying it is opt-in. Client-side timeouts are never
+retried, because the backend is probably still working. A server-supplied `Retry-After` is honored,
+but capped: a wait longer than `max_backoff` is handed back to you rather than slept through.
+
+**Request validation before the wire.** The gateway silently drops fields it does not accept, so
+the SDK warns by name about every one it removes instead of letting you believe a parameter took
+effect. Remote image URLs are rejected client-side, with the SSRF reason spelled out.
 
 ## Configuration
 

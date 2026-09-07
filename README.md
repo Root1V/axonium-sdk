@@ -13,7 +13,7 @@ response.
 
 | Language | Package | Status |
 |---|---|---|
-| Python | [`axonium`](python/) on PyPI | 🚧 In development — reference implementation |
+| Python | [`axonium`](python/) on PyPI | ✅ Release candidate — reference implementation |
 | Go | `github.com/Root1V/axonium-sdk/go` | 📋 Planned — see [go/README.md](go/) |
 | Rust | [`axonium`](rust/) on crates.io | 📋 Planned — see [rust/README.md](rust/) |
 
