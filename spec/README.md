@@ -13,17 +13,34 @@ rather than reimplemented three times from prose.
 
 ## How the contract tests work
 
-Each case in `cases/manifest.json` describes a request, the canned response to serve for it, and
-what the SDK is expected to produce — a typed error class with a given retryability, or a success
-with specific extracted fields. Each SDK mocks its own HTTP layer, replays every case, and asserts
-the expectation.
+Each case in `cases/manifest.json` names an operation, the canned response to serve for it, and
+what the SDK must produce. Each SDK mocks its own HTTP layer, replays every case, and asserts the
+expectation. Because all three read the same manifest and the same fixture bytes, identical
+behavior is enforced by construction rather than by three hand-written suites that drift apart.
 
-Because all three SDKs read the same manifest and the same fixture bytes, identical behavior is
-enforced by construction rather than by three hand-written suites that drift apart.
+A case's `expect.kind` selects how it is checked:
+
+| `kind` | Meaning |
+|---|---|
+| `ok` | The response parses and every path in `fields` resolves to the stated value |
+| `stream` | The stream assembles to `content` over `chunks` chunks, with the stated `usage` (`null` when none can be determined) |
+| `stream_error` | The stream raises the SDK's stream-interrupted error, preserving `partial_content` |
+
+`fields` paths are dotted, with integer segments indexing into lists (`choices.0.finish_reason`),
+resolved against the SDK's own accessors where it has them (`content`, `usage.total_tokens`).
+
+**The error taxonomy is not duplicated here.** `errors.json` is the source of truth for it, and
+each SDK asserts its own error types against that file directly. The manifest covers what only
+concrete wire data can express: response parsing, header parsing, and streaming behavior.
+
+Each SDK should also assert that every case in the manifest is actually executed by one of its
+runners. Without that check, a case using a `kind` an SDK does not implement is silently skipped —
+looking covered while verifying nothing.
 
 SSE fixtures are stored as literal wire bytes, including blank-line record separators, the
-terminal `data: [DONE]` sentinel, and the in-band `{"error": ...}` mid-stream failure shape. Do not
-reformat or prettify them.
+terminal `data: [DONE]` sentinel, and the in-band `{"error": ...}` mid-stream failure shape. They
+are captures, not documents: reformatting one silently changes what every SDK is tested against.
+The `spec-lint` workflow enforces this.
 
 ## Platform-team clarifications
 

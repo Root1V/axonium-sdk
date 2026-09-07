@@ -1,0 +1,95 @@
+name: spec-lint
+
+# The spec directory is the contract all three SDKs are built against, so a malformed file there
+# breaks every language at once. This validates it independently of any SDK's test suite.
+
+on:
+  push:
+    branches: [main]
+    paths: ["spec/**", ".github/workflows/spec-lint.yml"]
+  pull_request:
+    paths: ["spec/**", ".github/workflows/spec-lint.yml"]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Every JSON file parses
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          for path in sorted(Path("spec").rglob("*.json")):
+              json.loads(path.read_text())
+              print(f"ok  {path}")
+          PY
+
+      - name: Contract cases are well-formed and fixtures resolve
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          spec = Path("spec")
+          manifest = json.loads((spec / "cases" / "manifest.json").read_text())
+          cases = manifest["cases"]
+
+          ids = [case["id"] for case in cases]
+          assert len(ids) == len(set(ids)), "duplicate case ids"
+
+          referenced = set()
+          for case in cases:
+              response = case["response"]
+              name = response.get("body_file") or response["sse_file"]
+              assert (spec / "fixtures" / name).exists(), f"{case['id']}: missing {name}"
+              referenced.add(name)
+
+          on_disk = {p.name for p in (spec / "fixtures").iterdir() if p.is_file()}
+          orphans = on_disk - referenced
+          assert not orphans, f"fixtures referenced by no case: {sorted(orphans)}"
+
+          print(f"ok  {len(cases)} cases, {len(referenced)} fixtures")
+          PY
+
+      - name: SSE fixtures keep their literal wire framing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # These are captures, not documents: reformatting them would silently change what the
+          # SDKs are tested against.
+          for path in sorted(Path("spec/fixtures").glob("*.sse")):
+              raw = path.read_bytes()
+              assert b"\r" not in raw, f"{path}: CRLF line endings"
+              assert raw.endswith(b"\n\n"), f"{path}: missing the terminating blank line"
+              assert b"data: [DONE]\n" in raw, f"{path}: no [DONE] sentinel"
+              print(f"ok  {path}")
+          PY
+
+      - name: Error catalog covers every documented field
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          catalog = json.loads(Path("spec/errors.json").read_text())
+
+          for entry in catalog["gateway_errors"]:
+              for field in ("status", "suffix", "meaning", "retryable"):
+                  assert field in entry, f"{entry.get('suffix')}: missing {field}"
+
+          for entry in catalog["oauth_errors"]:
+              for field in ("status", "error", "meaning", "retryable"):
+                  assert field in entry, f"{entry.get('error')}: missing {field}"
+
+          suffixes = [entry["suffix"] for entry in catalog["gateway_errors"]]
+          assert len(suffixes) == len(set(suffixes)), "duplicate error suffixes"
+
+          print(f"ok  {len(suffixes)} gateway errors, {len(catalog['oauth_errors'])} oauth errors")
+          PY

@@ -1,0 +1,186 @@
+{
+  "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
+  "version": 1,
+  "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
+  "cases": [
+    {
+      "id": "chat-completion-basic",
+      "operation": "chat.completions.create",
+      "request": {
+        "model": "llama3-8b-q4",
+        "messages": [{ "role": "user", "content": "Hello" }]
+      },
+      "response": { "status": 200, "body_file": "chat_completion.json" },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "content": "Hello! How can I help?",
+          "model": "llama3-8b-q4",
+          "usage.prompt_tokens": 5,
+          "usage.completion_tokens": 9,
+          "usage.total_tokens": 14,
+          "choices.0.finish_reason": "stop"
+        }
+      }
+    },
+    {
+      "id": "chat-completion-tool-calls",
+      "$comment": "Tool calls are passed through untouched; the gateway does not interpret them. content is null when the model returns calls instead of prose.",
+      "operation": "chat.completions.create",
+      "request": {
+        "model": "llama3-8b-q4",
+        "messages": [{ "role": "user", "content": "weather in Lima?" }]
+      },
+      "response": { "status": 200, "body_file": "chat_completion_tool_calls.json" },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "content": null,
+          "choices.0.finish_reason": "tool_calls",
+          "tool_calls.0.id": "call_1"
+        }
+      }
+    },
+    {
+      "id": "chat-completion-backend-timings",
+      "$comment": "llama.cpp-family backends add timings alongside usage. Backend-dependent, so it must parse when present and be absent without error otherwise.",
+      "operation": "chat.completions.create",
+      "request": {
+        "model": "llama3-8b-q4",
+        "messages": [{ "role": "user", "content": "Hi" }]
+      },
+      "response": { "status": 200, "body_file": "chat_completion_timings.json" },
+      "expect": {
+        "kind": "ok",
+        "fields": { "timings.predicted_n": 20, "usage.total_tokens": 33 }
+      }
+    },
+    {
+      "id": "chat-rate-limit-headers-on-success",
+      "$comment": "The budget must be readable before a 429 is ever seen, so a caller can slow down rather than only react.",
+      "operation": "chat.completions.create",
+      "request": {
+        "model": "llama3-8b-q4",
+        "messages": [{ "role": "user", "content": "Hello" }]
+      },
+      "response": {
+        "status": 200,
+        "body_file": "chat_completion.json",
+        "headers": {
+          "X-Request-ID": "5c1e2b3a-0000-4000-8000-000000000000",
+          "X-Trace-ID": "b04044d6-0000-4000-8000-000000000000",
+          "X-RateLimit-Limit-Requests": "60",
+          "X-RateLimit-Remaining-Requests": "59",
+          "X-RateLimit-Reset-Requests": "1700000060",
+          "X-RateLimit-Limit-Tokens": "100000",
+          "X-RateLimit-Remaining-Tokens": "99986",
+          "X-RateLimit-Reset-Tokens": "1700000060"
+        }
+      },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "meta.request_id": "5c1e2b3a-0000-4000-8000-000000000000",
+          "meta.trace_id": "b04044d6-0000-4000-8000-000000000000",
+          "meta.rate_limit.remaining_requests": 59,
+          "meta.rate_limit.remaining_tokens": 99986
+        }
+      }
+    },
+    {
+      "id": "catalog-list",
+      "operation": "models.list",
+      "response": { "status": 200, "body_file": "models_catalog.json" },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "data.0.id": "llama3-8b-q4",
+          "data.0.context_length": 8192,
+          "data.0.modality": "text",
+          "data.1.modality": "embedding"
+        }
+      }
+    },
+    {
+      "id": "catalog-mine-empty",
+      "$comment": "A token holding an inference scope but no model grants gets an empty list, not an error.",
+      "operation": "models.mine",
+      "response": { "status": 200, "body_file": "models_mine_empty.json" },
+      "expect": { "kind": "ok", "fields": { "data": [] } }
+    },
+    {
+      "id": "embeddings-batch",
+      "$comment": "Embedding usage carries no completion_tokens: there is no generation phase.",
+      "operation": "embeddings.create",
+      "request": { "model": "embed-model", "input": ["first text", "second text"] },
+      "response": { "status": 200, "body_file": "embeddings.json" },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "data.0.embedding": [0.1, 0.2, 0.3],
+          "usage.prompt_tokens": 2,
+          "usage.completion_tokens": null
+        }
+      }
+    },
+    {
+      "id": "images-base64",
+      "$comment": "Images come back inline as base64, never as a URL; decoding and persisting is the caller's job.",
+      "operation": "images.generate",
+      "request": { "model": "sd-turbo", "prompt": "a photo of a cat", "n": 1, "size": "512x512" },
+      "response": { "status": 200, "body_file": "images.json" },
+      "expect": {
+        "kind": "ok",
+        "fields": { "output_format": "png", "data.0.b64_json": "aVZCT1J3MEtHZ28=" }
+      }
+    },
+    {
+      "id": "stream-basic",
+      "$comment": "Content assembles across chunks and the [DONE] sentinel terminates the stream.",
+      "operation": "chat.completions.stream",
+      "request": {
+        "model": "llama3-8b-q4",
+        "messages": [{ "role": "user", "content": "Hi" }]
+      },
+      "response": { "status": 200, "sse_file": "chat_stream_ok.sse" },
+      "expect": {
+        "kind": "stream",
+        "content": "Hello, world!",
+        "chunks": 4,
+        "usage": { "prompt_tokens": 15, "completion_tokens": 20, "estimated": true }
+      }
+    },
+    {
+      "id": "stream-usage-chunk",
+      "$comment": "Backends that do report usage take precedence over any figure derived from timings.",
+      "operation": "chat.completions.stream",
+      "request": { "model": "m", "messages": [{ "role": "user", "content": "Hi" }] },
+      "response": { "status": 200, "sse_file": "chat_stream_usage.sse" },
+      "expect": {
+        "kind": "stream",
+        "content": "Hi",
+        "chunks": 2,
+        "usage": { "prompt_tokens": 5, "completion_tokens": 9, "estimated": false }
+      }
+    },
+    {
+      "id": "stream-terminates-immediately",
+      "operation": "chat.completions.stream",
+      "request": { "model": "m", "messages": [{ "role": "user", "content": "Hi" }] },
+      "response": { "status": 200, "sse_file": "chat_stream_empty.sse" },
+      "expect": { "kind": "stream", "content": "", "chunks": 0, "usage": null }
+    },
+    {
+      "id": "stream-interrupted",
+      "$comment": "The status is 200 and the headers are already committed, so only the in-band chunk reveals the failure. Detection must key off the presence of an 'error' field rather than its message. The partial output received first must survive on the raised error.",
+      "operation": "chat.completions.stream",
+      "request": { "model": "m", "messages": [{ "role": "user", "content": "Hi" }] },
+      "response": { "status": 200, "sse_file": "chat_stream_interrupted.sse" },
+      "expect": {
+        "kind": "stream_error",
+        "error": "stream-interrupted",
+        "partial_content": "Hello, wor"
+      }
+    }
+  ]
+}

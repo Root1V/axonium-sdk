@@ -1,0 +1,15 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "llama3-8b-q4",
+      "object": "model",
+      "owned_by": "prometheus",
+      "context_length": 8192,
+      "family": "llama3",
+      "quantization": "Q4_0",
+      "modality": "text"
+    },
+    { "id": "embed-model", "object": "model", "owned_by": "prometheus", "modality": "embedding" }
+  ]
+}

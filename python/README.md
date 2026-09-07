@@ -66,7 +66,7 @@ Anything you need to log about the content, you already have at the call site.
 **OpenTelemetry spans** are available behind an extra and off by default:
 
 ```python
-client = Axonium(otel_enabled=True)   # or AXONIUM_OTEL_ENABLED=true
+client = Axonium(otel_enabled=True)  # or AXONIUM_OTEL_ENABLED=true
 ```
 
 Spans only — exporters and providers are your application's to configure. Trace context is not

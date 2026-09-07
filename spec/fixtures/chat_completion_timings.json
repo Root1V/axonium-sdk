@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-timings",
+  "object": "chat.completion",
+  "model": "llama3-8b-q4",
+  "choices": [
+    { "index": 0, "message": { "role": "assistant", "content": "Hi" }, "finish_reason": "stop" }
+  ],
+  "usage": { "prompt_tokens": 13, "completion_tokens": 20, "total_tokens": 33 },
+  "timings": {
+    "prompt_n": 13, "prompt_ms": 34.25, "prompt_per_second": 379.5,
+    "predicted_n": 20, "predicted_ms": 50.3, "predicted_per_second": 397.6,
+    "predicted_per_token_ms": 2.52
+  }
+}

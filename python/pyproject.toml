@@ -60,6 +60,14 @@ markers = [
 source = ["axonium"]
 branch = true
 
+[tool.coverage.report]
+# The suite reaches 100% line and branch coverage today. The gate sits a little below that so an
+# unrelated change does not fail CI on a single defensive branch, while still blocking any real
+# regression in coverage.
+fail_under = 98
+show_missing = true
+skip_covered = true
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"

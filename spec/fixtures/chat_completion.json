@@ -1,0 +1,13 @@
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "model": "llama3-8b-q4",
+  "choices": [
+    {
+      "index": 0,
+      "message": { "role": "assistant", "content": "Hello! How can I help?" },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": 5, "completion_tokens": 9, "total_tokens": 14 }
+}
