@@ -1,7 +1,6 @@
 """Python SDK for the Prometheus Gateway inference API.
 
-The client surface is assembled here as the implementation lands. See ``spec/prometheus-gateway.md``
-in the repository for the API contract this package implements.
+See ``spec/prometheus-gateway.md`` in the repository for the API contract this package implements.
 """
 
 from axonium.auth import TokenClaims, TokenSet
@@ -41,7 +40,22 @@ from axonium.errors import (
     UsageStoreUnavailableError,
 )
 from axonium.models.catalog import Model, ModelList
+from axonium.models.chat import ChatChoice, ChatCompletion, CompletionMessage, Timings
 from axonium.models.common import APIObject, RateLimitSnapshot, ResponseMeta, Usage
+from axonium.models.inference import (
+    CreateEmbeddingResponse,
+    Embedding,
+    GeneratedImage,
+    ImagesResponse,
+)
+from axonium.models.requests import (
+    ChatCompletionRequest,
+    ContentPart,
+    EmbeddingsRequest,
+    ImageGenerationRequest,
+    Message,
+)
+from axonium.transport.retry import CooldownRegistry, RetryPolicy
 
 __version__ = "1.0.0.dev0"
 
@@ -55,12 +69,25 @@ __all__ = [
     "AxoniumError",
     "BackendUnavailableError",
     "BadRequestError",
+    "ChatChoice",
+    "ChatCompletion",
+    "ChatCompletionRequest",
+    "CompletionMessage",
     "ConfigurationError",
+    "ContentPart",
     "ContextExceededError",
+    "CooldownRegistry",
+    "CreateEmbeddingResponse",
+    "Embedding",
+    "EmbeddingsRequest",
     "ForbiddenError",
+    "GeneratedImage",
+    "ImageGenerationRequest",
+    "ImagesResponse",
     "InvalidClientError",
     "InvalidScopeError",
     "InvalidTokenError",
+    "Message",
     "MissingCredentialsError",
     "ModalityMismatchError",
     "Model",
@@ -71,11 +98,13 @@ __all__ = [
     "RateLimitSnapshot",
     "RateLimitingUnavailableError",
     "ResponseMeta",
+    "RetryPolicy",
     "ServerError",
     "SpendCapExceededError",
     "StreamInterruptedError",
     "TimeoutError",
     "Timeouts",
+    "Timings",
     "TokenClaims",
     "TokenExpiredError",
     "TokenRevokedError",

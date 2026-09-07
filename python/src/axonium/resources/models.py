@@ -28,7 +28,8 @@ class Models:
         This endpoint is public, so it is called without a token — listing the catalog never
         triggers an authentication round trip.
         """
-        return dispatch.parse(self._client._get(CATALOG, authenticate=False), ModelList)
+        response = self._client._send("GET", CATALOG, authenticate=False)
+        return dispatch.parse(response, ModelList)
 
     def mine(self) -> ModelList:
         """Only the models this token holds a ``model:<id>`` scope for.
@@ -36,7 +37,7 @@ class Models:
         A token with ``inference:read`` but no model grants gets an empty list rather than an
         error, since holding an inference scope conveys no model access by itself.
         """
-        return dispatch.parse(self._client._get(MINE), ModelList)
+        return dispatch.parse(self._client._send("GET", MINE), ModelList)
 
 
 class AsyncModels:
@@ -46,7 +47,8 @@ class AsyncModels:
         self._client = client
 
     async def list(self) -> ModelList:
-        return dispatch.parse(await self._client._get(CATALOG, authenticate=False), ModelList)
+        response = await self._client._send("GET", CATALOG, authenticate=False)
+        return dispatch.parse(response, ModelList)
 
     async def mine(self) -> ModelList:
-        return dispatch.parse(await self._client._get(MINE), ModelList)
+        return dispatch.parse(await self._client._send("GET", MINE), ModelList)
