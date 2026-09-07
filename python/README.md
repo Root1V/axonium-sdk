@@ -73,6 +73,20 @@ but capped: a wait longer than `max_backoff` is handed back to you rather than s
 the SDK warns by name about every one it removes instead of letting you believe a parameter took
 effect. Remote image URLs are rejected client-side, with the SSRF reason spelled out.
 
+**Optional modality preflight.** The gateway's modality check is one-directional: calling
+`/v1/embeddings` with a text model is rejected, but calling `/v1/chat/completions` with an
+*embedding* model is not — it returns `200` with degenerate output that you pay for. Enable the
+check to catch that, and typos, before the request is sent:
+
+```python
+client = Axonium(verify_modality=True)  # or AXONIUM_VERIFY_MODALITY=true
+```
+
+Off by default because it costs one catalog request per client, and the SDK otherwise makes no
+request you did not ask for. If you already call `models.list()`, the result is reused and the
+check is free. If the catalog cannot be loaded the check is skipped rather than failing your
+request — a guard rail should not become a new way for inference to break.
+
 ## Configuration
 
 The SDK never hardcodes a host, port, or certificate — every deployment supplies its own. Settings

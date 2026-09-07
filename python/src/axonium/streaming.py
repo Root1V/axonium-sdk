@@ -12,7 +12,7 @@ belongs to the caller, who is the only one who knows what the partial output was
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from types import TracebackType
 from typing import Any
 
@@ -128,11 +128,20 @@ class ChatCompletionStream(_StreamBase):
 class AsyncChatCompletionStream(_StreamBase):
     """A streaming completion. See :class:`ChatCompletionStream`."""
 
-    def __init__(self, opener: Any, diagnose: Callable[[APIError], None]) -> None:
+    def __init__(
+        self,
+        opener: Any,
+        diagnose: Callable[[APIError], None],
+        preflight: Callable[[], Awaitable[None]],
+    ) -> None:
         super().__init__(diagnose)
         self._opener = opener
+        self._preflight = preflight
 
     async def __aenter__(self) -> AsyncChatCompletionStream:
+        # The sync stream checks this when stream() is called; here the method that builds the
+        # stream cannot await, so the check moves to the point the request is actually sent.
+        await self._preflight()
         response = await self._opener.__aenter__()
         if response.is_error:
             await response.aread()

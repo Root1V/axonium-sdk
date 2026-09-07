@@ -89,6 +89,12 @@ class AxoniumConfig(BaseSettings):
     #: platform runs its own tracing and this only exists to let a caller's traces join up with it.
     otel_enabled: bool = False
 
+    #: Check a model's modality against the endpoint before sending. Costs one catalog request per
+    #: client, which is why it is opt-in: the SDK otherwise makes no request a caller did not ask
+    #: for. Worth enabling where a mistyped model ID would be expensive — see
+    #: :mod:`axonium.preflight`.
+    verify_modality: bool = False
+
     #: Refresh the token once this fraction of its lifetime has elapsed.
     refresh_ahead_ratio: float = Field(default=0.8, gt=0.0, le=1.0)
     #: ...or once fewer than this many seconds remain, whichever comes first. Short-lived

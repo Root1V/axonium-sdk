@@ -30,6 +30,7 @@ class Images:
         timeout is long. Shortening it and retrying risks paying for two generations at once.
         """
         request = ImageGenerationRequest(**kwargs)
+        self._client._preflight(request.model, "images")
         response = self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )
@@ -43,6 +44,7 @@ class AsyncImages:
     async def generate(self, *, timeout: float | None = None, **kwargs: Any) -> ImagesResponse:
         """Generate images. See :meth:`Images.generate`."""
         request = ImageGenerationRequest(**kwargs)
+        await self._client._preflight(request.model, "images")
         response = await self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )

@@ -29,7 +29,7 @@ class Models:
         triggers an authentication round trip.
         """
         response = self._client._send("GET", CATALOG, authenticate=False)
-        return dispatch.parse(response, ModelList)
+        return self._client._remember_catalog(dispatch.parse(response, ModelList))
 
     def mine(self) -> ModelList:
         """Only the models this token holds a ``model:<id>`` scope for.
@@ -48,7 +48,7 @@ class AsyncModels:
 
     async def list(self) -> ModelList:
         response = await self._client._send("GET", CATALOG, authenticate=False)
-        return dispatch.parse(response, ModelList)
+        return self._client._remember_catalog(dispatch.parse(response, ModelList))
 
     async def mine(self) -> ModelList:
         return dispatch.parse(await self._client._send("GET", MINE), ModelList)

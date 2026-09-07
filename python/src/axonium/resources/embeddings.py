@@ -27,6 +27,7 @@ class Embeddings:
         returns ``400 modality-mismatch``.
         """
         request = EmbeddingsRequest(**kwargs)
+        self._client._preflight(request.model, "embeddings")
         response = self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )
@@ -42,6 +43,7 @@ class AsyncEmbeddings:
     ) -> CreateEmbeddingResponse:
         """Embed one string or a list of them. See :meth:`Embeddings.create`."""
         request = EmbeddingsRequest(**kwargs)
+        await self._client._preflight(request.model, "embeddings")
         response = await self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )

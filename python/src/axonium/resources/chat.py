@@ -36,6 +36,7 @@ class Completions:
         retrying is the documented way to end up paying for two generations at once.
         """
         request = _build(kwargs, stream=False)
+        self._client._preflight(request.model, "chat")
         response = self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )
@@ -53,6 +54,7 @@ class Completions:
         it is a fresh billable generation rather than a resumption.
         """
         request = _build(kwargs, stream=True)
+        self._client._preflight(request.model, "chat")
         opener = self._client._open_stream(
             ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )
@@ -66,6 +68,7 @@ class AsyncCompletions:
     async def create(self, *, timeout: float | None = None, **kwargs: Any) -> ChatCompletion:
         """Create a non-streaming chat completion. See :meth:`Completions.create`."""
         request = _build(kwargs, stream=False)
+        await self._client._preflight(request.model, "chat")
         response = await self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )
@@ -77,7 +80,13 @@ class AsyncCompletions:
         opener = self._client._open_stream(
             ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )
-        return AsyncChatCompletionStream(opener, self._client._stream_diagnoser(request.model))
+
+        async def preflight() -> None:
+            await self._client._preflight(request.model, "chat")
+
+        return AsyncChatCompletionStream(
+            opener, self._client._stream_diagnoser(request.model), preflight
+        )
 
 
 class Chat:

@@ -18,11 +18,13 @@ import httpx
 
 from axonium.auth import TokenClaims, TokenManager
 from axonium.config import AxoniumConfig
-from axonium.errors import APIError, BackendUnavailableError, ForbiddenError
+from axonium.errors import APIError, AxoniumError, BackendUnavailableError, ForbiddenError
+from axonium.models.catalog import ModelList
 from axonium.models.common import RateLimitSnapshot, ResponseMeta
 from axonium.observability.logging import request_fields
 from axonium.observability.otel import record_response, span
 from axonium.observability.scopes import explain_forbidden
+from axonium.preflight import check_model
 from axonium.resources.chat import AsyncChat, Chat
 from axonium.resources.embeddings import AsyncEmbeddings, Embeddings
 from axonium.resources.images import AsyncImages, Images
@@ -43,6 +45,7 @@ class _BaseAxonium:
         self._retry = retry or RetryPolicy()
         self._cooldowns = CooldownRegistry()
         self._last_rate_limit: RateLimitSnapshot | None = None
+        self._catalog: ModelList | None = None
 
     @property
     def config(self) -> AxoniumConfig:
@@ -118,6 +121,10 @@ class _BaseAxonium:
             ),
         )
         return delay
+
+    def _remember_catalog(self, catalog: ModelList) -> ModelList:
+        self._catalog = catalog
+        return catalog
 
     def _diagnose(self, error: APIError, *, model: str | None, streaming: bool) -> None:
         """Explain a denial in terms of the scopes this token actually holds."""
@@ -197,6 +204,23 @@ class Axonium(_BaseAxonium):
         self.chat = Chat(self)
         self.embeddings = Embeddings(self)
         self.images = Images(self)
+
+    def _preflight(self, model: str, endpoint: str) -> None:
+        """Catch a wrong-modality or unknown model before spending a request on it.
+
+        A failure to load the catalog is not allowed to fail the call: this is a guard rail, and
+        one that broke inference whenever the catalog endpoint was unhappy would be a worse trade
+        than the mistake it prevents.
+        """
+        if not self._config.verify_modality:
+            return
+        if self._catalog is None:
+            try:
+                self.models.list()
+            except AxoniumError as exc:
+                logger.debug("Skipping preflight; catalog unavailable", extra={"error": str(exc)})
+                return
+        check_model(self._catalog, model, endpoint=endpoint)
 
     def _send(
         self,
@@ -292,6 +316,18 @@ class AsyncAxonium(_BaseAxonium):
         self.chat = AsyncChat(self)
         self.embeddings = AsyncEmbeddings(self)
         self.images = AsyncImages(self)
+
+    async def _preflight(self, model: str, endpoint: str) -> None:
+        """See :meth:`Axonium._preflight`."""
+        if not self._config.verify_modality:
+            return
+        if self._catalog is None:
+            try:
+                await self.models.list()
+            except AxoniumError as exc:
+                logger.debug("Skipping preflight; catalog unavailable", extra={"error": str(exc)})
+                return
+        check_model(self._catalog, model, endpoint=endpoint)
 
     async def _send(
         self,
