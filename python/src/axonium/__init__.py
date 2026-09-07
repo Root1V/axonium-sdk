@@ -7,6 +7,7 @@ in the repository for the API contract this package implements.
 from axonium.config import AxoniumConfig, Timeouts
 from axonium.errors import (
     APIError,
+    AuthTransportError,
     AxoniumError,
     BackendUnavailableError,
     BadRequestError,
@@ -43,6 +44,7 @@ __version__ = "1.0.0.dev0"
 
 __all__ = [
     "APIError",
+    "AuthTransportError",
     "AxoniumConfig",
     "AxoniumError",
     "BackendUnavailableError",

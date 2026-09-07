@@ -47,6 +47,9 @@ class Timeouts(BaseSettings):
     pool: float = 10.0
     #: Read timeout for SSE responses, kept above the gateway's own 120s backend read timeout.
     stream_read: float = 180.0
+    #: Read timeout for token requests. Deliberately short: the auth-service does no inference,
+    #: so it must not inherit the long read timeout that image generation needs.
+    auth_read: float = 30.0
 
 
 class AxoniumConfig(BaseSettings):

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "APIError",
+    "AuthTransportError",
     "AxoniumError",
     "BackendUnavailableError",
     "BadRequestError",
@@ -79,6 +80,15 @@ class UnsupportedFieldWarning(UserWarning):
 
 class TransportError(AxoniumError):
     """The request never produced an HTTP response (DNS, connection, or TLS failure)."""
+
+
+class AuthTransportError(TransportError):
+    """The auth-service could not be reached, or answered with something unusable.
+
+    Distinct from :class:`OAuthError`, which is the auth-service correctly reporting that the
+    credentials or the grant were rejected. This one means the token could not be obtained at all,
+    so no request can be attempted.
+    """
 
 
 class TimeoutError(TransportError):
@@ -265,8 +275,8 @@ class RateLimitError(APIError):
     """The requests-per-minute budget was exceeded.
 
     Enforced independently per ``client_id`` and per ``user_id``. ``retry_after`` carries how long
-    to wait, taken from the ``Retry-After`` header when present and from the body's ``retry_after``
-    otherwise.
+    to wait; the gateway emits the same value in the ``Retry-After`` header and the body's
+    ``retry_after`` field, so the two cannot disagree.
     """
 
     type_suffix = "rate-limit-exceeded-requests"
@@ -302,9 +312,11 @@ class ModelNotLoadedError(ServerError):
 class BackendUnavailableError(ServerError):
     """The gateway's circuit breaker is open for this backend, or the backend was unreachable.
 
-    When ``retry_after`` is set the gateway fast-failed without attempting the backend call and the
-    value is computed from the actual expected recovery time, which makes it cheap and safe to
-    retry after that wait. Absent it, no wait hint exists and any backoff is a guess.
+    Two causes with different handling. With ``retry_after`` set, the gateway's circuit breaker is
+    open: it fast-failed without attempting the backend, and the value is its expected recovery
+    time, which makes retrying after that wait both cheap and well-informed. Without it, the
+    backend was genuinely unreachable and the platform supplies no wait hint at all — any backoff
+    there is the SDK's own conservative guess rather than an API fact.
     """
 
     type_suffix = "backend-unavailable"

@@ -6,7 +6,7 @@
       "media_type": "application/problem+json",
       "fields": ["type", "title", "status", "detail", "instance", "request_id", "trace_id"],
       "optional_fields": {
-        "retry_after": "Integer seconds. Present on rate-limit errors, which also omit trace_id.",
+        "retry_after": "Integer seconds. Present on rate-limit errors, which also omit trace_id. Confirmed by the platform team: the Retry-After header and this field are written from the same variable in the same call, so they cannot disagree — either source may be read.",
         "trace_id": "Omitted by the rate-limiting middleware envelope."
       }
     },
@@ -99,10 +99,10 @@
     {
       "status": 503,
       "suffix": "backend-unavailable",
-      "meaning": "The gateway's circuit breaker is open for this model's backend (fast-failed with no network call made), or the backend was genuinely unreachable.",
+      "meaning": "Two distinct causes, confirmed by the platform team. Circuit breaker open: the gateway fast-failed without attempting the backend, and sets the Retry-After *header* (never a body field) from the actual expected recovery time. Genuine connection failure: no wait value is supplied at all, in neither header nor body.",
       "retryable": true,
       "retry_policy": "wait_for_retry_after_when_present",
-      "$comment": "Retry-After is set when it is a circuit-breaker case, computed from the actual recovery time. Absent it, no wait hint exists."
+      "$comment": "When Retry-After is absent the wait is the SDK's decision, not an API fact. The platform team recommends a conservative default of 1s with doubling, rather than assuming it behaves like the circuit-breaker case."
     },
     {
       "status": 503,

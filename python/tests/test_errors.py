@@ -138,15 +138,17 @@ class TestRetryAfter:
         assert exc.retry_after == 30.0
         assert exc.trace_id is None
 
-    def test_header_supplied_value_wins_over_the_body(self) -> None:
-        # Where the two disagree the header is authoritative; the body is the fallback.
+    def test_reads_retry_after_from_the_header(self) -> None:
+        # The gateway writes the Retry-After header and the body's retry_after from one variable,
+        # so they cannot disagree; reading either is equivalent. Both paths are supported anyway,
+        # since a proxy could strip one of them.
         exc = error_from_response(
             status=429,
-            body=problem("rate-limit-exceeded-requests", 429, retry_after=30),
-            retry_after=12.0,
+            body=problem("rate-limit-exceeded-requests", 429),
+            retry_after=30.0,
         )
 
-        assert exc.retry_after == 12.0
+        assert exc.retry_after == 30.0
 
     def test_backend_unavailable_without_retry_after_leaves_it_unset(self) -> None:
         # Retry-After is only set for the circuit-breaker case; absent it there is no wait hint.
