@@ -1,9 +1,81 @@
 """Python SDK for the Prometheus Gateway inference API.
 
-The public surface is assembled here as the implementation lands. See the repository
-``spec/prometheus-gateway.md`` for the API contract this package implements.
+The client surface is assembled here as the implementation lands. See ``spec/prometheus-gateway.md``
+in the repository for the API contract this package implements.
 """
+
+from axonium.config import AxoniumConfig, Timeouts
+from axonium.errors import (
+    APIError,
+    AxoniumError,
+    BackendUnavailableError,
+    BadRequestError,
+    ConfigurationError,
+    ContextExceededError,
+    ForbiddenError,
+    InvalidClientError,
+    InvalidScopeError,
+    InvalidTokenError,
+    MissingCredentialsError,
+    ModalityMismatchError,
+    ModelNotLoadedError,
+    OAuthError,
+    RateLimitError,
+    RateLimitingUnavailableError,
+    ServerError,
+    SpendCapExceededError,
+    StreamInterruptedError,
+    TimeoutError,
+    TokenExpiredError,
+    TokenRevokedError,
+    TransportError,
+    UnauthorizedClientError,
+    UnauthorizedError,
+    UnknownModelError,
+    UnsupportedFieldWarning,
+    UnsupportedGrantTypeError,
+    UpstreamError,
+    UsageStoreUnavailableError,
+)
+from axonium.models.common import RateLimitSnapshot, ResponseMeta, Usage
 
 __version__ = "1.0.0.dev0"
 
-__all__ = ["__version__"]
+__all__ = [
+    "APIError",
+    "AxoniumConfig",
+    "AxoniumError",
+    "BackendUnavailableError",
+    "BadRequestError",
+    "ConfigurationError",
+    "ContextExceededError",
+    "ForbiddenError",
+    "InvalidClientError",
+    "InvalidScopeError",
+    "InvalidTokenError",
+    "MissingCredentialsError",
+    "ModalityMismatchError",
+    "ModelNotLoadedError",
+    "OAuthError",
+    "RateLimitError",
+    "RateLimitSnapshot",
+    "RateLimitingUnavailableError",
+    "ResponseMeta",
+    "ServerError",
+    "SpendCapExceededError",
+    "StreamInterruptedError",
+    "TimeoutError",
+    "Timeouts",
+    "TokenExpiredError",
+    "TokenRevokedError",
+    "TransportError",
+    "UnauthorizedClientError",
+    "UnauthorizedError",
+    "UnknownModelError",
+    "UnsupportedFieldWarning",
+    "UnsupportedGrantTypeError",
+    "UpstreamError",
+    "Usage",
+    "UsageStoreUnavailableError",
+    "__version__",
+]
