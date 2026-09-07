@@ -20,6 +20,8 @@ response.
 Python is built first as the reference implementation. Go and Rust follow, validated against
 the same shared contract fixtures in [`spec/`](spec/) so all three behave identically.
 
+Backlog and delivered work: [ROADMAP.md](ROADMAP.md).
+
 ## Repository layout
 
 ```

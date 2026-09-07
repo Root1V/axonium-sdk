@@ -139,7 +139,16 @@ read `expires_in` from the token response**:
 `POST /oauth2/token` again with `client_credentials`. The SDK should implement a
 refresh-ahead pattern:
 
-1. Cache the token + the wall-clock time it expires at (`issued_at + expires_in`).
+1. **The token response has no `issued_at` field, and the token itself isn't decoded just to
+   read `iat`/`exp` for this** — don't anchor the expiry calculation to the SDK's own
+   wall-clock reading at the moment it sent the request, since that's vulnerable to clock
+   drift between the SDK's host and the auth-service's host. Instead, **use the HTTP `Date`
+   response header** (confirmed present on every auth-service response — standard HTTP/1.1
+   server behavior via uvicorn, not something the application explicitly sets, so it's
+   reliably there) as the server-authoritative "now" reference: `expires_at = Date_header_value
+   + expires_in`. This still doesn't eliminate clock skew *during* the single request
+   round-trip, but that window is far smaller and bounded by network latency, not by however
+   out-of-sync the two machines' clocks happen to be.
 2. Before each request (or on a background timer), check if the token is within some buffer
    of expiry — e.g. 80% of its `expires_in` has elapsed, or fewer than 30 seconds remain,
    whichever is more conservative for short-TTL `app`-role tokens.
@@ -359,9 +368,16 @@ Notes an SDK must handle correctly:
   chunk from llama.cpp models.
 - **Mid-stream failures don't produce an HTTP error status** — by the time a backend fails
   mid-generation, the `200`/`text/event-stream` headers are already committed. Instead, the
-  gateway emits an in-band error chunk (`data: {"error": "stream interrupted"}`) followed by
-  `data: [DONE]`, then closes the connection. **The SDK must parse this in-band shape and
-  cannot rely on HTTP status alone to detect a failed stream.**
+  gateway emits an in-band error chunk followed by `data: [DONE]`, then closes the connection.
+  **The SDK must parse this in-band shape and cannot rely on HTTP status alone to detect a
+  failed stream.** As of this codebase version there is exactly one code path that emits an
+  in-band error, and it always sends the literal `data: {"error": "stream interrupted"}` —
+  there is no other in-band error message anywhere in the streaming code, and no evidence
+  `error`'s value is ever anything other than that fixed string. That said, **this single
+  fixed string is not a documented stable contract, just what the current implementation
+  happens to send** — parse by checking for the presence of a top-level `error` key on any
+  chunk (treat it as "the stream failed," full stop) rather than matching the specific string
+  value, so the SDK doesn't silently stop detecting failures if the message text ever changes.
 - Streaming requests are **never retried internally by the gateway** (response headers are
   already sent) — any retry-on-failure for a stream is entirely the SDK's responsibility, and
   since generation isn't idempotent, retrying a partially-completed stream means the client
@@ -417,9 +433,7 @@ and persisting the image if the caller wants a file.
 
 ```
 X-Request-ID                       — fresh UUID per request, generated server-side
-X-Trace-ID                         — for log correlation; a client-supplied X-Trace-ID is
-                                      ignored/only honored if it's a valid UUID4, depending on
-                                      deployment mode — don't rely on setting it yourself
+X-Trace-ID                         — for log correlation; see the exact adoption rule below
 X-RateLimit-Limit-Requests
 X-RateLimit-Remaining-Requests
 X-RateLimit-Reset-Requests         — unix timestamp of the next window
@@ -427,6 +441,19 @@ X-RateLimit-Limit-Tokens
 X-RateLimit-Remaining-Tokens
 X-RateLimit-Reset-Tokens
 ```
+
+**`X-Trace-ID` adoption rule, confirmed precisely (two deployment modes exist)**:
+- In deployments with a real tracing backend configured ("OTEL mode"), a client-supplied
+  `X-Trace-ID` is **never read at all** — the gateway always starts a fresh trace and returns
+  its own ID, specifically to prevent a client from forging trace context.
+- In deployments without a tracing backend configured ("legacy mode"), a client-supplied
+  `X-Trace-ID` **is** adopted, but only if it's a syntactically valid UUID4 — anything else is
+  replaced with a freshly generated one.
+- **`traceparent` (the W3C standard trace-context header) is never read by this platform in
+  either mode** — confirmed by reading the middleware directly, not inferred. Do not send it
+  expecting propagation; if the SDK wants to correlate its own internal tracing with this
+  platform's logs, use the returned `X-Trace-ID` from the response, not a `traceparent` you
+  send on the request.
 
 **No API-version header exists.** `/v1/` in the path is the only version signal.
 
@@ -475,6 +502,14 @@ Parse `type`'s last path segment as the machine-readable error code (e.g. `forbi
 middleware specifically use a slightly different envelope: no `trace_id`, plus an optional
 `retry_after` (int seconds) field alongside the standard fields.
 
+**`Retry-After` header vs. body `retry_after`, confirmed — they cannot disagree.** Both are
+written from the exact same computed value inside the same function call that builds the
+response; there is no code path where they're set independently. The SDK doesn't need a
+header-vs-body precedence rule at all — read either one, they're guaranteed identical. (This
+is specific to the rate-limiting middleware's error envelope; see the next section for the
+circuit-breaker's `503 backend-unavailable`, which only ever sets the header, never a body
+field — a different response builder entirely.)
+
 ### 5.2 Full error catalog (client-facing endpoints only)
 
 | Status | `type` suffix | Meaning | Retryable? |
@@ -491,12 +526,27 @@ middleware specifically use a slightly different envelope: no `trace_id`, plus a
 | 429 | `rate-limit-exceeded-requests` | RPM budget exceeded (per client_id and per user_id, both enforced independently). `Retry-After` header + `retry_after` body field tell you exactly how long to wait. | **Yes**, after `Retry-After` |
 | 502 | `upstream-error` | Backend returned repeated 502/503/504s and the gateway's own internal retries (3 attempts, exponential backoff) were exhausted. | Cautiously — see §6 |
 | 503 | `model-not-loaded` | Model is registered but not currently deployed/running. | No — needs operator action |
-| 503 | `backend-unavailable` | Circuit breaker is open for this model's backend (fast-failed, no network call made), or the backend was genuinely unreachable (connection error). `Retry-After` header set when it's a circuit-breaker case, computed from the actual recovery time. | **Yes**, after `Retry-After` when set |
+| 503 | `backend-unavailable` | Two distinct causes share this same `type`, and only one of them sets `Retry-After` — see the note below the table. | See below |
 | 503 | `rate-limiting-unavailable` | Redis (rate limiter backing store) is down and the deployment is configured fail-closed. | **Yes**, with backoff — transient infra issue |
 | 503 | `usage-store-unavailable` | Only on `GET /v1/usage`/`/v1/usage/export` — DB read failed. | **Yes**, with backoff |
 
 There is no `404` on the inference-family endpoints for "model not found" — that's a `400
 unknown-model`, not a `404`. Reserve `404` handling in the SDK for genuinely unmapped routes.
+
+**`503 backend-unavailable`'s two causes, confirmed precisely (this is not the same code path
+in both cases)**:
+- **Circuit breaker open** — the request is fast-failed before any network call is made. This
+  case **does** set a `Retry-After` header, computed from the circuit's actual recovery time.
+  No body `retry_after` field is ever added here (unlike the 429 case above) — only the
+  header carries the value.
+- **Genuine connection failure** (the backend was unreachable even after the gateway's own
+  internal retries) — this case sets **no `Retry-After` header and no body field at all**.
+  There is zero backoff signal from the server in this specific case — confirmed by reading
+  the response-building call directly, not inferred from absence of documentation. If your
+  SDK needs a default backoff here, it is a genuine guess, not a value coming from the API —
+  we'd suggest starting conservatively (e.g. 1s, doubling, capped) rather than assuming the
+  same magnitude as the circuit-breaker case's typical recovery window, since the two failure
+  modes have no guaranteed relationship to each other.
 
 ---
 
@@ -520,6 +570,10 @@ SDK to detect (via the in-band error chunk, §3.3) and decide whether to retry f
 - **Retry, with backoff, respecting `Retry-After` when present**: `429`, `503
   backend-unavailable` (when `Retry-After` is set — it tells you exactly when the circuit is
   expected to recover), `503 rate-limiting-unavailable`, `503 usage-store-unavailable`.
+- **Retry `503 backend-unavailable` without `Retry-After`, but with your own default backoff**
+  — this is the connection-failure variant (§5.2), which carries no server-provided signal at
+  all; pick a conservative default (see §5.2's note) rather than assuming it behaves like the
+  circuit-breaker variant.
 - **Retry once, after a token refresh**: `401 token-expired`.
 - **Retry cautiously, capped at 1 attempt, only for non-streaming**: `502 upstream-error` —
   this means the gateway's own 3 internal attempts already failed; a persistent backend problem
