@@ -56,7 +56,7 @@ class Completions:
         opener = self._client._open_stream(
             ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )
-        return ChatCompletionStream(opener)
+        return ChatCompletionStream(opener, self._client._stream_diagnoser(request.model))
 
 
 class AsyncCompletions:
@@ -77,7 +77,7 @@ class AsyncCompletions:
         opener = self._client._open_stream(
             ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )
-        return AsyncChatCompletionStream(opener)
+        return AsyncChatCompletionStream(opener, self._client._stream_diagnoser(request.model))
 
 
 class Chat:

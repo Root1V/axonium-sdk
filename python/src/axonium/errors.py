@@ -139,8 +139,14 @@ class APIError(AxoniumError):
         if type_suffix is not None:
             self.type_suffix = type_suffix
 
+    #: Client-side diagnosis added where the SDK can say something the gateway's ``detail`` does
+    #: not, such as exactly which scope a token is missing.
+    hint: str | None = None
+
     def __str__(self) -> str:
         parts = [super().__str__()]
+        if self.hint:
+            parts.append(self.hint)
         if self.request_id:
             parts.append(f"request_id={self.request_id}")
         if self.trace_id:

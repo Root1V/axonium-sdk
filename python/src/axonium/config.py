@@ -85,6 +85,10 @@ class AxoniumConfig(BaseSettings):
     #: deployments with a CA-signed certificate need nothing here.
     ca_bundle: str | None = None
 
+    #: Emit OpenTelemetry spans. Requires the ``axonium[otel]`` extra; off by default because the
+    #: platform runs its own tracing and this only exists to let a caller's traces join up with it.
+    otel_enabled: bool = False
+
     #: Refresh the token once this fraction of its lifetime has elapsed.
     refresh_ahead_ratio: float = Field(default=0.8, gt=0.0, le=1.0)
     #: ...or once fewer than this many seconds remain, whichever comes first. Short-lived

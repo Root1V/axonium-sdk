@@ -12,12 +12,13 @@ belongs to the caller, who is the only one who knows what the partial output was
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from types import TracebackType
 from typing import Any
 
 import httpx
 
+from axonium.errors import APIError
 from axonium.models.chat import ChatCompletionChunk
 from axonium.models.common import ResponseMeta, Usage
 from axonium.transport import dispatch
@@ -29,10 +30,20 @@ logger = logging.getLogger("axonium.streaming")
 
 
 class _StreamBase:
-    def __init__(self) -> None:
+    def __init__(self, diagnose: Callable[[APIError], None]) -> None:
         self._response: httpx.Response | None = None
         self._state = StreamAccumulator()
         self._meta: ResponseMeta | None = None
+        self._diagnose = diagnose
+
+    def _raise_for_status(self, response: httpx.Response) -> None:
+        try:
+            dispatch.raise_for_status(response)
+        except APIError as error:
+            # Streaming is where the read/stream scope distinction trips people up, so the
+            # diagnosis matters more here than anywhere else.
+            self._diagnose(error)
+            raise
 
     @property
     def content(self) -> str:
@@ -74,8 +85,8 @@ class ChatCompletionStream(_StreamBase):
             print(stream.usage())
     """
 
-    def __init__(self, opener: Any) -> None:
-        super().__init__()
+    def __init__(self, opener: Any, diagnose: Callable[[APIError], None]) -> None:
+        super().__init__(diagnose)
         self._opener = opener
 
     def __enter__(self) -> ChatCompletionStream:
@@ -84,7 +95,7 @@ class ChatCompletionStream(_StreamBase):
         # turned into a typed error.
         if response.is_error:
             response.read()
-            dispatch.raise_for_status(response)
+            self._raise_for_status(response)
         self._begin(response)
         return self
 
@@ -117,15 +128,15 @@ class ChatCompletionStream(_StreamBase):
 class AsyncChatCompletionStream(_StreamBase):
     """A streaming completion. See :class:`ChatCompletionStream`."""
 
-    def __init__(self, opener: Any) -> None:
-        super().__init__()
+    def __init__(self, opener: Any, diagnose: Callable[[APIError], None]) -> None:
+        super().__init__(diagnose)
         self._opener = opener
 
     async def __aenter__(self) -> AsyncChatCompletionStream:
         response = await self._opener.__aenter__()
         if response.is_error:
             await response.aread()
-            dispatch.raise_for_status(response)
+            self._raise_for_status(response)
         self._begin(response)
         return self
 

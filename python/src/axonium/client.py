@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from types import TracebackType
 from typing import Any
 
@@ -17,8 +18,11 @@ import httpx
 
 from axonium.auth import TokenClaims, TokenManager
 from axonium.config import AxoniumConfig
-from axonium.errors import APIError, BackendUnavailableError
-from axonium.models.common import RateLimitSnapshot
+from axonium.errors import APIError, BackendUnavailableError, ForbiddenError
+from axonium.models.common import RateLimitSnapshot, ResponseMeta
+from axonium.observability.logging import request_fields
+from axonium.observability.otel import record_response, span
+from axonium.observability.scopes import explain_forbidden
 from axonium.resources.chat import AsyncChat, Chat
 from axonium.resources.embeddings import AsyncEmbeddings, Embeddings
 from axonium.resources.images import AsyncImages, Images
@@ -88,21 +92,83 @@ class _BaseAxonium:
         if not snapshot.is_empty:
             self._last_rate_limit = snapshot
 
-    def _after_failure(self, key: str, error: APIError, attempt: int) -> float | None:
+    def _after_failure(
+        self,
+        key: str,
+        error: APIError,
+        attempt: int,
+        *,
+        model: str | None = None,
+        streaming: bool = False,
+    ) -> float | None:
+        self._diagnose(error, model=model, streaming=streaming)
         self._cooldowns.note(key, error)
+
         delay = self._retry.delay_for(error, attempt=attempt)
-        if delay is not None:
-            logger.debug(
-                "Retrying after a retryable error",
-                extra={
-                    "type": error.type_suffix,
-                    "status": error.status,
-                    "attempt": attempt,
-                    "delay_s": round(delay, 3),
-                    "request_id": error.request_id,
-                },
-            )
+        logger.debug(
+            "Request failed" if delay is None else "Retrying after a retryable error",
+            extra=request_fields(
+                model=model,
+                status=error.status,
+                request_id=error.request_id,
+                trace_id=error.trace_id,
+                attempt=attempt,
+                type=error.type_suffix,
+                delay_s=None if delay is None else round(delay, 3),
+            ),
+        )
         return delay
+
+    def _diagnose(self, error: APIError, *, model: str | None, streaming: bool) -> None:
+        """Explain a denial in terms of the scopes this token actually holds."""
+        if not isinstance(error, ForbiddenError):
+            return
+        token = self._auth.cached_token
+        if token is not None:
+            error.hint = explain_forbidden(token.scope, model=model, streaming=streaming)
+
+    def _stream_diagnoser(self, model: str | None) -> Callable[[APIError], None]:
+        def diagnose(error: APIError) -> None:
+            self._diagnose(error, model=model, streaming=True)
+
+        return diagnose
+
+    def _observe(self, method: str, path: str, model: str | None) -> Any:
+        return span(
+            f"axonium {method} {path}",
+            enabled=self._config.otel_enabled,
+            **{
+                "gen_ai.system": "prometheus-gateway",
+                "gen_ai.request.model": model,
+                "http.request.method": method,
+                "url.path": path,
+            },
+        )
+
+    def _succeeded(
+        self,
+        active: Any,
+        response: httpx.Response,
+        *,
+        method: str,
+        path: str,
+        model: str | None,
+        started: float,
+    ) -> None:
+        meta = ResponseMeta.from_headers(response.headers)
+        record_response(active, request_id=meta.request_id, trace_id=meta.trace_id)
+        logger.debug(
+            "Request completed",
+            extra=request_fields(
+                method=method,
+                path=path,
+                model=model,
+                status=response.status_code,
+                duration_ms=(time.monotonic() - started) * 1000,
+                request_id=meta.request_id,
+                trace_id=meta.trace_id,
+            ),
+        )
 
 
 class Axonium(_BaseAxonium):
@@ -146,31 +212,36 @@ class Axonium(_BaseAxonium):
         self._check_cooldown(key)
 
         attempt = 1
-        while True:
-            try:
-                response = self._http.request(
-                    method,
-                    self._url(path),
-                    json=json,
-                    auth=None if not authenticate else httpx.USE_CLIENT_DEFAULT,
-                    timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout,
+        with self._observe(method, path, model) as active:
+            while True:
+                started = time.monotonic()
+                try:
+                    response = self._http.request(
+                        method,
+                        self._url(path),
+                        json=json,
+                        auth=None if not authenticate else httpx.USE_CLIENT_DEFAULT,
+                        timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout,
+                    )
+                except httpx.HTTPError as exc:
+                    raise dispatch.translate_transport_error(exc) from exc
+
+                self._record(response)
+                try:
+                    dispatch.raise_for_status(response)
+                except APIError as error:
+                    delay = self._after_failure(key, error, attempt, model=model)
+                    if delay is None:
+                        raise
+                    time.sleep(delay)
+                    attempt += 1
+                    continue
+
+                self._cooldowns.clear(key)
+                self._succeeded(
+                    active, response, method=method, path=path, model=model, started=started
                 )
-            except httpx.HTTPError as exc:
-                raise dispatch.translate_transport_error(exc) from exc
-
-            self._record(response)
-            try:
-                dispatch.raise_for_status(response)
-            except APIError as error:
-                delay = self._after_failure(key, error, attempt)
-                if delay is None:
-                    raise
-                time.sleep(delay)
-                attempt += 1
-                continue
-
-            self._cooldowns.clear(key)
-            return response
+                return response
 
     def _open_stream(
         self,
@@ -236,31 +307,36 @@ class AsyncAxonium(_BaseAxonium):
         self._check_cooldown(key)
 
         attempt = 1
-        while True:
-            try:
-                response = await self._http.request(
-                    method,
-                    self._url(path),
-                    json=json,
-                    auth=None if not authenticate else httpx.USE_CLIENT_DEFAULT,
-                    timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout,
+        with self._observe(method, path, model) as active:
+            while True:
+                started = time.monotonic()
+                try:
+                    response = await self._http.request(
+                        method,
+                        self._url(path),
+                        json=json,
+                        auth=None if not authenticate else httpx.USE_CLIENT_DEFAULT,
+                        timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout,
+                    )
+                except httpx.HTTPError as exc:
+                    raise dispatch.translate_transport_error(exc) from exc
+
+                self._record(response)
+                try:
+                    dispatch.raise_for_status(response)
+                except APIError as error:
+                    delay = self._after_failure(key, error, attempt, model=model)
+                    if delay is None:
+                        raise
+                    await asyncio.sleep(delay)
+                    attempt += 1
+                    continue
+
+                self._cooldowns.clear(key)
+                self._succeeded(
+                    active, response, method=method, path=path, model=model, started=started
                 )
-            except httpx.HTTPError as exc:
-                raise dispatch.translate_transport_error(exc) from exc
-
-            self._record(response)
-            try:
-                dispatch.raise_for_status(response)
-            except APIError as error:
-                delay = self._after_failure(key, error, attempt)
-                if delay is None:
-                    raise
-                await asyncio.sleep(delay)
-                attempt += 1
-                continue
-
-            self._cooldowns.clear(key)
-            return response
+                return response
 
     def _open_stream(
         self,
