@@ -11,7 +11,15 @@ from typing import Any
 
 from axonium.models.common import APIObject, Usage, _Passthrough
 
-__all__ = ["ChatChoice", "ChatCompletion", "CompletionMessage", "Timings"]
+__all__ = [
+    "ChatChoice",
+    "ChatCompletion",
+    "ChatCompletionChunk",
+    "ChoiceDelta",
+    "CompletionMessage",
+    "StreamChoice",
+    "Timings",
+]
 
 
 class Timings(_Passthrough):
@@ -81,3 +89,47 @@ class ChatCompletion(APIObject):
             return []
         message = self.choices[0].message
         return message.tool_calls or [] if message else []
+
+
+class ChoiceDelta(_Passthrough):
+    """The incremental part of a streamed choice."""
+
+    role: str | None = None
+    content: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
+
+
+class StreamChoice(_Passthrough):
+    index: int | None = None
+    delta: ChoiceDelta | None = None
+    finish_reason: str | None = None
+
+
+class ChatCompletionChunk(_Passthrough):
+    """One chunk of a streamed completion.
+
+    Chunks are forwarded from the backend essentially verbatim, so almost everything is optional:
+    what a given backend puts in each chunk varies, and a chunk carrying only a ``finish_reason``
+    or only ``timings`` is normal rather than malformed.
+    """
+
+    id: str | None = None
+    object: str | None = None
+    created: int | None = None
+    model: str | None = None
+    choices: list[StreamChoice] = []  # noqa: RUF012 - pydantic copies defaults per instance
+    #: Present on some backends; llama.cpp-family models send token counts only via ``timings``.
+    usage: Usage | None = None
+    timings: Timings | None = None
+
+    @property
+    def content(self) -> str | None:
+        """Text carried by this chunk's first choice, if any."""
+        if not self.choices:
+            return None
+        delta = self.choices[0].delta
+        return delta.content if delta else None
+
+    @property
+    def finish_reason(self) -> str | None:
+        return self.choices[0].finish_reason if self.choices else None

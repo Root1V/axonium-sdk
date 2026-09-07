@@ -40,7 +40,15 @@ from axonium.errors import (
     UsageStoreUnavailableError,
 )
 from axonium.models.catalog import Model, ModelList
-from axonium.models.chat import ChatChoice, ChatCompletion, CompletionMessage, Timings
+from axonium.models.chat import (
+    ChatChoice,
+    ChatCompletion,
+    ChatCompletionChunk,
+    ChoiceDelta,
+    CompletionMessage,
+    StreamChoice,
+    Timings,
+)
 from axonium.models.common import APIObject, RateLimitSnapshot, ResponseMeta, Usage
 from axonium.models.inference import (
     CreateEmbeddingResponse,
@@ -55,6 +63,7 @@ from axonium.models.requests import (
     ImageGenerationRequest,
     Message,
 )
+from axonium.streaming import AsyncChatCompletionStream, ChatCompletionStream
 from axonium.transport.retry import CooldownRegistry, RetryPolicy
 
 __version__ = "1.0.0.dev0"
@@ -63,6 +72,7 @@ __all__ = [
     "APIError",
     "APIObject",
     "AsyncAxonium",
+    "AsyncChatCompletionStream",
     "AuthTransportError",
     "Axonium",
     "AxoniumConfig",
@@ -71,7 +81,10 @@ __all__ = [
     "BadRequestError",
     "ChatChoice",
     "ChatCompletion",
+    "ChatCompletionChunk",
     "ChatCompletionRequest",
+    "ChatCompletionStream",
+    "ChoiceDelta",
     "CompletionMessage",
     "ConfigurationError",
     "ContentPart",
@@ -101,6 +114,7 @@ __all__ = [
     "RetryPolicy",
     "ServerError",
     "SpendCapExceededError",
+    "StreamChoice",
     "StreamInterruptedError",
     "TimeoutError",
     "Timeouts",

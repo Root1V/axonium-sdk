@@ -172,6 +172,27 @@ class Axonium(_BaseAxonium):
             self._cooldowns.clear(key)
             return response
 
+    def _open_stream(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any],
+        model: str | None = None,
+        timeout: float | None = None,
+    ) -> Any:
+        """Open a streaming request.
+
+        Not retried: the gateway never retries streams either, and a retry after partial output
+        has been delivered is a fresh billable generation rather than a resumption.
+        """
+        self._check_cooldown(self._cooldown_key(model))
+        return self._http.stream(
+            "POST",
+            self._url(path),
+            json=json,
+            timeout=self._config.timeouts.stream_read if timeout is None else timeout,
+        )
+
     def close(self) -> None:
         self._http.close()
         self._auth.close()
@@ -240,6 +261,23 @@ class AsyncAxonium(_BaseAxonium):
 
             self._cooldowns.clear(key)
             return response
+
+    def _open_stream(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any],
+        model: str | None = None,
+        timeout: float | None = None,
+    ) -> Any:
+        """Open a streaming request. See :meth:`Axonium._open_stream`."""
+        self._check_cooldown(self._cooldown_key(model))
+        return self._http.stream(
+            "POST",
+            self._url(path),
+            json=json,
+            timeout=self._config.timeouts.stream_read if timeout is None else timeout,
+        )
 
     async def aclose(self) -> None:
         await self._http.aclose()

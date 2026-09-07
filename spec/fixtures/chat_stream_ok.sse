@@ -1,0 +1,10 @@
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","model":"llama3-8b-q4","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"}}]}
+
+data: {"choices":[{"index":0,"delta":{"content":", "}}]}
+
+data: {"choices":[{"index":0,"delta":{"content":"world!"}}]}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"timings":{"prompt_n":13,"cache_n":2,"predicted_n":20,"predicted_ms":50.3}}
+
+data: [DONE]
+

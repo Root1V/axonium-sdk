@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from axonium.models.chat import ChatCompletion
 from axonium.models.requests import ChatCompletionRequest
+from axonium.streaming import AsyncChatCompletionStream, ChatCompletionStream
 from axonium.transport import dispatch
 
 if TYPE_CHECKING:
@@ -16,8 +17,8 @@ __all__ = ["AsyncChat", "AsyncCompletions", "Chat", "Completions"]
 ENDPOINT = "/v1/chat/completions"
 
 
-def _build(kwargs: dict[str, Any]) -> ChatCompletionRequest:
-    return ChatCompletionRequest(**kwargs, stream=False)
+def _build(kwargs: dict[str, Any], *, stream: bool) -> ChatCompletionRequest:
+    return ChatCompletionRequest(**kwargs, stream=stream)
 
 
 class Completions:
@@ -34,11 +35,28 @@ class Completions:
         deliberately long because some backends legitimately take minutes; setting it low and
         retrying is the documented way to end up paying for two generations at once.
         """
-        request = _build(kwargs)
+        request = _build(kwargs, stream=False)
         response = self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )
         return dispatch.parse(response, ChatCompletion)
+
+    def stream(self, *, timeout: float | None = None, **kwargs: Any) -> ChatCompletionStream:
+        """Stream a chat completion.
+
+        Requires the ``inference:stream`` scope, which is distinct from the ``inference:read``
+        scope non-streaming calls need: holding one does not grant the other.
+
+        A separate method rather than ``create(stream=True)`` so the return type is honest, the
+        scope requirement is explicit, and there is somewhere to say that streams are never
+        retried automatically — a failed stream has already delivered partial output, so retrying
+        it is a fresh billable generation rather than a resumption.
+        """
+        request = _build(kwargs, stream=True)
+        opener = self._client._open_stream(
+            ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
+        )
+        return ChatCompletionStream(opener)
 
 
 class AsyncCompletions:
@@ -47,11 +65,19 @@ class AsyncCompletions:
 
     async def create(self, *, timeout: float | None = None, **kwargs: Any) -> ChatCompletion:
         """Create a non-streaming chat completion. See :meth:`Completions.create`."""
-        request = _build(kwargs)
+        request = _build(kwargs, stream=False)
         response = await self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
         )
         return dispatch.parse(response, ChatCompletion)
+
+    def stream(self, *, timeout: float | None = None, **kwargs: Any) -> AsyncChatCompletionStream:
+        """Stream a chat completion. See :meth:`Completions.stream`."""
+        request = _build(kwargs, stream=True)
+        opener = self._client._open_stream(
+            ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
+        )
+        return AsyncChatCompletionStream(opener)
 
 
 class Chat:
