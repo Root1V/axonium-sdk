@@ -1,15 +1,22 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
 *.egg-info
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Virtual environments
-.venv
+# Rust
+target/
 
-# Environment variables in subfolders
+# Environment variables
 **/.env
 
-.pytest_cache/
+# macOS
+.DS_Store

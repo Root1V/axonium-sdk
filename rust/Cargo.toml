@@ -1,0 +1,13 @@
+[package]
+name = "axonium"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Rust SDK for the Prometheus Gateway inference API"
+license = "MIT"
+repository = "https://github.com/Root1V/axonium-sdk"
+keywords = ["llm", "inference", "sdk", "openai"]
+categories = ["api-bindings"]
+publish = false
+
+[dependencies]

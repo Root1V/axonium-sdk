@@ -1,0 +1,27 @@
+name: rust-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["rust/**", "spec/**", ".github/workflows/rust-ci.yml"]
+  pull_request:
+    paths: ["rust/**", "spec/**", ".github/workflows/rust-ci.yml"]
+
+defaults:
+  run:
+    working-directory: rust
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
