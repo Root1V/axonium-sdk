@@ -11,11 +11,18 @@ must not break an SDK that predates it.
 from __future__ import annotations
 
 import warnings
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
-from axonium.errors import UnsupportedFieldWarning
+from axonium.errors import InvalidRequestError, UnsupportedFieldWarning
 
 __all__ = [
     "ChatCompletionRequest",
@@ -26,6 +33,8 @@ __all__ = [
 ]
 
 Role = Literal["system", "user", "assistant", "tool"]
+
+_RequestT = TypeVar("_RequestT", bound="_AllowlistRequest")
 
 
 class _AllowlistRequest(BaseModel):
@@ -67,6 +76,19 @@ class _AllowlistRequest(BaseModel):
 
         self.__pydantic_extra__.clear()  # type: ignore[union-attr]
         return self
+
+    @classmethod
+    def build(cls: type[_RequestT], kwargs: dict[str, Any]) -> _RequestT:
+        """Validate a request, reporting failures as an SDK error.
+
+        Pydantic's own exception carries the useful detail, so it is preserved as the cause and
+        rendered in the message; what changes is that ``except AxoniumError`` now covers request
+        validation too, rather than only what comes back over the wire.
+        """
+        try:
+            return cls(**kwargs)
+        except ValidationError as exc:
+            raise InvalidRequestError(f"Invalid request for {cls.__name__}: {exc}") from exc
 
     def to_payload(self) -> dict[str, Any]:
         """The JSON body to send, with unset optional fields omitted entirely."""

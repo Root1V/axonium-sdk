@@ -48,4 +48,6 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | RM-40 | Client-side modality check before sending | ✅ | Opt-in `verify_modality`; gateway accepts chat on an embedding model and bills for garbage |
 | RM-41 | First-class access to `reasoning_content` | ✅ | `.reasoning` on completions, chunks and streams; kept separate from `.content` |
 | RM-42 | Security suite: credential leaks and hostile responses | ✅ | Found and fixed a secret visible in `repr(config)` |
-| RM-43 | Platform security probes | 🚧 | Auth-service probes pending a running auth-service |
+| RM-43 | Platform security probes | ✅ | 28/28 pass against a live deployment |
+| RM-44 | Unified error surface: everything raises an `AxoniumError` | ✅ | Request validation no longer leaks pydantic's exception |
+| RM-45 | Ask the platform team about the 422 envelope | 📋 | Not RFC 9457, no request_id, absent from the catalog |

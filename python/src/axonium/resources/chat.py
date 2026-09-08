@@ -18,7 +18,7 @@ ENDPOINT = "/v1/chat/completions"
 
 
 def _build(kwargs: dict[str, Any], *, stream: bool) -> ChatCompletionRequest:
-    return ChatCompletionRequest(**kwargs, stream=stream)
+    return ChatCompletionRequest.build({**kwargs, "stream": stream})
 
 
 class Completions:

@@ -65,6 +65,14 @@ against the gateway source. Every SDK should follow these.
   ignored and a new span is always started; in legacy mode only `X-Trace-ID` is consulted. SDKs
   must not assume outbound trace propagation works.
 
+## Open questions for the platform team
+
+- **422 breaks the error envelope.** Request-schema validation failures return FastAPI's default
+  422 body — `application/json`, a list of pydantic errors under `detail` — rather than the RFC
+  9457 envelope §5.1 describes, and they carry **no `request_id` or `trace_id`**. A client that
+  hits one has nothing to give support. 422 is also absent from the §5.2 catalog. Observed against
+  a live deployment; SDKs currently fall back by status code.
+
 ## Updating the vendored guide
 
 `prometheus-gateway.md` is a copy, not the original. When the platform team revises the guide,

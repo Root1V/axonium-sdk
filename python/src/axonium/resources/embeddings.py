@@ -26,7 +26,7 @@ class Embeddings:
         The model must have ``embedding`` modality; calling this with a text-generation model
         returns ``400 modality-mismatch``.
         """
-        request = EmbeddingsRequest(**kwargs)
+        request = EmbeddingsRequest.build(kwargs)
         self._client._preflight(request.model, "embeddings")
         response = self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
@@ -42,7 +42,7 @@ class AsyncEmbeddings:
         self, *, timeout: float | None = None, **kwargs: Any
     ) -> CreateEmbeddingResponse:
         """Embed one string or a list of them. See :meth:`Embeddings.create`."""
-        request = EmbeddingsRequest(**kwargs)
+        request = EmbeddingsRequest.build(kwargs)
         await self._client._preflight(request.model, "embeddings")
         response = await self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout

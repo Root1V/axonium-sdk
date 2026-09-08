@@ -117,6 +117,64 @@ class TestMalformedBodies:
         assert caught.value.type_suffix is None
 
 
+class TestErrorSurface:
+    """Everything a call can raise is an AxoniumError, so one except clause is enough."""
+
+    @pytest.mark.parametrize(
+        ("label", "kwargs"),
+        [
+            ("temperature-too-high", {"model": "m", "messages": MESSAGES, "temperature": 99}),
+            ("negative-max-tokens", {"model": "m", "messages": MESSAGES, "max_tokens": -1}),
+            ("empty-messages", {"model": "m", "messages": []}),
+            ("unknown-role", {"model": "m", "messages": [{"role": "wizard", "content": "x"}]}),
+            ("missing-model", {"messages": MESSAGES}),
+            (
+                "remote-image-url",
+                {
+                    "model": "m",
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "image_url", "image_url": {"url": "https://x/c.png"}}
+                            ],
+                        }
+                    ],
+                },
+            ),
+        ],
+    )
+    @respx.mock
+    def test_a_request_rejected_before_sending_raises_an_sdk_error(
+        self, client: Axonium, label: str, kwargs: dict[str, object]
+    ) -> None:
+        # Without this a caller would have to catch pydantic's ValidationError alongside ours.
+        sent = respx.post(CHAT_URL)
+
+        with client, pytest.raises(AxoniumError):
+            client.chat.completions.create(**kwargs)
+
+        assert not sent.called
+
+    @respx.mock
+    def test_the_underlying_validation_detail_is_preserved(self, client: Axonium) -> None:
+        from axonium.errors import InvalidRequestError
+
+        with client, pytest.raises(InvalidRequestError) as caught:
+            client.chat.completions.create(model="m", messages=MESSAGES, temperature=99)
+
+        assert "temperature" in str(caught.value)
+        assert caught.value.__cause__ is not None
+
+    @respx.mock
+    def test_embeddings_and_images_behave_the_same_way(self, client: Axonium) -> None:
+        with client:
+            with pytest.raises(AxoniumError):
+                client.embeddings.create(model="m")
+            with pytest.raises(AxoniumError):
+                client.images.generate(model="m", prompt="a cat", n=-1)
+
+
 class TestHostileHeaders:
     @pytest.mark.parametrize(
         "retry_after",

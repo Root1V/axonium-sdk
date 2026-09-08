@@ -30,6 +30,7 @@ __all__ = [
     "ContextExceededError",
     "ForbiddenError",
     "InvalidClientError",
+    "InvalidRequestError",
     "InvalidScopeError",
     "InvalidTokenError",
     "MissingCredentialsError",
@@ -75,6 +76,16 @@ class UnsupportedFieldWarning(UserWarning):
     The gateway's request schemas are allowlists and silently discard unknown fields, so the SDK
     warns rather than letting a caller believe a parameter took effect. This is a warning and not
     an error so that a newer gateway accepting more fields never breaks an older SDK.
+    """
+
+
+class InvalidRequestError(AxoniumError):
+    """A request was rejected by the SDK before it was sent.
+
+    Raised where a value cannot be valid — a temperature outside the accepted range, an unknown
+    role, a remote image URL — so the mistake surfaces at the call site instead of costing a round
+    trip. Everything this SDK raises is an :class:`AxoniumError`, so a caller never has to catch a
+    validation library's exceptions alongside ours.
     """
 
 

@@ -29,7 +29,7 @@ class Images:
         Image backends can legitimately take minutes per request, which is why the default read
         timeout is long. Shortening it and retrying risks paying for two generations at once.
         """
-        request = ImageGenerationRequest(**kwargs)
+        request = ImageGenerationRequest.build(kwargs)
         self._client._preflight(request.model, "images")
         response = self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
@@ -43,7 +43,7 @@ class AsyncImages:
 
     async def generate(self, *, timeout: float | None = None, **kwargs: Any) -> ImagesResponse:
         """Generate images. See :meth:`Images.generate`."""
-        request = ImageGenerationRequest(**kwargs)
+        request = ImageGenerationRequest.build(kwargs)
         await self._client._preflight(request.model, "images")
         response = await self._client._send(
             "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
