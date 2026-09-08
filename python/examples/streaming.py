@@ -23,8 +23,21 @@ def main(model: str) -> None:
     messages = [{"role": "user", "content": "Count from one to ten, in words."}]
 
     with client, client.chat.completions.stream(model=model, messages=messages) as stream:
+        thinking = False
         try:
             for chunk in stream:
+                if chunk.reasoning:
+                    # A reasoning model streams its thinking before any answer token. Showing it
+                    # is what keeps the first seconds from looking like a hang.
+                    if not thinking:
+                        print("[thinking] ", end="", flush=True)
+                        thinking = True
+                    print(chunk.reasoning, end="", flush=True)
+                    continue
+
+                if thinking:
+                    print("\n\n[answer] ", end="", flush=True)
+                    thinking = False
                 print(chunk.content or "", end="", flush=True)
         except StreamInterruptedError as exc:
             # A mid-stream failure arrives in-band on a 200 whose headers were already sent, so

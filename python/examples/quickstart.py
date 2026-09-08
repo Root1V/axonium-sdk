@@ -62,14 +62,10 @@ def main() -> None:
         if completion.content:
             print(f"\n{model} says: {completion.content}")
         else:
-            # Unmodeled fields are preserved rather than dropped, so a reasoning model's output
-            # is still reachable even though this SDK does not model `reasoning_content`.
-            raw = completion.choices[0].message.model_dump() if completion.choices else {}
-            reasoning = raw.get("reasoning_content")
             reason = completion.choices[0].finish_reason if completion.choices else None
             print(f"\n{model} returned no content (finish_reason={reason!r}).")
-            if reasoning:
-                print(f"It was still reasoning: {reasoning[:120]}...")
+            if completion.reasoning:
+                print(f"It was still reasoning: {completion.reasoning[:120]}...")
                 print("Raise max_tokens to give it room to finish.")
 
         if completion.usage:

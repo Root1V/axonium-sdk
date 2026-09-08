@@ -43,8 +43,12 @@ class CompletionMessage(_Passthrough):
     """The assistant message in a completion."""
 
     role: str | None = None
-    #: ``None`` when the model returned tool calls instead of prose.
+    #: ``None`` when the model returned tool calls instead of prose, and empty on a reasoning
+    #: model that spent its whole token budget thinking.
     content: str | None = None
+    #: A reasoning model's chain of thought, kept separate from the answer. Not part of the
+    #: gateway's documented contract — backends that do not reason simply omit it.
+    reasoning_content: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
 
 
@@ -73,11 +77,24 @@ class ChatCompletion(APIObject):
 
     @property
     def content(self) -> str | None:
-        """Text of the first choice, or ``None`` for a tool-call response."""
+        """Text of the first choice, or ``None`` for a tool-call response.
+
+        Empty on a reasoning model that ran out of tokens before it finished thinking — check
+        :attr:`reasoning` and ``finish_reason`` to tell that apart from a model with nothing to
+        say.
+        """
         if not self.choices:
             return None
         message = self.choices[0].message
         return message.content if message else None
+
+    @property
+    def reasoning(self) -> str | None:
+        """The first choice's chain of thought, if the model produced one."""
+        if not self.choices:
+            return None
+        message = self.choices[0].message
+        return message.reasoning_content if message else None
 
     @property
     def tool_calls(self) -> list[dict[str, Any]]:
@@ -96,6 +113,8 @@ class ChoiceDelta(_Passthrough):
 
     role: str | None = None
     content: str | None = None
+    #: Reasoning models stream their thinking here first, then switch to ``content``.
+    reasoning_content: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
 
 
@@ -129,6 +148,18 @@ class ChatCompletionChunk(_Passthrough):
             return None
         delta = self.choices[0].delta
         return delta.content if delta else None
+
+    @property
+    def reasoning(self) -> str | None:
+        """Reasoning carried by this chunk, if the model is still thinking.
+
+        A chunk carries one or the other, so a caller rendering progress can show thinking rather
+        than appearing to hang while the model reasons.
+        """
+        if not self.choices:
+            return None
+        delta = self.choices[0].delta
+        return delta.reasoning_content if delta else None
 
     @property
     def finish_reason(self) -> str | None:

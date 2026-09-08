@@ -55,6 +55,15 @@ class _StreamBase:
         return self._state.content
 
     @property
+    def reasoning(self) -> str:
+        """The chain of thought received so far, if the model is a reasoning model.
+
+        Assembled separately from :attr:`content`, so rendering progress can show that the model
+        is thinking rather than appearing to hang before the first answer token arrives.
+        """
+        return self._state.reasoning
+
+    @property
     def meta(self) -> ResponseMeta | None:
         """Correlation IDs and rate-limit budget from the response headers."""
         return self._meta

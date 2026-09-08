@@ -78,6 +78,7 @@ class StreamAccumulator:
     trace_id: str | None = None
 
     _parts: list[str] = field(default_factory=list)
+    _reasoning: list[str] = field(default_factory=list)
     _usage: Usage | None = None
     _timings: dict[str, Any] | None = None
     _done: bool = False
@@ -86,6 +87,11 @@ class StreamAccumulator:
     def content(self) -> str:
         """Everything received so far, including on a stream that failed partway."""
         return "".join(self._parts)
+
+    @property
+    def reasoning(self) -> str:
+        """The chain of thought received so far, assembled separately from the answer."""
+        return "".join(self._reasoning)
 
     @property
     def done(self) -> bool:
@@ -118,6 +124,8 @@ class StreamAccumulator:
 
         if chunk.content:
             self._parts.append(chunk.content)
+        if chunk.reasoning:
+            self._reasoning.append(chunk.reasoning)
         if chunk.usage is not None:
             self._usage = chunk.usage
         if chunk.timings is not None:

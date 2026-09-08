@@ -47,6 +47,25 @@ with client.chat.completions.stream(model="llama3-8b-q4", messages=messages) as 
 `AsyncAxonium` mirrors the whole surface — same names, same behavior, with `await`, `async with`
 and `async for`.
 
+### Reasoning models
+
+A reasoning model streams its chain of thought before any answer token, and keeps it in a field
+separate from the answer. `content` is therefore empty until it stops thinking — with a small
+`max_tokens` it can stay empty, and `finish_reason` will be `"length"`. Both are exposed, and
+neither is inferred from the other:
+
+```python
+if completion.content:
+    print(completion.content)
+elif completion.reasoning:
+    print(f"still thinking: {completion.reasoning}")  # raise max_tokens
+
+# Streaming: a chunk carries one or the other, so progress can show which phase it is in.
+for chunk in stream:
+    print(chunk.reasoning or chunk.content or "", end="")
+print(stream.reasoning, stream.content)
+```
+
 Runnable examples are in [`examples/`](examples/).
 
 ## What the client does for you
