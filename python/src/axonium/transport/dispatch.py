@@ -7,10 +7,12 @@ happen in exactly one place rather than being re-implemented per endpoint.
 from __future__ import annotations
 
 import logging
+import math
 from email.utils import parsedate_to_datetime
 from typing import Any, TypeVar
 
 import httpx
+from pydantic import ValidationError
 
 from axonium.errors import APIError, TimeoutError, TransportError, error_from_response
 from axonium.models.common import APIObject, RateLimitSnapshot, ResponseMeta
@@ -23,13 +25,18 @@ ModelT = TypeVar("ModelT", bound=APIObject)
 
 
 def retry_after_seconds(response: httpx.Response) -> float | None:
-    """Read ``Retry-After``, which may be either delta-seconds or an HTTP date."""
+    """Read ``Retry-After``, which may be either delta-seconds or an HTTP date.
+
+    The result is always a finite, non-negative number of seconds or ``None``. A caller is likely
+    to pass it straight to ``sleep``, where a negative value raises and an infinite one never
+    returns — so a malformed header is discarded rather than propagated.
+    """
     raw = response.headers.get("Retry-After")
     if raw is None:
         return None
 
     try:
-        return float(raw)
+        return _sane_wait(float(raw))
     except ValueError:
         pass
 
@@ -48,7 +55,13 @@ def retry_after_seconds(response: httpx.Response) -> float | None:
 
     if reference is None:
         return None
-    return max(0.0, (target - reference).total_seconds())
+    return _sane_wait((target - reference).total_seconds())
+
+
+def _sane_wait(seconds: float) -> float | None:
+    if not math.isfinite(seconds):
+        return None
+    return max(0.0, seconds)
 
 
 def raise_for_status(response: httpx.Response) -> None:
@@ -97,7 +110,18 @@ def parse(response: httpx.Response, model: type[ModelT]) -> ModelT:
             trace_id=response.headers.get("X-Trace-ID"),
         ) from exc
 
-    parsed = model.model_validate(payload)
+    try:
+        parsed = model.model_validate(payload)
+    except ValidationError as exc:
+        # Anything reaching a caller from a request should be catchable as an AxoniumError; a raw
+        # pydantic failure would escape `except AxoniumError` and surprise them.
+        raise APIError(
+            f"The gateway returned a body this SDK could not parse as {model.__name__}: {exc}",
+            status=response.status_code,
+            request_id=response.headers.get("X-Request-ID"),
+            trace_id=response.headers.get("X-Trace-ID"),
+        ) from exc
+
     parsed._attach(ResponseMeta.from_headers(response.headers))
     return parsed
 

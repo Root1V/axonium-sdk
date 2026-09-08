@@ -44,6 +44,8 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | RM-36 | Response normalizers | 🚫 | Spanish-heuristic hacks tied to one backend's output |
 | RM-37 | Client-side circuit breaker | 🚫 | The gateway runs one with better information |
 | RM-38 | `v0.6` compatibility layer | 🚫 | No production consumers to migrate |
-| RM-39 | Automate the integration suite behind `AXONIUM_INTEGRATION=1` | 📋 | Manual today; keep it out of default CI |
+| RM-39 | Automate the integration suite behind `AXONIUM_INTEGRATION=1` | ✅ | Platform security probes in `tests/integration/`; kept out of default CI |
 | RM-40 | Client-side modality check before sending | ✅ | Opt-in `verify_modality`; gateway accepts chat on an embedding model and bills for garbage |
 | RM-41 | First-class access to `reasoning_content` | ✅ | `.reasoning` on completions, chunks and streams; kept separate from `.content` |
+| RM-42 | Security suite: credential leaks and hostile responses | ✅ | Found and fixed a secret visible in `repr(config)` |
+| RM-43 | Platform security probes | 🚧 | Auth-service probes pending a running auth-service |

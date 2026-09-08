@@ -40,6 +40,11 @@ logger = logging.getLogger("axonium.auth")
 
 TOKEN_ENDPOINT = "/oauth2/token"
 
+#: The longest TTL an operator can configure for an account. A larger ``expires_in`` is not
+#: something the platform can legitimately issue, so it is clamped rather than trusted: believing
+#: it would mean never refreshing proactively and falling back to the reactive 401 path forever.
+MAX_PLAUSIBLE_TTL = 86400.0
+
 
 @dataclass(frozen=True)
 class TokenSet:
@@ -242,7 +247,7 @@ class TokenManager(httpx.Auth):
         form = {
             "grant_type": "client_credentials",
             "client_id": self._config.client_id,
-            "client_secret": self._config.client_secret,
+            "client_secret": self._config.client_secret.get_secret_value(),
         }
         if self._config.scope:
             form["scope"] = self._config.scope
@@ -351,7 +356,9 @@ def _token_from_response(response: httpx.Response, *, issued_at: float) -> Token
     granted = body.get("scope")
     scope = tuple(granted.split()) if isinstance(granted, str) else ()
 
-    lifetime = _effective_lifetime(response, access_token, float(expires_in))
+    lifetime = min(
+        _effective_lifetime(response, access_token, float(expires_in)), MAX_PLAUSIBLE_TTL
+    )
 
     logger.debug(
         "Obtained access token",
