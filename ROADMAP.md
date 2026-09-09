@@ -34,7 +34,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-24 | TestPyPI dry run | 📋 | After AXO-23 |
 | AXO-25 | Publish `python/v1.0.0rc1` | 📋 | After AXO-24; a PyPI version cannot be reused |
 | AXO-26 | Integration tests against a real deployment | ✅ | Validated by hand against a local gateway; not yet automated |
-| AXO-27 | Go SDK | 📋 | Contract already defined by AXO-18 |
+| AXO-27 | Go SDK | 🚧 | v0.1: streaming, cancellation, both credential modes, 12/12 contract cases |
 | AXO-28 | Rust SDK | 📋 | Contract already defined by AXO-18 |
 | AXO-29 | Optional caller-supplied `X-Trace-ID` | 📋 | Only adopted in legacy-mode deployments, and only as UUID4 |
 | AXO-30 | Error-catalog cases in the contract manifest | 📋 | Today asserted against `errors.json` instead |
@@ -57,3 +57,6 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-47 | Re-record contract fixtures from a live deployment | 📋 | Today's are authored, so they pin the SDKs to each other, not to the gateway |
 | AXO-48 | Map `Usage` onto the agreed H3 vocabulary | 📋 | Prometheus cannot source `reasoning` or `cache_write`; nullability must be explicit |
 | AXO-49 | Two permanent credential modes with construction-time validation | ✅ | Environment credentials are discarded, not merely unused |
+| AXO-50 | Go: raise coverage to the Python bar | 📋 | 78.7% today; Python is at 100% line and branch |
+| AXO-51 | Go: structured logging and optional OTel spans | 📋 | Python has both; Go has neither yet |
+| AXO-52 | Tag and publish `go/v0.1.0` | 📋 | Needs AXO-50; Aeon's MDL-009 waits on the tag |

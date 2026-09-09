@@ -19,7 +19,19 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
-          cache-dependency-path: go/go.sum
+          # No cache-dependency-path: this module has no third-party dependencies, so there is no
+          # go.sum to key a cache on. Standard library only is deliberate for an SDK that other
+          # people will vendor.
+      - name: Formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:"; echo "$unformatted"; exit 1
+          fi
       - run: go vet ./...
       - run: go build ./...
-      - run: go test ./...
+      # The race detector is not optional here: this SDK caches tokens and refreshes them under
+      # concurrency, which is exactly where a data race would hide.
+      - run: go test -race -coverprofile=coverage.out ./...
+      - name: Coverage
+        run: go tool cover -func=coverage.out | tail -1
