@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import warnings
 from collections.abc import Callable
 from types import TracebackType
 from typing import Any
@@ -18,13 +19,21 @@ import httpx
 
 from axonium.auth import TokenClaims, TokenManager
 from axonium.config import AxoniumConfig
-from axonium.errors import APIError, AxoniumError, BackendUnavailableError, ForbiddenError
+from axonium.errors import (
+    APIError,
+    AxoniumError,
+    BackendUnavailableError,
+    ConfigurationError,
+    ForbiddenError,
+    UnusedCredentialWarning,
+)
 from axonium.models.catalog import ModelList
 from axonium.models.common import RateLimitSnapshot, ResponseMeta
 from axonium.observability.logging import request_fields
 from axonium.observability.otel import record_response, span
 from axonium.observability.scopes import explain_forbidden
 from axonium.preflight import check_model
+from axonium.providers import AsyncTokenProvider, ProvidedTokenAuth, TokenProvider
 from axonium.resources.chat import AsyncChat, Chat
 from axonium.resources.embeddings import AsyncEmbeddings, Embeddings
 from axonium.resources.images import AsyncImages, Images
@@ -38,10 +47,91 @@ __all__ = ["AsyncAxonium", "Axonium"]
 logger = logging.getLogger("axonium.client")
 
 
+def _credentials_were_explicit(settings: dict[str, Any]) -> bool:
+    """Whether the caller asked for credentials, as opposed to the environment carrying them.
+
+    A deliberately built ``config=`` object counts as asking.
+    """
+    supplied = settings.get("config")
+    if supplied is not None:
+        return supplied.client_id is not None or supplied.client_secret is not None
+    return bool({"client_id", "client_secret"} & settings.keys())
+
+
+def _select_auth(
+    config: AxoniumConfig,
+    provider: TokenProvider | AsyncTokenProvider | None,
+    *,
+    is_async: bool,
+    credentials_were_explicit: bool,
+) -> TokenManager | ProvidedTokenAuth:
+    """Pick the credential mode, refusing anything genuinely ambiguous.
+
+    The two modes are permanent and mirror how the SDK is consumed: a governed host injects a
+    provider and keeps its secret; an autonomous caller hands over credentials so it can work
+    without that host.
+
+    Asking for both *explicitly* is a contradiction and is refused. Credentials that merely happen
+    to be in the environment are not: a governed host will often have them set for other reasons,
+    and refusing to start would be fragile without being safer. The explicit provider wins — the
+    same precedence every other setting follows — and the unused credentials are reported, because
+    an operator who set them probably believes they are in use, and that belief is the thing worth
+    correcting.
+    """
+    has_credentials = config.client_id is not None or config.client_secret is not None
+
+    if provider is not None and has_credentials:
+        if credentials_were_explicit:
+            raise ConfigurationError(
+                "Supply either a token_provider or client_id/client_secret, not both. A provider "
+                "means the SDK never holds a secret; credentials mean it mints its own tokens. "
+                "Which is in force must not depend on precedence."
+            )
+        warnings.warn(
+            "A token_provider was supplied, so the client_id/client_secret found in the "
+            "environment are unused and have been discarded. Unset AXONIUM_CLIENT_ID and "
+            "AXONIUM_CLIENT_SECRET to keep the secret out of this process entirely.",
+            UnusedCredentialWarning,
+            stacklevel=3,
+        )
+        # Dropped rather than merely ignored, so "the SDK never holds a long-lived secret" is a
+        # fact about this object and not a statement about which code path reads it.
+        config.client_id = None
+        config.client_secret = None
+
+    if provider is not None:
+        return (
+            ProvidedTokenAuth(async_provider=provider)  # type: ignore[arg-type]
+            if is_async
+            else ProvidedTokenAuth(provider=provider)  # type: ignore[arg-type]
+        )
+
+    missing = [
+        name
+        for name, value in (
+            ("client_id", config.client_id),
+            ("client_secret", config.client_secret),
+        )
+        if value is None
+    ]
+    if missing:
+        raise ConfigurationError(
+            f"Missing {' and '.join(missing)}. Set them (or AXONIUM_{missing[0].upper()} and so "
+            f"on), or pass token_provider= to let a host supply tokens instead."
+        )
+
+    return TokenManager(config)
+
+
 class _BaseAxonium:
-    def __init__(self, config: AxoniumConfig, retry: RetryPolicy | None) -> None:
+    def __init__(
+        self,
+        config: AxoniumConfig,
+        retry: RetryPolicy | None,
+        auth: TokenManager | ProvidedTokenAuth,
+    ) -> None:
         self._config = config
-        self._auth = TokenManager(config)
+        self._auth = auth
         self._retry = retry or RetryPolicy()
         self._cooldowns = CooldownRegistry()
         self._last_rate_limit: RateLimitSnapshot | None = None
@@ -191,13 +281,33 @@ class Axonium(_BaseAxonium):
             print(completion.content)
     """
 
-    def __init__(self, *, retry: RetryPolicy | None = None, **settings: Any) -> None:
+    def __init__(
+        self,
+        *,
+        retry: RetryPolicy | None = None,
+        token_provider: TokenProvider | None = None,
+        **settings: Any,
+    ) -> None:
         """Accepts any :class:`~axonium.config.AxoniumConfig` field, or none at all to take every
         value from the environment. A missing required setting raises
         :class:`~axonium.errors.ConfigurationError` naming it.
+
+        ``token_provider`` selects the governed mode: the SDK never holds a secret and asks the
+        provider for a token, passing back any token the gateway rejected. Supply it *or*
+        ``client_id``/``client_secret``, never both.
         """
+        explicit = _credentials_were_explicit(settings)
         config = settings.pop("config", None) or AxoniumConfig(**settings)
-        super().__init__(config, retry)
+        super().__init__(
+            config,
+            retry,
+            _select_auth(
+                config,
+                token_provider,
+                is_async=False,
+                credentials_were_explicit=explicit,
+            ),
+        )
         self._http = build_sync_client(config, auth=self._auth)
 
         self.models = Models(self)
@@ -307,9 +417,28 @@ class Axonium(_BaseAxonium):
 class AsyncAxonium(_BaseAxonium):
     """Asynchronous client for the Prometheus Gateway. See :class:`Axonium`."""
 
-    def __init__(self, *, retry: RetryPolicy | None = None, **settings: Any) -> None:
+    def __init__(
+        self,
+        *,
+        retry: RetryPolicy | None = None,
+        token_provider: AsyncTokenProvider | None = None,
+        **settings: Any,
+    ) -> None:
+        """See :class:`Axonium`. ``token_provider`` must be an async callable here: a blocking
+        token fetch on the event loop would stall every other request in flight.
+        """
+        explicit = _credentials_were_explicit(settings)
         config = settings.pop("config", None) or AxoniumConfig(**settings)
-        super().__init__(config, retry)
+        super().__init__(
+            config,
+            retry,
+            _select_auth(
+                config,
+                token_provider,
+                is_async=True,
+                credentials_were_explicit=explicit,
+            ),
+        )
         self._http = build_async_client(config, auth=self._auth)
 
         self.models = AsyncModels(self)

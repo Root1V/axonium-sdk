@@ -38,6 +38,7 @@ from axonium.errors import (
     UnknownModelError,
     UnsupportedFieldWarning,
     UnsupportedGrantTypeError,
+    UnusedCredentialWarning,
     UpstreamError,
     UsageStoreUnavailableError,
 )
@@ -65,6 +66,7 @@ from axonium.models.requests import (
     ImageGenerationRequest,
     Message,
 )
+from axonium.providers import AsyncTokenProvider, TokenProvider
 from axonium.streaming import AsyncChatCompletionStream, ChatCompletionStream
 from axonium.transport.retry import CooldownRegistry, RetryPolicy
 
@@ -73,6 +75,7 @@ __all__ = [
     "APIObject",
     "AsyncAxonium",
     "AsyncChatCompletionStream",
+    "AsyncTokenProvider",
     "AuthTransportError",
     "Axonium",
     "AxoniumConfig",
@@ -122,6 +125,7 @@ __all__ = [
     "Timings",
     "TokenClaims",
     "TokenExpiredError",
+    "TokenProvider",
     "TokenRevokedError",
     "TokenSet",
     "TransportError",
@@ -130,6 +134,7 @@ __all__ = [
     "UnknownModelError",
     "UnsupportedFieldWarning",
     "UnsupportedGrantTypeError",
+    "UnusedCredentialWarning",
     "UpstreamError",
     "Usage",
     "UsageStoreUnavailableError",

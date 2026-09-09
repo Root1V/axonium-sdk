@@ -244,6 +244,11 @@ class TokenManager(httpx.Auth):
 
     def _request_kwargs(self) -> dict[str, Any]:
         # The endpoint is form-encoded, not JSON.
+        if self._config.client_id is None or self._config.client_secret is None:
+            raise AuthTransportError(
+                "This client has no credentials. Supply client_id and client_secret, or a token "
+                "provider."
+            )
         form = {
             "grant_type": "client_credentials",
             "client_id": self._config.client_id,

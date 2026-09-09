@@ -14,25 +14,35 @@ class TestRequiredSettings:
         assert config.gateway_base_url == "https://gateway.test.invalid"
         assert config.client_id == "test-client"
 
-    def test_missing_settings_name_themselves_and_their_env_vars(self) -> None:
+    def test_missing_urls_name_themselves_and_their_env_vars(self) -> None:
         with pytest.raises(ConfigurationError) as caught:
             AxoniumConfig()
 
         message = str(caught.value)
-        for field in ("auth_base_url", "gateway_base_url", "client_id", "client_secret"):
+        for field in ("auth_base_url", "gateway_base_url"):
             assert field in message
             assert f"AXONIUM_{field.upper()}" in message
 
-    def test_partial_configuration_reports_only_what_is_missing(
-        self, config_kwargs: dict[str, str]
-    ) -> None:
+    def test_credentials_are_optional_at_this_level(self, config_kwargs: dict[str, str]) -> None:
+        # Governed callers supply a token provider instead, which is not a settings value, so
+        # whether a credential is required depends on how the client is built rather than on the
+        # configuration alone. The client enforces that rule; see test_credential_modes.
         del config_kwargs["client_secret"]
+        del config_kwargs["client_id"]
+
+        config = AxoniumConfig(**config_kwargs)
+
+        assert config.client_id is None
+        assert config.client_secret is None
+
+    def test_partial_urls_report_only_what_is_missing(self, config_kwargs: dict[str, str]) -> None:
+        del config_kwargs["gateway_base_url"]
 
         with pytest.raises(ConfigurationError) as caught:
             AxoniumConfig(**config_kwargs)
 
         message = str(caught.value)
-        assert "client_secret" in message
+        assert "gateway_base_url" in message
         assert "auth_base_url" not in message
 
 

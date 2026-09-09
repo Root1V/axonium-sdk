@@ -72,11 +72,13 @@ class AxoniumConfig(BaseSettings):
     #: Base URL of the gateway serving the ``/v1/`` inference API.
     gateway_base_url: str
 
-    client_id: str
+    #: Required in autonomous mode, where the SDK mints its own tokens. Absent in governed mode,
+    #: where a caller-supplied token provider is the authority and the SDK never sees a secret.
+    client_id: str | None = None
     #: Held as a SecretStr so it cannot leak through repr(), which is what a traceback, an error
     #: reporter capturing locals, or a stray log of the config would otherwise print in full.
     #: Read it with ``.get_secret_value()``.
-    client_secret: SecretStr
+    client_secret: SecretStr | None = None
 
     #: Optional space-separated scope request. When omitted the token receives the account's full
     #: allowed scopes; when supplied the effective scope is the intersection with what the account

@@ -51,6 +51,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | RM-43 | Platform security probes | ✅ | 28/28 pass against a live deployment |
 | RM-44 | Unified error surface: everything raises an `AxoniumError` | ✅ | Request validation no longer leaks pydantic's exception |
 | RM-45 | Ask the platform team about the 422 envelope | 📋 | Not RFC 9457, no request_id, absent from the catalog |
-| RM-46 | Injected token provider as an alternative to client credentials | 📋 | Aeon P4: governed mode must not hand the SDK a long-lived secret |
+| RM-46 | Injected token provider as an alternative to client credentials | ✅ | Rejected token passed back, not a flag, so a provider can deduplicate exactly |
 | RM-47 | Re-record contract fixtures from a live deployment | 📋 | Today's are authored, so they pin the SDKs to each other, not to the gateway |
 | RM-48 | Map `Usage` onto the agreed H3 vocabulary | 📋 | Prometheus cannot source `reasoning` or `cache_write`; nullability must be explicit |
+| RM-49 | Two permanent credential modes with construction-time validation | ✅ | Environment credentials are discarded, not merely unused |

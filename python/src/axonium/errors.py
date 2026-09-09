@@ -51,6 +51,7 @@ __all__ = [
     "UnknownModelError",
     "UnsupportedFieldWarning",
     "UnsupportedGrantTypeError",
+    "UnusedCredentialWarning",
     "UpstreamError",
     "UsageStoreUnavailableError",
     "error_from_response",
@@ -76,6 +77,14 @@ class UnsupportedFieldWarning(UserWarning):
     The gateway's request schemas are allowlists and silently discard unknown fields, so the SDK
     warns rather than letting a caller believe a parameter took effect. This is a warning and not
     an error so that a newer gateway accepting more fields never breaks an older SDK.
+    """
+
+
+class UnusedCredentialWarning(UserWarning):
+    """Credentials were found but will not be used, because a token provider takes precedence.
+
+    Worth saying out loud: an operator who set them almost certainly believes they are in use, and
+    the whole point of the provider mode is that the secret need not be in this process at all.
     """
 
 

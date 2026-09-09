@@ -106,6 +106,44 @@ request you did not ask for. If you already call `models.list()`, the result is 
 check is free. If the catalog cannot be loaded the check is skipped rather than failing your
 request — a guard rail should not become a new way for inference to break.
 
+## Credential modes
+
+Two modes, permanent and mutually exclusive. Which one you use follows from how the SDK is
+embedded, not from preference.
+
+**Autonomous** — the SDK mints and refreshes its own tokens. For development, notebooks and tests,
+where there is no host to ask.
+
+```python
+client = Axonium(client_id=..., client_secret=...)  # or from the environment
+```
+
+**Governed** — a host that already owns the credential supplies tokens, and the SDK never holds a
+secret. The provider is the sole authority: it owns caching, refresh and rotation, and Axonium does
+no refresh-ahead of its own, because two caches for one token is how a client ends up sending a
+token its owner already retired.
+
+```python
+def tokens(
+    rejected: str | None,
+) -> str: ...  # `rejected` is the token the gateway just refused, or None
+
+
+client = Axonium(token_provider=tokens)
+```
+
+**The rejected token comes back, not a flag.** With a boolean a provider cannot tell whether two
+concurrent refreshes concern the same dead token or different ones, so it must mint twice or guess
+with a time window. Given the token, the answer is exact — if what it holds already differs, it
+refreshed already.
+
+`AsyncAxonium` requires an async provider: a blocking token fetch would stall the event loop, so
+the mismatch is reported rather than tolerated.
+
+Asking for both modes by name is refused. Credentials that merely happen to be in the environment
+are not — the explicit provider wins, and the credentials are **discarded** with a warning, so the
+secret really does leave the process rather than sitting unused.
+
 ## Configuration
 
 The SDK never hardcodes a host, port, or certificate — every deployment supplies its own. Settings
