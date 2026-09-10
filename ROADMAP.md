@@ -55,7 +55,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-45 | Ask the platform team about the 422 envelope | 📋 | Not RFC 9457, no request_id, absent from the catalog |
 | AXO-46 | Injected token provider as an alternative to client credentials | ✅ | Rejected token passed back, not a flag, so a provider can deduplicate exactly |
 | AXO-47 | Re-record contract fixtures from a live deployment | 📋 | Today's are authored, so they pin the SDKs to each other, not to the gateway |
-| AXO-48 | Map `Usage` onto the agreed H3 vocabulary | 📋 | Prometheus cannot source `reasoning` or `cache_write`; nullability must be explicit |
+| AXO-48 | Map `Usage` onto the agreed H3 vocabulary | ✅ | `cache_read` exposed as a subset of input; `reasoning`/`cache_write` stay null, unsourceable |
 | AXO-49 | Two permanent credential modes with construction-time validation | ✅ | Environment credentials are discarded, not merely unused |
 | AXO-50 | Go: raise coverage to the Python bar | 📋 | 78.7% today; Python is at 100% line and branch |
 | AXO-51 | Go: structured logging and optional OTel spans | 📋 | Python has both; Go has neither yet |
