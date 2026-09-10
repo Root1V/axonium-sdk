@@ -49,6 +49,16 @@ class Usage(_Passthrough):
     completion_tokens: int | None = None
     total_tokens: int | None = None
 
+    #: How many of ``prompt_tokens`` were served from cache. A **subset** of ``prompt_tokens``, not
+    #: a separate bucket: the input counter includes the cached prefix. That convention was settled
+    #: across the three fronts because providers report it that way, so an adapter copies instead
+    #: of subtracting -- copying cannot be done wrong, and a forgotten subtraction double-counts
+    #: the cache without producing any error.
+    #:
+    #: ``None`` when the backend did not report it. Only llama.cpp-family timings carry it today,
+    #: so a non-streaming response usually leaves this unset rather than zero.
+    cache_read_tokens: int | None = None
+
     #: True when the counts were derived from a backend ``timings`` object rather than reported
     #: directly. llama.cpp-family backends emit no usage chunk when streaming, so token counts can
     #: only be inferred from the final chunk's timings.

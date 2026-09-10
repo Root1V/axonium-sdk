@@ -91,6 +91,16 @@ type Usage struct {
 	CompletionTokens *int `json:"completion_tokens,omitempty"`
 	TotalTokens      *int `json:"total_tokens,omitempty"`
 
+	// CacheReadTokens is how many of PromptTokens were served from cache. It is a subset of
+	// PromptTokens, not a separate bucket: the input counter includes the cached prefix. That
+	// convention was settled across the three fronts because providers report it that way, so an
+	// adapter copies instead of subtracting -- copying cannot be done wrong, and a forgotten
+	// subtraction double-counts the cache without producing any error.
+	//
+	// nil when the backend did not report it. Only llama.cpp-family timings carry it today, so a
+	// non-streaming response usually leaves this unset rather than zero.
+	CacheReadTokens *int `json:"cache_read_tokens,omitempty"`
+
 	// Estimated is true when the counts were derived from a backend timings object rather than
 	// reported directly. A derived figure must never be mistaken for a measured one: it is the
 	// difference between billing on a fact and billing on an inference.

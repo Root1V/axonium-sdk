@@ -91,6 +91,43 @@ func TestUsageFromTimingsIsFlaggedEstimated(t *testing.T) {
 	if !usage.Estimated {
 		t.Error("a derived figure must be marked estimated")
 	}
+	if usage.CacheReadTokens == nil || *usage.CacheReadTokens != 5 {
+		t.Errorf("cache_read must be reported so a consumer can compute a hit ratio: %+v", usage.CacheReadTokens)
+	}
+}
+
+// The three fronts settled that input INCLUDES the cached prefix, and cache_read says how many of
+// those were cached. The two conventions disagree by exactly cache_n with no error on either side,
+// so the arithmetic is pinned here: it would otherwise only show up on an invoice.
+func TestInputIncludesTheCachedPrefix(t *testing.T) {
+	var acc accumulator
+	acc.timings = map[string]any{"prompt_n": 13.0, "cache_n": 2.0, "predicted_n": 20.0}
+
+	usage := acc.finalUsage()
+	if *usage.PromptTokens != 15 {
+		t.Fatalf("input must include the cached prefix: got %d, want 15 (13 + 2)", *usage.PromptTokens)
+	}
+	if *usage.CacheReadTokens != 2 {
+		t.Fatalf("cache_read is the cached subset of input: got %d, want 2", *usage.CacheReadTokens)
+	}
+	if *usage.CacheReadTokens > *usage.PromptTokens {
+		t.Fatal("cache_read is a subset of input, so it can never exceed it")
+	}
+}
+
+// A backend that reports no cache_n at all leaves cache_read unset rather than zero: "nobody
+// measured" is not "nothing was cached", and a zero would make a hit ratio look like a cold cache.
+func TestAbsentCacheCounterIsNilNotZero(t *testing.T) {
+	var acc accumulator
+	acc.timings = map[string]any{"prompt_n": 13.0, "predicted_n": 20.0}
+
+	usage := acc.finalUsage()
+	if usage.CacheReadTokens != nil {
+		t.Errorf("an unreported cache counter must stay nil, got %d", *usage.CacheReadTokens)
+	}
+	if *usage.PromptTokens != 13 {
+		t.Errorf("input: got %d, want 13", *usage.PromptTokens)
+	}
 }
 
 // A reported usage always wins over a derived one, and is not marked estimated.

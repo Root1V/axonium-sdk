@@ -151,6 +151,36 @@ class TestAccumulator:
         assert usage.completion_tokens == 20
         assert usage.total_tokens == 35
         assert usage.estimated is True, "a derived figure must never look like a reported one"
+        assert usage.cache_read_tokens == 2, "the cached subset has to survive the sum"
+
+    def test_input_includes_the_cached_prefix(self) -> None:
+        # The three fronts settled that `input` INCLUDES the cached prefix, and `cache_read` says
+        # how many of those were cached. The rival convention treats them as disjoint buckets and
+        # disagrees by exactly cache_n, with no error on either side — it would only ever show up
+        # on an invoice, so the arithmetic is pinned here.
+        accumulator = StreamAccumulator()
+
+        self.feed_all(
+            accumulator, ['data: {"timings":{"prompt_n":13,"cache_n":2,"predicted_n":20}}']
+        )
+        usage = accumulator.usage()
+
+        assert usage is not None
+        assert usage.prompt_tokens == 15, "13 served fresh plus 2 from cache"
+        assert usage.cache_read_tokens == 2
+        assert usage.cache_read_tokens <= usage.prompt_tokens, "a subset can never exceed its set"
+
+    def test_absent_cache_counter_stays_none_rather_than_zero(self) -> None:
+        # "Nobody measured" is not "nothing was cached": a zero would make a hit ratio read as a
+        # cold cache instead of as an unknown.
+        accumulator = StreamAccumulator()
+
+        self.feed_all(accumulator, ['data: {"timings":{"prompt_n":13,"predicted_n":20}}'])
+        usage = accumulator.usage()
+
+        assert usage is not None
+        assert usage.cache_read_tokens is None
+        assert usage.prompt_tokens == 13
 
     def test_usage_is_none_when_nothing_reported_it(self) -> None:
         accumulator = StreamAccumulator()

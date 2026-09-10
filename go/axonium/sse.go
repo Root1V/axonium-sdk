@@ -119,18 +119,29 @@ func (a *accumulator) finalUsage() *Usage {
 		return nil
 	}
 
-	prompt := asInt(a.timings["prompt_n"]) + asInt(a.timings["cache_n"])
+	// Read by value rather than by key presence: a backend that sends an explicit null must be
+	// treated as not having measured it, the same as one that omits the field. A zero here would
+	// make an unknown look like a cold cache.
+	cached, cacheReported := numeric(a.timings["cache_n"])
+	// input includes the cached prefix; cache_read says how many of those were cached. Summing is
+	// the copy, not an addition of two disjoint buckets.
+	prompt := asInt(a.timings["prompt_n"]) + int(cached)
 	completion := asInt(a.timings["predicted_n"])
 	if prompt == 0 && completion == 0 {
 		return nil
 	}
 	total := prompt + completion
-	return &Usage{
+	usage := &Usage{
 		PromptTokens:     &prompt,
 		CompletionTokens: &completion,
 		TotalTokens:      &total,
 		Estimated:        true,
 	}
+	if cacheReported {
+		cachedTokens := int(cached)
+		usage.CacheReadTokens = &cachedTokens
+	}
+	return usage
 }
 
 func asInt(v any) int {

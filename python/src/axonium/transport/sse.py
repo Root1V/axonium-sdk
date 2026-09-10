@@ -145,7 +145,10 @@ class StreamAccumulator:
         if not self._timings:
             return None
 
-        prompt = _as_int(self._timings.get("prompt_n")) + _as_int(self._timings.get("cache_n"))
+        cached = _as_int(self._timings.get("cache_n"))
+        # input includes the cached prefix; cache_read says how many of those were cached. Summing
+        # is the copy, not an addition of two disjoint buckets.
+        prompt = _as_int(self._timings.get("prompt_n")) + cached
         completion = _as_int(self._timings.get("predicted_n"))
         if prompt == 0 and completion == 0:
             return None
@@ -154,6 +157,10 @@ class StreamAccumulator:
             prompt_tokens=prompt,
             completion_tokens=completion,
             total_tokens=prompt + completion,
+            # By value, not by key: the Timings model dumps every field, so an absent cache_n is
+            # present as None. Keying on the name alone would report a measured zero where the
+            # backend reported nothing, and make a cold cache indistinguishable from an unknown.
+            cache_read_tokens=cached if self._timings.get("cache_n") is not None else None,
             estimated=True,
         )
 
