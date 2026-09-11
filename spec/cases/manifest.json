@@ -97,7 +97,9 @@
           "data.0.id": "llama3-8b-q4",
           "data.0.context_length": 8192,
           "data.0.modality": "text",
-          "data.1.modality": "embedding"
+          "data.1.modality": "embedding",
+          "data.2.modality": "vision",
+          "data.3.modality": "image"
         }
       }
     },

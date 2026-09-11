@@ -10,6 +10,24 @@
       "quantization": "Q4_0",
       "modality": "text"
     },
-    { "id": "embed-model", "object": "model", "owned_by": "prometheus", "modality": "embedding" }
+    {
+      "id": "embed-model",
+      "object": "model",
+      "owned_by": "prometheus",
+      "modality": "embedding"
+    },
+    {
+      "id": "vision-model",
+      "object": "model",
+      "owned_by": "prometheus",
+      "context_length": 32768,
+      "modality": "vision"
+    },
+    {
+      "id": "sd-turbo",
+      "object": "model",
+      "owned_by": "prometheus",
+      "modality": "image"
+    }
   ]
 }
