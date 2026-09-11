@@ -1,6 +1,7 @@
 package axonium
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 )
@@ -105,4 +106,31 @@ type Usage struct {
 	// reported directly. A derived figure must never be mistaken for a measured one: it is the
 	// difference between billing on a fact and billing on an inference.
 	Estimated bool `json:"-"`
+}
+
+// promptTokensDetails is the OpenAI-shaped breakdown of the prompt count. Non-streaming responses
+// report the cached share here, so cache_read is a measured figure on that path rather than one
+// derived from timings.
+type promptTokensDetails struct {
+	CachedTokens *int `json:"cached_tokens"`
+}
+
+// UnmarshalJSON lifts prompt_tokens_details.cached_tokens onto CacheReadTokens.
+//
+// Without this the count sits nested where nothing reads it, and the SDK would report that nobody
+// measured the cache on the one path where somebody did.
+func (u *Usage) UnmarshalJSON(data []byte) error {
+	type plain Usage
+	var raw struct {
+		plain
+		PromptTokensDetails *promptTokensDetails `json:"prompt_tokens_details"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*u = Usage(raw.plain)
+	if u.CacheReadTokens == nil && raw.PromptTokensDetails != nil {
+		u.CacheReadTokens = raw.PromptTokensDetails.CachedTokens
+	}
+	return nil
 }

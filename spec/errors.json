@@ -1,5 +1,5 @@
 {
-  "$comment": "Error catalog for the Prometheus Gateway, derived from spec/prometheus-gateway.md \u00a75.2. Every language SDK maps its exception/error types from this file so the taxonomy cannot drift between SDKs. `suffix` is the last path segment of the problem-details `type` URI and is the stable field to branch on; `detail` is human-readable and may change wording.",
+  "$comment": "Error catalog for the Prometheus Gateway, derived from spec/prometheus-gateway.md §5.2. Every language SDK maps its exception/error types from this file so the taxonomy cannot drift between SDKs. `suffix` is the last path segment of the problem-details `type` URI and is the stable field to branch on; `detail` is human-readable and may change wording.",
   "envelopes": {
     "gateway": {
       "$comment": "RFC 9457 problem details, Content-Type: application/problem+json. Returned by every gateway endpoint.",
@@ -14,12 +14,12 @@
         "trace_id"
       ],
       "optional_fields": {
-        "retry_after": "Integer seconds. Present on rate-limit errors, which also omit trace_id. Confirmed by the platform team: the Retry-After header and this field are written from the same variable in the same call, so they cannot disagree \u2014 either source may be read.",
+        "retry_after": "Integer seconds. Present on rate-limit errors, which also omit trace_id. Confirmed by the platform team: the Retry-After header and this field are written from the same variable in the same call, so they cannot disagree — either source may be read.",
         "trace_id": "Omitted by the rate-limiting middleware envelope."
       }
     },
     "oauth": {
-      "$comment": "RFC 6749 \u00a75.2, returned by the auth-service token endpoint only. Deliberately a different shape from the gateway envelope.",
+      "$comment": "RFC 6749 §5.2, returned by the auth-service token endpoint only. Deliberately a different shape from the gateway envelope.",
       "fields": [
         "error",
         "error_description"
@@ -128,6 +128,13 @@
       "meaning": "Database read failed. Only on GET /v1/usage and /v1/usage/export.",
       "retryable": true,
       "retry_policy": "backoff"
+    },
+    {
+      "status": 422,
+      "suffix": "validation-error",
+      "meaning": "Request schema validation failed. Carries an additional `errors` array of field-level problems, each with `loc`, `msg`, `type` and the offending `input`, which is what tells a caller which field to fix.",
+      "retryable": false,
+      "$comment": "Verified against a live deployment on 2026-09-11. This used to be the one endpoint that broke the envelope -- FastAPI's default shape, with no request_id or trace_id -- and the platform team has since fixed it. Keep the status-keyed fallback anyway: the lesson was that an SDK must not assume every error carries a `type`."
     }
   ],
   "oauth_errors": [
@@ -160,6 +167,6 @@
     "There is no 404 for 'model not found' on the inference endpoints; that is 400 unknown-model. Reserve 404 handling for genuinely unmapped routes.",
     "Unknown type suffixes must not raise a parse error: fall back to a status-keyed base error, since the catalog will grow.",
     "There is no idempotency-key mechanism in this API. A retried chat/embeddings/images request is a genuinely new generation, billable and non-replayable.",
-    "Observed, not documented: request-schema validation failures return 422 with FastAPI's default shape (application/json, a list of pydantic errors under `detail`) rather than the RFC 9457 envelope \u2014 and with no request_id or trace_id, so a client hitting one has nothing to correlate against platform logs. 422 is also absent from the catalog above. SDKs must therefore fall back by status rather than assuming every error carries a `type`."
+    "Every gateway error observed on a live deployment carries the full RFC 9457 envelope including request_id and trace_id, 422 included. Fall back by status regardless: an SDK that hard-fails on an error without a `type` would break the moment one appears, and one did for a while."
   ]
 }

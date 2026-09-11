@@ -219,13 +219,18 @@ class TestSyncStreaming:
         ):
             chunks = list(stream)
             text = stream.content
+            reasoning = stream.reasoning
             usage = stream.usage()
 
-        assert text == "Hello, world!"
-        assert "".join(chunk.content or "" for chunk in chunks) == "Hello, world!"
-        assert chunks[-1].finish_reason == "stop"
+        # Recorded from a live deployment: a reasoning model that never left its thinking phase.
+        # The answer is empty, the chain of thought is not, and there is still usage to pay for --
+        # the shape a caller reading only `content` would misread as an empty response.
+        assert text == ""
+        assert "".join(chunk.reasoning or "" for chunk in chunks) == reasoning
+        assert reasoning, "the chain of thought must survive an empty answer"
+        assert chunks[-1].finish_reason == "length"
         assert usage is not None
-        assert usage.estimated is True
+        assert usage.estimated is True, "no usage chunk arrives, so these are derived"
 
     @respx.mock
     def test_requests_a_stream_from_the_gateway(
@@ -410,12 +415,18 @@ class TestAsyncStreaming:
         ):
             chunks = [chunk async for chunk in stream]
             text = stream.content
+            reasoning = stream.reasoning
             usage = stream.usage()
 
-        assert text == "Hello, world!"
-        assert chunks[-1].finish_reason == "stop"
+        # Recorded from a live deployment: a reasoning model that never left its thinking phase.
+        # The answer is empty, the chain of thought is not, and there is still usage to pay for --
+        # the shape a caller reading only `content` would misread as an empty response.
+        assert text == ""
+        assert reasoning, "the chain of thought must survive an empty answer"
+        assert chunks[-1].finish_reason == "length"
         assert usage is not None
-        assert usage.prompt_tokens == 15
+        assert usage.prompt_tokens == 15, "prompt_n plus cache_n"
+        assert usage.cache_read_tokens == 14
 
     @respx.mock
     async def test_detects_an_interrupted_stream(

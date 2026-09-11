@@ -16,7 +16,7 @@ import pytest
 import respx
 
 from axonium import AsyncAxonium, Axonium
-from axonium.errors import StreamInterruptedError
+from axonium.errors import APIError, StreamInterruptedError
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SPEC = REPO_ROOT / "spec"
@@ -135,6 +135,18 @@ def assert_fields(result: Any, expected: dict[str, Any], case_id: str) -> None:
         assert got == want, f"{case_id}: {path} was {got!r}, expected {want!r}"
 
 
+def assert_error(error: APIError, case: dict[str, Any]) -> None:
+    expect = case["expect"]
+    cid = case["id"]
+    assert error.status == case["response"]["status"], cid
+    assert error.type_suffix == expect["error_type_suffix"], cid
+    assert error.retryable is expect["retryable"], cid
+    if expect.get("has_request_id"):
+        assert error.request_id, f"{cid}: no request_id, so a caller cannot correlate this"
+    if expect.get("has_trace_id"):
+        assert error.trace_id, f"{cid}: no trace_id, so a caller cannot correlate this"
+
+
 def assert_usage(usage: Any, expected: dict[str, Any] | None, case_id: str) -> None:
     if expected is None:
         assert usage is None, f"{case_id}: expected no usage, got {usage!r}"
@@ -148,6 +160,7 @@ def assert_usage(usage: Any, expected: dict[str, Any] | None, case_id: str) -> N
 
 NON_STREAMING = [case for case in CASES if case["expect"]["kind"] == "ok"]
 STREAMING = [case for case in CASES if case["expect"]["kind"].startswith("stream")]
+ERRORS = [case for case in CASES if case["expect"]["kind"] == "error"]
 
 
 class TestNonStreamingCases:
@@ -216,6 +229,35 @@ class TestStreamingCases:
             assert_usage(stream.usage(), expect["usage"], case["id"])
 
 
+class TestErrorCases:
+    """Recorded failures must map to the taxonomy the shared catalog declares.
+
+    The correlation IDs are asserted too: an error a caller cannot take to the platform team is
+    half an error.
+    """
+
+    @respx.mock
+    @pytest.mark.parametrize("case", ERRORS, ids=[c["id"] for c in ERRORS])
+    def test_sync(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
+        route_for(case)
+
+        with Axonium(**config_kwargs) as client, pytest.raises(APIError) as caught:
+            call_sync(client, case)
+
+        assert_error(caught.value, case)
+
+    @respx.mock
+    @pytest.mark.parametrize("case", ERRORS, ids=[c["id"] for c in ERRORS])
+    async def test_async(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
+        route_for(case)
+
+        async with AsyncAxonium(**config_kwargs) as client:
+            with pytest.raises(APIError) as caught:
+                await call_async(client, case)
+
+        assert_error(caught.value, case)
+
+
 class TestManifestIntegrity:
     """The manifest is only useful if it stays well-formed and actually gets exercised."""
 
@@ -225,7 +267,7 @@ class TestManifestIntegrity:
     def test_every_case_is_executed_by_one_of_the_runners(self) -> None:
         # A case with an unrecognized kind would otherwise be silently skipped, leaving the
         # behavior it describes unverified while looking covered.
-        executed = {case["id"] for case in NON_STREAMING + STREAMING}
+        executed = {case["id"] for case in NON_STREAMING + STREAMING + ERRORS}
         assert executed == set(CASE_IDS)
 
     def test_every_operation_is_routable(self) -> None:

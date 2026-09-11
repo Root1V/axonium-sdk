@@ -33,6 +33,9 @@ var (
 	ErrModalityMismatch = errors.New("axonium: modality-mismatch")
 	ErrContextExceeded  = errors.New("axonium: context-exceeded")
 
+	// 422 -- the body carries an `errors` array naming the offending fields.
+	ErrValidation = errors.New("axonium: validation-error")
+
 	// 401
 	ErrMissingCredentials = errors.New("axonium: missing-credentials")
 	ErrInvalidToken       = errors.New("axonium: invalid-token")
@@ -88,6 +91,7 @@ var suffixSentinels = map[string]error{
 	"unknown-model":                ErrUnknownModel,
 	"modality-mismatch":            ErrModalityMismatch,
 	"context-exceeded":             ErrContextExceeded,
+	"validation-error":             ErrValidation,
 	"missing-credentials":          ErrMissingCredentials,
 	"invalid-token":                ErrInvalidToken,
 	"token-expired":                ErrTokenExpired,

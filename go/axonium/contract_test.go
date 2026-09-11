@@ -47,6 +47,9 @@ type contractCase struct {
 		Usage           map[string]any `json:"usage"`
 		PartialContent  *string        `json:"partial_content"`
 		ErrorTypeSuffix string         `json:"error_type_suffix"`
+		Retryable       *bool          `json:"retryable"`
+		HasRequestID    *bool          `json:"has_request_id"`
+		HasTraceID      *bool          `json:"has_trace_id"`
 	} `json:"expect"`
 }
 
@@ -120,6 +123,8 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 				t.Errorf("%s: got %#v, want %#v", path, got, want)
 			}
 		}
+	case "error":
+		runErrorCase(t, client, c)
 	case "stream", "stream_error":
 		runStreamCase(t, client, c)
 	default:
@@ -188,13 +193,59 @@ func invokeUnary(t *testing.T, client *Client, c contractCase) map[string]any {
 	// value happens to sit in the payload. Python satisfies this with properties; Go grafts the
 	// accessor results on here.
 	if completion, ok := value.(*ChatCompletion); ok {
-		generic["content"] = nilIfEmpty(completion.Content())
-		generic["reasoning"] = nilIfEmpty(completion.Reasoning())
+		generic["content"] = completion.Content()
+		generic["reasoning"] = completion.Reasoning()
 		if calls := completion.ToolCalls(); calls != nil {
 			generic["tool_calls"] = calls
 		}
 	}
 	return generic
+}
+
+// runErrorCase asserts that a recorded failure maps to the taxonomy the catalog declares, and that
+// the correlation IDs survive onto the error -- which is what a caller needs to take a failure to
+// the platform team.
+func runErrorCase(t *testing.T, client *Client, c contractCase) {
+	err := invokeExpectingError(t, client, c)
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected an *APIError, got %T: %v", err, err)
+	}
+	if apiErr.Status != c.Response.Status {
+		t.Errorf("status: got %d, want %d", apiErr.Status, c.Response.Status)
+	}
+	if apiErr.TypeSuffix != c.Expect.ErrorTypeSuffix {
+		t.Errorf("type suffix: got %q, want %q", apiErr.TypeSuffix, c.Expect.ErrorTypeSuffix)
+	}
+	if sentinel, ok := suffixSentinels[c.Expect.ErrorTypeSuffix]; ok && !errors.Is(err, sentinel) {
+		t.Errorf("%s did not match its sentinel", c.Expect.ErrorTypeSuffix)
+	}
+	if c.Expect.Retryable != nil && apiErr.Retryable() != *c.Expect.Retryable {
+		t.Errorf("retryable: got %v, want %v", apiErr.Retryable(), *c.Expect.Retryable)
+	}
+	if c.Expect.HasRequestID != nil && (apiErr.RequestID != "") != *c.Expect.HasRequestID {
+		t.Errorf("request_id present: got %v, want %v", apiErr.RequestID != "", *c.Expect.HasRequestID)
+	}
+	if c.Expect.HasTraceID != nil && (apiErr.TraceID != "") != *c.Expect.HasTraceID {
+		t.Errorf("trace_id present: got %v, want %v", apiErr.TraceID != "", *c.Expect.HasTraceID)
+	}
+}
+
+func invokeExpectingError(t *testing.T, client *Client, c contractCase) error {
+	t.Helper()
+	ctx := context.Background()
+	switch c.Operation {
+	case "chat.completions.create":
+		_, err := client.Chat.Create(ctx, chatRequestFrom(c.Request))
+		return err
+	case "embeddings.create":
+		_, err := client.Embeddings.Create(ctx, embeddingRequestFrom(c.Request))
+		return err
+	default:
+		t.Fatalf("unsupported operation %q for an error case", c.Operation)
+		return nil
+	}
 }
 
 func runStreamCase(t *testing.T, client *Client, c contractCase) {
@@ -251,6 +302,8 @@ func runStreamCase(t *testing.T, client *Client, c contractCase) {
 			got = derefInt(usage.CompletionTokens)
 		case "total_tokens":
 			got = derefInt(usage.TotalTokens)
+		case "cache_read_tokens":
+			got = derefInt(usage.CacheReadTokens)
 		case "estimated":
 			got = usage.Estimated
 		default:
@@ -260,16 +313,6 @@ func runStreamCase(t *testing.T, client *Client, c contractCase) {
 			t.Errorf("usage.%s: got %#v, want %#v", key, got, want)
 		}
 	}
-}
-
-// nilIfEmpty distinguishes "the model returned no prose" from "the model returned an empty
-// string". The manifest asserts content is null for a tool-call response, and reporting "" there
-// would claim the model answered with nothing rather than that it answered with calls.
-func nilIfEmpty(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }
 
 func derefInt(v *int) any {

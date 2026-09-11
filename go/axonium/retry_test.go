@@ -250,3 +250,48 @@ func TestReactiveRefreshReplaysOnceAfter401(t *testing.T) {
 		t.Errorf("expected exactly one replay after the 401, got %d attempts", n)
 	}
 }
+
+// A response bigger than whatever the transport happened to buffer must still be readable.
+//
+// This pins a real bug: the per-request timeout context was cancelled when the send returned, and
+// a cancelled context closes the response body, so anything not already buffered failed with
+// "context canceled". Small fixtures hid it completely -- they arrive in one segment. A real
+// embeddings response, tens of kilobytes of floats, does not.
+func TestLargeResponseBodySurvivesTheRequestTimeout(t *testing.T) {
+	const vectors, dims = 24, 1024
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			writeToken(w, "tok", 300)
+			return
+		}
+		data := make([]any, 0, vectors)
+		for i := 0; i < vectors; i++ {
+			vec := make([]float64, dims)
+			for j := range vec {
+				vec[j] = float64(j) / 1000
+			}
+			data = append(data, map[string]any{"object": "embedding", "index": i, "embedding": vec})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"object": "list", "model": "embed", "data": data,
+			"usage": map[string]any{"prompt_tokens": 2, "total_tokens": 2},
+		})
+	}))
+	defer srv.Close()
+
+	client := testClient(t, srv.URL)
+	out, err := client.Embeddings.Create(context.Background(), EmbeddingRequest{
+		Model: "embed", Input: []string{"a", "b"},
+	})
+	if err != nil {
+		t.Fatalf("a large body must survive the request timeout scope: %v", err)
+	}
+	if len(out.Data) != vectors {
+		t.Fatalf("got %d vectors, want %d", len(out.Data), vectors)
+	}
+	if len(out.Data[vectors-1].Embedding) != dims {
+		t.Fatalf("the last vector was truncated: %d dims", len(out.Data[vectors-1].Embedding))
+	}
+}

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, PrivateAttr
+from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
 
 __all__ = ["APIObject", "RateLimitSnapshot", "ResponseMeta", "Usage"]
 
@@ -63,6 +63,23 @@ class Usage(_Passthrough):
     #: directly. llama.cpp-family backends emit no usage chunk when streaming, so token counts can
     #: only be inferred from the final chunk's timings.
     estimated: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _lift_cached_tokens(cls, data: Any) -> Any:
+        """Read the cached count out of the OpenAI-shaped ``prompt_tokens_details``.
+
+        Non-streaming responses report it there, so ``cache_read_tokens`` is a *measured* figure on
+        that path rather than one derived from ``timings``. Leaving it buried would have meant
+        telling a caller nobody measured the cache on the one path where somebody did.
+        """
+        if not isinstance(data, dict) or data.get("cache_read_tokens") is not None:
+            return data
+
+        details = data.get("prompt_tokens_details")
+        if isinstance(details, dict) and isinstance(details.get("cached_tokens"), int):
+            data = {**data, "cache_read_tokens": details["cached_tokens"]}
+        return data
 
 
 class RateLimitSnapshot(BaseModel):

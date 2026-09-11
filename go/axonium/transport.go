@@ -273,6 +273,23 @@ func (c *Client) attempt(ctx context.Context, method, path string, body []byte, 
 		c.explainForbidden(apiErr)
 		return nil, meta, apiErr
 	}
+
+	if !streaming {
+		// Read the body here, inside the timeout scope, rather than handing it back still open.
+		// The deferred cancel above fires when this function returns, and a cancelled context
+		// closes the body -- so a caller reading afterwards gets "context canceled" for any
+		// response too large to have been buffered already. Small bodies hid it; a real
+		// embeddings response, which is tens of kilobytes of floats, does not.
+		//
+		// Reading here also makes Timeouts.Request mean what it says: the whole exchange,
+		// body included, rather than just the headers.
+		body, err := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if err != nil {
+			return nil, meta, translateTransportError(ctx, err)
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+	}
 	return resp, meta, nil
 }
 

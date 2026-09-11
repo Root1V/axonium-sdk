@@ -37,7 +37,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-27 | Go SDK | 🚧 | v0.1: streaming, cancellation, both credential modes, 12/12 contract cases |
 | AXO-28 | Rust SDK | 📋 | Contract already defined by AXO-18 |
 | AXO-29 | Optional caller-supplied `X-Trace-ID` | 📋 | Only adopted in legacy-mode deployments, and only as UUID4 |
-| AXO-30 | Error-catalog cases in the contract manifest | 📋 | Today asserted against `errors.json` instead |
+| AXO-30 | Error-catalog cases in the contract manifest | ✅ | 4 recorded failures, asserting suffix, retryability and correlation IDs |
 | AXO-31 | Refresh GitHub Actions off deprecated Node 20 | 📋 | Confirmed live: the release run warns on checkout@v4, upload-artifact@v4, setup-uv@v5 |
 | AXO-32 | Langfuse integration | 🚫 | Vendor observability belongs to the platform |
 | AXO-33 | `llm-guard` PII masking | 🚫 | Heavyweight, English-only, and was broken |
@@ -52,11 +52,13 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-42 | Security suite: credential leaks and hostile responses | ✅ | Found and fixed a secret visible in `repr(config)` |
 | AXO-43 | Platform security probes | ✅ | 28/28 pass against a live deployment |
 | AXO-44 | Unified error surface: everything raises an `AxoniumError` | ✅ | Request validation no longer leaks pydantic's exception |
-| AXO-45 | Ask the platform team about the 422 envelope | 📋 | Not RFC 9457, no request_id, absent from the catalog |
+| AXO-45 | Ask the platform team about the 422 envelope | ✅ | Fixed on the platform: full RFC 9457 with correlation IDs, now catalogued |
 | AXO-46 | Injected token provider as an alternative to client credentials | ✅ | Rejected token passed back, not a flag, so a provider can deduplicate exactly |
-| AXO-47 | Re-record contract fixtures from a live deployment | 📋 | Today's are authored, so they pin the SDKs to each other, not to the gateway |
+| AXO-47 | Re-record contract fixtures from a live deployment | 🚧 | 9 of 17 cases recorded; tool calls, images and the empty catalog still authored |
 | AXO-48 | Map `Usage` onto the agreed H3 vocabulary | ✅ | `cache_read` exposed as a subset of input; `reasoning`/`cache_write` stay null, unsourceable |
 | AXO-49 | Two permanent credential modes with construction-time validation | ✅ | Environment credentials are discarded, not merely unused |
 | AXO-50 | Go: raise coverage to the Python bar | 📋 | 78.7% today; Python is at 100% line and branch |
 | AXO-51 | Go: structured logging and optional OTel spans | 📋 | Python has both; Go has neither yet |
 | AXO-52 | Tag and publish `go/v0.1.0` | 📋 | Needs AXO-50; Aeon's MDL-009 waits on the tag |
+| AXO-53 | Go cannot express an absent `content` | 📋 | `Content()` returns "" for both null and empty; Python distinguishes them |
+| AXO-54 | `response.model` is not `request.model` | 📋 | The gateway routed `-local-2` to `-local-1`; nothing may assume they match |

@@ -54,6 +54,7 @@ __all__ = [
     "UnusedCredentialWarning",
     "UpstreamError",
     "UsageStoreUnavailableError",
+    "ValidationError",
     "error_from_response",
 ]
 
@@ -226,6 +227,17 @@ class ContextExceededError(BadRequestError):
     """The request exceeds the model's context window."""
 
     type_suffix = "context-exceeded"
+
+
+class ValidationError(BadRequestError):
+    """The request body failed schema validation.
+
+    ``raw["errors"]`` carries the field-level problems — each with ``loc``, ``msg``, ``type`` and
+    the offending ``input`` — which is what names the field to fix rather than only saying the
+    request was malformed.
+    """
+
+    type_suffix = "validation-error"
 
 
 # --------------------------------------------------------------------------------------
@@ -457,6 +469,7 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         UnknownModelError,
         ModalityMismatchError,
         ContextExceededError,
+        ValidationError,
         MissingCredentialsError,
         InvalidTokenError,
         TokenExpiredError,
