@@ -30,15 +30,15 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-20 | Runnable examples | ✅ | Verified against a mocked gateway |
 | AXO-21 | Release workflow via PyPI trusted publishing | ✅ | Checks tag matches packaged version |
 | AXO-22 | Single-source package version | ✅ | Prevents the drift the legacy SDK had |
-| AXO-23 | PyPI + TestPyPI pending publishers, GitHub environments | ⛔ | Owner action; needs the PyPI/GitHub accounts |
-| AXO-24 | TestPyPI dry run | 📋 | After AXO-23 |
-| AXO-25 | Publish `python/v1.0.0rc1` | 📋 | After AXO-24; a PyPI version cannot be reused |
+| AXO-23 | PyPI + TestPyPI pending publishers, GitHub environments | 🚧 | TestPyPI side done; PyPI registration still owner action |
+| AXO-24 | TestPyPI dry run | ✅ | `1.0.0rc1` published, installed from the index and run against the live gateway |
+| AXO-25 | Publish `python/v1.0.0rc1` | ⛔ | Needs the PyPI half of AXO-23; a PyPI version cannot be reused |
 | AXO-26 | Integration tests against a real deployment | ✅ | Validated by hand against a local gateway; not yet automated |
 | AXO-27 | Go SDK | 🚧 | v0.1: streaming, cancellation, both credential modes, 12/12 contract cases |
 | AXO-28 | Rust SDK | 📋 | Contract already defined by AXO-18 |
 | AXO-29 | Optional caller-supplied `X-Trace-ID` | 📋 | Only adopted in legacy-mode deployments, and only as UUID4 |
 | AXO-30 | Error-catalog cases in the contract manifest | 📋 | Today asserted against `errors.json` instead |
-| AXO-31 | Refresh GitHub Actions off deprecated Node 20 | 📋 | `checkout@v4`, `setup-uv@v5` |
+| AXO-31 | Refresh GitHub Actions off deprecated Node 20 | 📋 | Confirmed live: the release run warns on checkout@v4, upload-artifact@v4, setup-uv@v5 |
 | AXO-32 | Langfuse integration | 🚫 | Vendor observability belongs to the platform |
 | AXO-33 | `llm-guard` PII masking | 🚫 | Heavyweight, English-only, and was broken |
 | AXO-34 | LangChain / LangGraph bridges | 🚫 | Out of scope for an API client |
