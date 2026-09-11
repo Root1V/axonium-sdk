@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 2,
+  "version": 3,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -428,8 +428,38 @@
         "has_request_id": true,
         "has_trace_id": true
       }
+    },
+    {
+      "id": "stream-tool-calls",
+      "$comment": "Recorded. Tool calls arrive fragmented: the first delta carries index, id, type and function.name; every later one carries only index and an arguments fragment. The fragments are individually invalid JSON ('{', '\"', 'city') and must be concatenated and parsed once at the end. index is the correlation key, since id never repeats. This case pins today's behaviour -- the SDK passes fragments through without reassembling them, which is AXO-56 -- so it will gain assertions rather than change when that lands.",
+      "operation": "chat.completions.stream",
+      "request": {
+        "model": "qwen3-0-6b-iq4-nl-local-2",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is the weather in Lima? Use the tool."
+          }
+        ],
+        "max_tokens": 160
+      },
+      "response": {
+        "status": 200,
+        "sse_file": "chat_stream_tool_calls.sse"
+      },
+      "expect": {
+        "kind": "stream",
+        "content": "",
+        "chunks": 113,
+        "usage": {
+          "prompt_tokens": 166,
+          "completion_tokens": 128,
+          "cache_read_tokens": 165,
+          "estimated": true
+        }
+      }
     }
   ],
   "$recording": "Cases marked AUTHORED are written from the integration guide; the rest were recorded from a live deployment on 2026-09-11. Only the recorded ones are evidence about the gateway.",
-  "$version_note": "Bumped to 2 on 2026-09-11 when the corpus was re-recorded from a live deployment (AXO-47). Bodies were replaced and chat_completion_timings.json was removed, which broke a consumer referencing it by name. Anything vendoring these files should compare this number against its own copy: a bump means bodies moved."
+  "$version_note": "Version 3 adds a recorded streamed tool call (2026-09-11). Version 2 re-recorded the bodies from a live deployment and removed chat_completion_timings.json. Anything vendoring these files should compare this number against its own copy: a bump means bodies moved or arrived."
 }
