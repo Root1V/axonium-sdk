@@ -62,3 +62,4 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-52 | Tag and publish `go/v0.1.0` | 📋 | Needs AXO-50; Aeon's MDL-009 waits on the tag |
 | AXO-53 | Go cannot express an absent `content` | 📋 | `Content()` returns "" for both null and empty; Python distinguishes them |
 | AXO-54 | `response.model` is not `request.model` | 📋 | The gateway routed `-local-2` to `-local-1`; nothing may assume they match |
+| AXO-55 | Type tool calls like the rest of the message | 📋 | They arrive as raw dicts while the message is a model; the asymmetry cost a consumer real work |

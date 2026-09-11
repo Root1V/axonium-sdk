@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 1,
+  "version": 2,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -430,5 +430,6 @@
       }
     }
   ],
-  "$recording": "Cases marked AUTHORED are written from the integration guide; the rest were recorded from a live deployment on 2026-09-11. Only the recorded ones are evidence about the gateway."
+  "$recording": "Cases marked AUTHORED are written from the integration guide; the rest were recorded from a live deployment on 2026-09-11. Only the recorded ones are evidence about the gateway.",
+  "$version_note": "Bumped to 2 on 2026-09-11 when the corpus was re-recorded from a live deployment (AXO-47). Bodies were replaced and chat_completion_timings.json was removed, which broke a consumer referencing it by name. Anything vendoring these files should compare this number against its own copy: a bump means bodies moved."
 }
