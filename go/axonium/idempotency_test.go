@@ -155,3 +155,36 @@ func TestStreamRefusesAnIdempotencyKey(t *testing.T) {
 		t.Errorf("the message should say why, got %q", err)
 	}
 }
+
+// An over-length key is refused before the wire. The gateway reports it as 409
+// idempotency-conflict -- the same type a genuine reuse produces -- so a caller branching on that
+// would conclude they had repeated a request when their key is merely too long.
+func TestOverlongIdempotencyKeyIsRefusedLocally(t *testing.T) {
+	var reached int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			writeToken(w, "tok", 300)
+			return
+		}
+		atomic.AddInt64(&reached, 1)
+	}))
+	defer srv.Close()
+
+	client := testClient(t, srv.URL)
+	req := simpleRequest()
+	req.IdempotencyKey = strings.Repeat("x", 256)
+
+	_, err := client.Chat.Create(context.Background(), req)
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("expected a local rejection naming the real problem, got %v", err)
+	}
+	if errors.Is(err, ErrIdempotencyConflict) {
+		t.Error("a too-long key is not a conflict; saying so would send the caller hunting a reuse that never happened")
+	}
+	if n := atomic.LoadInt64(&reached); n != 0 {
+		t.Errorf("the request should not have been sent, but the gateway saw %d", n)
+	}
+	if !strings.Contains(err.Error(), "255") {
+		t.Errorf("the message should name the limit, got %q", err)
+	}
+}

@@ -30,6 +30,11 @@ const instanceHeader = "X-Prometheus-Instance"
 // it, and generates again -- so the SDK refuses to send one there.
 const idempotencyHeader = "Idempotency-Key"
 
+// maxIdempotencyKeyLength is the gateway's limit. Checked client-side because exceeding it comes
+// back as 409 idempotency-conflict -- the same type a genuine reuse produces -- which would tell a
+// caller they repeated a request when their key is simply too long.
+const maxIdempotencyKeyLength = 255
+
 // retryAfterSeconds reads Retry-After, which may be either delta-seconds or an HTTP date.
 //
 // The result is always a finite, non-negative number of seconds or nil. A caller is likely to pass
@@ -178,6 +183,12 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 			Hint:       "This was refused locally, without a request, to honor the wait the gateway supplied.",
 			RetryAfter: ptr(wait.Seconds()),
 		}
+	}
+
+	if len(idemKey) > maxIdempotencyKeyLength {
+		return nil, ResponseMeta{}, fmt.Errorf(
+			"%w: IdempotencyKey is %d characters; the gateway accepts at most %d",
+			ErrInvalidRequest, len(idemKey), maxIdempotencyKeyLength)
 	}
 
 	policy := DefaultRetryPolicy()

@@ -25,6 +25,7 @@ from axonium.errors import (
     BackendUnavailableError,
     ConfigurationError,
     ForbiddenError,
+    InvalidRequestError,
     TimeoutError,
     TransportError,
     UnusedCredentialWarning,
@@ -47,6 +48,20 @@ from axonium.transport.retry import CooldownRegistry, RetryPolicy
 __all__ = ["AsyncAxonium", "Axonium"]
 
 logger = logging.getLogger("axonium.client")
+
+
+def _validate_idempotency_key(key: str | None) -> None:
+    """Reject a key the gateway would reject, but with the right error.
+
+    Over-length keys come back as ``409 idempotency-conflict``, which is the same type a genuine
+    reuse produces. A caller branching on that would conclude they had repeated a request. Checking
+    here costs nothing and names the actual problem.
+    """
+    if key is not None and len(key) > MAX_IDEMPOTENCY_KEY_LENGTH:
+        raise InvalidRequestError(
+            f"idempotency_key is {len(key)} characters; the gateway accepts at most "
+            f"{MAX_IDEMPOTENCY_KEY_LENGTH}."
+        )
 
 
 def _request_headers(instance: str | None, idempotency_key: str | None) -> dict[str, str] | None:
@@ -73,6 +88,11 @@ INSTANCE_HEADER = "X-Prometheus-Instance"
 #: and the call generates again. The SDK refuses to send one there rather than let a caller believe
 #: a stream is protected.
 IDEMPOTENCY_HEADER = "Idempotency-Key"
+
+#: The gateway's limit. Worth checking client-side because exceeding it is reported as
+#: ``409 idempotency-conflict`` — the same type as a genuine key reuse, which would tell a caller
+#: they repeated a request when in fact their key is simply too long.
+MAX_IDEMPOTENCY_KEY_LENGTH = 255
 
 
 def _credentials_were_explicit(settings: dict[str, Any]) -> bool:
@@ -398,6 +418,7 @@ class Axonium(_BaseAxonium):
         idempotency_key: str | None = None,
         timeout: float | None = None,
     ) -> httpx.Response:
+        _validate_idempotency_key(idempotency_key)
         key = self._cooldown_key(model)
         self._check_cooldown(key)
 
@@ -537,6 +558,7 @@ class AsyncAxonium(_BaseAxonium):
         idempotency_key: str | None = None,
         timeout: float | None = None,
     ) -> httpx.Response:
+        _validate_idempotency_key(idempotency_key)
         key = self._cooldown_key(model)
         self._check_cooldown(key)
 

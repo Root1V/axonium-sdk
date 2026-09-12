@@ -71,6 +71,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-63 | Go: model the catalog fields and keep per-model `Raw` | ✅ | `context_length`/`served_by` as pointers; `Raw` was never populated per model |
 | AXO-64 | `RemoteProtocolError` can double-bill | 🚫 | Withdrawn: the platform corrected us — usage is recorded per response returned, never per attempt |
 | AXO-65 | `Idempotency-Key` support | ✅ | Makes a keyed client-timeout retryable, the one case that did double-bill |
-| AXO-66 | Ask for a machine-readable 409 discriminator | 📋 | Three causes share `idempotency-conflict`; only `detail` prose tells them apart |
+| AXO-66 | Ask for a machine-readable 409 discriminator | 🚧 | Sent. Four causes now share the type, including a malformed key |
+| AXO-67 | Validate idempotency key length client-side | ✅ | 255 max; the gateway reports over-length as a *conflict*, which misdirects |
 | AXO-60 | Re-record fixtures against the slug catalog | 📋 | Yesterday's recordings are already stale: 6 entries and old ids |
 | AXO-61 | Migrate examples and docs to model slugs | 📋 | Aliases still resolve, so this is tidiness, not breakage |

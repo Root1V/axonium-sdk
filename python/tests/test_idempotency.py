@@ -221,3 +221,33 @@ class TestEdges:
                 await client.chat.completions.stream(
                     model="qwen3-0.6b", messages=MESSAGES, idempotency_key="key-1"
                 )
+
+
+def test_an_overlong_key_is_refused_before_the_wire(config_kwargs: dict[str, str]) -> None:
+    # The gateway reports an over-length key as 409 idempotency-conflict — the same type a genuine
+    # reuse produces — so a caller branching on that would go hunting a repeat that never happened.
+    # Checking here costs nothing and names the real problem.
+    with (
+        Axonium(**config_kwargs) as client,
+        pytest.raises(InvalidRequestError, match="at most 255"),
+    ):
+        client.chat.completions.create(
+            model="qwen3-0.6b", messages=MESSAGES, idempotency_key="x" * 256
+        )
+
+
+def test_a_key_at_the_limit_is_accepted(config_kwargs: dict[str, str]) -> None:
+    with respx.mock:
+        respx.post(AUTH_URL).mock(
+            return_value=httpx.Response(
+                200, json={"access_token": "t", "token_type": "bearer", "expires_in": 300}
+            )
+        )
+        route = respx.post(CHAT).mock(return_value=httpx.Response(200, json=COMPLETION))
+
+        with Axonium(**config_kwargs) as client:
+            client.chat.completions.create(
+                model="qwen3-0.6b", messages=MESSAGES, idempotency_key="x" * 255
+            )
+
+    assert route.calls.last.request.headers[IDEMPOTENCY_HEADER] == "x" * 255
