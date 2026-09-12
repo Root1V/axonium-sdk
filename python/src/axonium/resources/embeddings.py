@@ -20,7 +20,9 @@ class Embeddings:
     def __init__(self, client: Axonium) -> None:
         self._client = client
 
-    def create(self, *, timeout: float | None = None, **kwargs: Any) -> CreateEmbeddingResponse:
+    def create(
+        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+    ) -> CreateEmbeddingResponse:
         """Embed one string or a list of them.
 
         The model must have ``embedding`` modality; calling this with a text-generation model
@@ -29,7 +31,12 @@ class Embeddings:
         request = EmbeddingsRequest.build(kwargs)
         self._client._preflight(request.model, "embeddings")
         response = self._client._send(
-            "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
+            "POST",
+            ENDPOINT,
+            json=request.to_payload(),
+            model=request.model,
+            instance=instance,
+            timeout=timeout,
         )
         return dispatch.parse(response, CreateEmbeddingResponse)
 
@@ -39,12 +46,17 @@ class AsyncEmbeddings:
         self._client = client
 
     async def create(
-        self, *, timeout: float | None = None, **kwargs: Any
+        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
     ) -> CreateEmbeddingResponse:
         """Embed one string or a list of them. See :meth:`Embeddings.create`."""
         request = EmbeddingsRequest.build(kwargs)
         await self._client._preflight(request.model, "embeddings")
         response = await self._client._send(
-            "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
+            "POST",
+            ENDPOINT,
+            json=request.to_payload(),
+            model=request.model,
+            instance=instance,
+            timeout=timeout,
         )
         return dispatch.parse(response, CreateEmbeddingResponse)

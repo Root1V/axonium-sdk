@@ -48,6 +48,7 @@ __all__ = [
     "TransportError",
     "UnauthorizedClientError",
     "UnauthorizedError",
+    "UnknownInstanceError",
     "UnknownModelError",
     "UnsupportedFieldWarning",
     "UnsupportedGrantTypeError",
@@ -227,6 +228,15 @@ class ContextExceededError(BadRequestError):
     """The request exceeds the model's context window."""
 
     type_suffix = "context-exceeded"
+
+
+class UnknownInstanceError(BadRequestError):
+    """The pinned instance does not serve the requested model.
+
+    A pin never silently falls back: asking for one instance gets that instance or an error.
+    """
+
+    type_suffix = "unknown-instance"
 
 
 class ValidationError(BadRequestError):
@@ -470,6 +480,7 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         ModalityMismatchError,
         ContextExceededError,
         ValidationError,
+        UnknownInstanceError,
         MissingCredentialsError,
         InvalidTokenError,
         TokenExpiredError,

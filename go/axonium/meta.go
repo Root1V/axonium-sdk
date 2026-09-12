@@ -70,13 +70,23 @@ type ResponseMeta struct {
 	// TraceID is the log-correlation ID, from the X-Trace-ID header.
 	TraceID   string
 	RateLimit *RateLimitSnapshot
+
+	// Instance is the short label of the instance that served this response ("#1", "#2"), unique
+	// within the model. Stable for an instance's life, but a number can be reused after the
+	// highest-numbered instance is deleted -- so log it for readability and key on InstanceID.
+	Instance string
+	// InstanceID is the full id of the instance that served this response. This is the value to
+	// report when asking the platform team about a slow or odd response.
+	InstanceID string
 }
 
 func metaFromHeaders(h http.Header) ResponseMeta {
 	return ResponseMeta{
-		RequestID: h.Get("X-Request-ID"),
-		TraceID:   h.Get("X-Trace-ID"),
-		RateLimit: rateLimitFromHeaders(h),
+		RequestID:  h.Get("X-Request-ID"),
+		TraceID:    h.Get("X-Trace-ID"),
+		Instance:   h.Get("X-Prometheus-Instance"),
+		InstanceID: h.Get("X-Prometheus-Instance-Id"),
+		RateLimit:  rateLimitFromHeaders(h),
 	}
 }
 

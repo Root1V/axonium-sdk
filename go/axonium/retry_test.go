@@ -295,3 +295,116 @@ func TestLargeResponseBodySurvivesTheRequestTimeout(t *testing.T) {
 		t.Fatalf("the last vector was truncated: %d dims", len(out.Data[vectors-1].Embedding))
 	}
 }
+
+// A pin is kept across a retry, confirmed by the platform team: a pin never silently falls back,
+// and dropping it on retry would answer a different question than the caller asked.
+func TestInstancePinSurvivesRetries(t *testing.T) {
+	var seen []string
+	var attempts int64
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			writeToken(w, "tok", 300)
+			return
+		}
+		seen = append(seen, r.Header.Get("X-Prometheus-Instance"))
+		if atomic.AddInt64(&attempts, 1) == 1 {
+			problemJSON(w, 429, "rate-limit-exceeded-requests", "slow down")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Prometheus-Instance", "#2")
+		w.Header().Set("X-Prometheus-Instance-Id", "qwen3-0-6b-iq4-nl-local-1")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "c1", "model": "qwen3-0.6b", "choices": []any{}})
+	}))
+	defer srv.Close()
+
+	client, err := New(Config{
+		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+		ClientID: "id", ClientSecret: "secret", Retry: fastRetry(),
+	})
+	if err != nil {
+		t.Fatalf("building the client: %v", err)
+	}
+	defer client.Close()
+
+	req := simpleRequest()
+	req.Instance = "#2"
+	out, err := client.Chat.Create(context.Background(), req)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if len(seen) != 2 {
+		t.Fatalf("expected one retry, the gateway saw %d requests", len(seen))
+	}
+	for i, pin := range seen {
+		if pin != "#2" {
+			t.Errorf("attempt %d carried pin %q, want %q -- a dropped pin silently changes the question", i+1, pin, "#2")
+		}
+	}
+	if out.Meta.Instance != "#2" || out.Meta.InstanceID != "qwen3-0-6b-iq4-nl-local-1" {
+		t.Errorf("the serving instance must reach the caller: %+v", out.Meta)
+	}
+}
+
+// A cooldown is scoped to one model. 503 backend-unavailable means every instance of THAT model is
+// out; other models on the same gateway keep serving, so cooling the gateway would refuse requests
+// the platform would have answered.
+func TestCooldownIsScopedToOneModel(t *testing.T) {
+	var reached []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			writeToken(w, "tok", 300)
+			return
+		}
+		var body struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		reached = append(reached, body.Model)
+
+		if body.Model == "down-model" {
+			w.Header().Set("Retry-After", "30")
+			problemJSON(w, 503, "backend-unavailable", "every instance of down-model is out")
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "c1", "choices": []any{}})
+	}))
+	defer srv.Close()
+
+	client, err := New(Config{
+		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+		ClientID: "id", ClientSecret: "secret", Retry: fastRetry(),
+	})
+	if err != nil {
+		t.Fatalf("building the client: %v", err)
+	}
+	defer client.Close()
+
+	down := simpleRequest()
+	down.Model = "down-model"
+	if _, err := client.Chat.Create(context.Background(), down); err == nil {
+		t.Fatal("expected the unavailable model to fail")
+	}
+
+	// The healthy model must still reach the gateway.
+	healthy := simpleRequest()
+	healthy.Model = "healthy-model"
+	if _, err := client.Chat.Create(context.Background(), healthy); err != nil {
+		t.Fatalf("a cooldown on one model must not block another: %v", err)
+	}
+	if got := reached[len(reached)-1]; got != "healthy-model" {
+		t.Errorf("the healthy model never reached the gateway; last seen %q", got)
+	}
+
+	// ...while the cooled one is still refused locally, without a request.
+	before := len(reached)
+	if _, err := client.Chat.Create(context.Background(), down); !errors.Is(err, ErrBackendUnavailable) {
+		t.Fatalf("the cooled model should still be refused locally, got %v", err)
+	}
+	if len(reached) != before {
+		t.Error("the cooled model reached the gateway despite an unexpired cooldown")
+	}
+}

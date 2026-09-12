@@ -52,6 +52,17 @@ type ChatRequest struct {
 	ToolChoice  any      `json:"tool_choice,omitempty"`
 
 	Extra map[string]any `json:"-"`
+
+	// Instance pins this request to one instance, by label ("#2") or by full instance id. It is
+	// sent as a header, never in Model: a grant covers a model, billing attributes to a model, and
+	// the catalog lists models.
+	//
+	// Intended for reproducing a problem or comparing two machines, not for normal traffic: a pin
+	// opts out of load balancing AND of failover. An unavailable pinned instance returns
+	// ErrBackendUnavailable rather than quietly going elsewhere, and a name that does not serve
+	// this model returns ErrUnknownInstance. The pin is kept across retries -- dropping it would
+	// answer a different question than the caller asked.
+	Instance string `json:"-"`
 }
 
 func (r *ChatRequest) validate() error {
@@ -277,7 +288,7 @@ func (s *ChatService) Create(ctx context.Context, req ChatRequest) (*ChatComplet
 	}
 
 	var raw map[string]any
-	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/chat/completions", req, &raw)
+	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/chat/completions", req, &raw, req.Model, req.Instance)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +341,7 @@ func (s *ChatService) Stream(ctx context.Context, req ChatRequest) (*ChatComplet
 
 	// The stream owns this cancel for its whole life, so Close can tear the connection down.
 	streamCtx, cancel := context.WithCancel(ctx)
-	resp, meta, err := s.client.send(streamCtx, http.MethodPost, "/v1/chat/completions", body, true)
+	resp, meta, err := s.client.send(streamCtx, http.MethodPost, "/v1/chat/completions", body, true, req.Model, req.Instance)
 	if err != nil {
 		cancel()
 		return nil, err

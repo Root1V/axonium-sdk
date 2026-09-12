@@ -21,6 +21,9 @@ import (
 // exhaust client memory before the SDK notices.
 const maxErrorBody = 1 << 20
 
+// instanceHeader pins a request to one instance, and names the serving instance on the response.
+const instanceHeader = "X-Prometheus-Instance"
+
 // retryAfterSeconds reads Retry-After, which may be either delta-seconds or an HTTP date.
 //
 // The result is always a finite, non-negative number of seconds or nil. A caller is likely to pass
@@ -110,7 +113,7 @@ func translateTransportError(ctx context.Context, err error) error {
 }
 
 // doJSON sends a request with retries and decodes a successful JSON response into out.
-func (c *Client) doJSON(ctx context.Context, method, path string, payload any, out any) (ResponseMeta, error) {
+func (c *Client) doJSON(ctx context.Context, method, path string, payload any, out any, model, instance string) (ResponseMeta, error) {
 	var body []byte
 	if payload != nil {
 		encoded, err := json.Marshal(payload)
@@ -120,7 +123,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, o
 		body = encoded
 	}
 
-	resp, meta, err := c.send(ctx, method, path, body, false)
+	resp, meta, err := c.send(ctx, method, path, body, false, model, instance)
 	if err != nil {
 		return meta, err
 	}
@@ -153,8 +156,11 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, o
 //
 // On success the response body is still open and belongs to the caller. streaming suppresses the
 // whole-request timeout, because a long generation is not a stalled one.
-func (c *Client) send(ctx context.Context, method, path string, body []byte, streaming bool) (*http.Response, ResponseMeta, error) {
-	key := c.config.GatewayBaseURL
+func (c *Client) send(ctx context.Context, method, path string, body []byte, streaming bool, model, instance string) (*http.Response, ResponseMeta, error) {
+	// Keyed by model, not by gateway. 503 backend-unavailable is a per-model condition -- it means
+	// every instance of that model is out, and other models on the same gateway keep serving.
+	// Cooling the whole gateway would refuse requests the platform would have answered.
+	key := cooldownKey(c.config.GatewayBaseURL, model)
 	if wait := c.cooldown.remaining(key); wait > 0 {
 		return nil, ResponseMeta{}, &APIError{
 			Status:     http.StatusServiceUnavailable,
@@ -174,7 +180,7 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 	}
 
 	for attempt := 1; ; attempt++ {
-		resp, meta, err := c.attempt(ctx, method, path, body, streaming)
+		resp, meta, err := c.attempt(ctx, method, path, body, streaming, instance)
 		if err == nil {
 			return resp, meta, nil
 		}
@@ -204,7 +210,7 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 	}
 }
 
-func (c *Client) attempt(ctx context.Context, method, path string, body []byte, streaming bool) (*http.Response, ResponseMeta, error) {
+func (c *Client) attempt(ctx context.Context, method, path string, body []byte, streaming bool, instance string) (*http.Response, ResponseMeta, error) {
 	if !streaming {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.config.Timeouts.Request)
@@ -229,6 +235,9 @@ func (c *Client) attempt(ctx context.Context, method, path string, body []byte, 
 		req.Header.Set("Accept", "application/json")
 	}
 	req.Header.Set("User-Agent", userAgent)
+	if instance != "" {
+		req.Header.Set(instanceHeader, instance)
+	}
 
 	token, err := c.auth.apply(ctx, req)
 	if err != nil {
@@ -305,3 +314,12 @@ func ptr[T any](v T) *T { return &v }
 // rawCapturer is implemented by response types that retain the decoded body, so a field this SDK
 // does not model is still reachable by a caller rather than silently dropped.
 type rawCapturer interface{ setRaw(map[string]any) }
+
+// cooldownKey scopes a cooldown to one model on one gateway. An empty model (the catalog
+// endpoints) gets its own bucket rather than sharing with every unnamed call.
+func cooldownKey(gateway, model string) string {
+	if model == "" {
+		model = "-"
+	}
+	return gateway + "|" + model
+}

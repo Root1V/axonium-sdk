@@ -158,11 +158,22 @@ class ResponseMeta(BaseModel):
     trace_id: str | None = None
     rate_limit: RateLimitSnapshot | None = None
 
+    #: Short label of the instance that served this response (``"#1"``, ``"#2"``), unique within
+    #: the model. Stable for the life of an instance, but a number can be reused after the
+    #: highest-numbered instance is deleted — so log it for readability and key on
+    #: :attr:`instance_id`.
+    instance: str | None = None
+    #: Full id of the instance that served this response. This is the value to report when asking
+    #: the platform team about a slow or odd response.
+    instance_id: str | None = None
+
     @classmethod
     def from_headers(cls, headers: Any) -> ResponseMeta:
         rate_limit = RateLimitSnapshot.from_headers(headers)
         return cls(
             request_id=headers.get("X-Request-ID"),
             trace_id=headers.get("X-Trace-ID"),
+            instance=headers.get("X-Prometheus-Instance"),
+            instance_id=headers.get("X-Prometheus-Instance-Id"),
             rate_limit=None if rate_limit.is_empty else rate_limit,
         )

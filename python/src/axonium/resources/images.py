@@ -20,7 +20,9 @@ class Images:
     def __init__(self, client: Axonium) -> None:
         self._client = client
 
-    def generate(self, *, timeout: float | None = None, **kwargs: Any) -> ImagesResponse:
+    def generate(
+        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+    ) -> ImagesResponse:
         """Generate images.
 
         Results come back as base64 rather than URLs, so decoding and persisting them is the
@@ -32,7 +34,12 @@ class Images:
         request = ImageGenerationRequest.build(kwargs)
         self._client._preflight(request.model, "images")
         response = self._client._send(
-            "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
+            "POST",
+            ENDPOINT,
+            json=request.to_payload(),
+            model=request.model,
+            instance=instance,
+            timeout=timeout,
         )
         return dispatch.parse(response, ImagesResponse)
 
@@ -41,11 +48,18 @@ class AsyncImages:
     def __init__(self, client: AsyncAxonium) -> None:
         self._client = client
 
-    async def generate(self, *, timeout: float | None = None, **kwargs: Any) -> ImagesResponse:
+    async def generate(
+        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+    ) -> ImagesResponse:
         """Generate images. See :meth:`Images.generate`."""
         request = ImageGenerationRequest.build(kwargs)
         await self._client._preflight(request.model, "images")
         response = await self._client._send(
-            "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
+            "POST",
+            ENDPOINT,
+            json=request.to_payload(),
+            model=request.model,
+            instance=instance,
+            timeout=timeout,
         )
         return dispatch.parse(response, ImagesResponse)

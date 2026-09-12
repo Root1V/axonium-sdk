@@ -46,6 +46,12 @@ __all__ = ["AsyncAxonium", "Axonium"]
 
 logger = logging.getLogger("axonium.client")
 
+#: Pins a request to one instance, and names the serving instance on every response. Sent as a
+#: header and never in ``model``: a grant covers a model, billing attributes to a model, and the
+#: catalog lists models. A pin opts out of load balancing *and* of failover, so it is for
+#: reproducing a problem or comparing machines rather than for normal traffic.
+INSTANCE_HEADER = "X-Prometheus-Instance"
+
 
 def _credentials_were_explicit(settings: dict[str, Any]) -> bool:
     """Whether the caller asked for credentials, as opposed to the environment carrying them.
@@ -340,6 +346,7 @@ class Axonium(_BaseAxonium):
         json: dict[str, Any] | None = None,
         authenticate: bool = True,
         model: str | None = None,
+        instance: str | None = None,
         timeout: float | None = None,
     ) -> httpx.Response:
         key = self._cooldown_key(model)
@@ -354,6 +361,7 @@ class Axonium(_BaseAxonium):
                         method,
                         self._url(path),
                         json=json,
+                        headers=None if instance is None else {INSTANCE_HEADER: instance},
                         auth=None if not authenticate else httpx.USE_CLIENT_DEFAULT,
                         timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout,
                     )
@@ -383,6 +391,7 @@ class Axonium(_BaseAxonium):
         *,
         json: dict[str, Any],
         model: str | None = None,
+        instance: str | None = None,
         timeout: float | None = None,
     ) -> Any:
         """Open a streaming request.
@@ -395,6 +404,7 @@ class Axonium(_BaseAxonium):
             "POST",
             self._url(path),
             json=json,
+            headers=None if instance is None else {INSTANCE_HEADER: instance},
             timeout=self._config.timeouts.stream_read if timeout is None else timeout,
         )
 
@@ -466,6 +476,7 @@ class AsyncAxonium(_BaseAxonium):
         json: dict[str, Any] | None = None,
         authenticate: bool = True,
         model: str | None = None,
+        instance: str | None = None,
         timeout: float | None = None,
     ) -> httpx.Response:
         key = self._cooldown_key(model)
@@ -480,6 +491,7 @@ class AsyncAxonium(_BaseAxonium):
                         method,
                         self._url(path),
                         json=json,
+                        headers=None if instance is None else {INSTANCE_HEADER: instance},
                         auth=None if not authenticate else httpx.USE_CLIENT_DEFAULT,
                         timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout,
                     )
@@ -509,6 +521,7 @@ class AsyncAxonium(_BaseAxonium):
         *,
         json: dict[str, Any],
         model: str | None = None,
+        instance: str | None = None,
         timeout: float | None = None,
     ) -> Any:
         """Open a streaming request. See :meth:`Axonium._open_stream`."""
@@ -517,6 +530,7 @@ class AsyncAxonium(_BaseAxonium):
             "POST",
             self._url(path),
             json=json,
+            headers=None if instance is None else {INSTANCE_HEADER: instance},
             timeout=self._config.timeouts.stream_read if timeout is None else timeout,
         )
 

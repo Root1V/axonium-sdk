@@ -36,6 +36,10 @@ var (
 	// 422 -- the body carries an `errors` array naming the offending fields.
 	ErrValidation = errors.New("axonium: validation-error")
 
+	// ErrUnknownInstance means a pinned instance does not serve the requested model. A pin never
+	// silently falls back: you get that instance or an error.
+	ErrUnknownInstance = errors.New("axonium: unknown-instance")
+
 	// 401
 	ErrMissingCredentials = errors.New("axonium: missing-credentials")
 	ErrInvalidToken       = errors.New("axonium: invalid-token")
@@ -92,6 +96,7 @@ var suffixSentinels = map[string]error{
 	"modality-mismatch":            ErrModalityMismatch,
 	"context-exceeded":             ErrContextExceeded,
 	"validation-error":             ErrValidation,
+	"unknown-instance":             ErrUnknownInstance,
 	"missing-credentials":          ErrMissingCredentials,
 	"invalid-token":                ErrInvalidToken,
 	"token-expired":                ErrTokenExpired,

@@ -70,7 +70,7 @@ func (s *EmbeddingsService) Create(ctx context.Context, req EmbeddingRequest) (*
 	}
 
 	var out EmbeddingList
-	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/embeddings", req, &out)
+	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/embeddings", req, &out, req.Model, "")
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (s *ImagesService) Generate(ctx context.Context, req ImageRequest) (*ImageL
 	}
 
 	var out ImageList
-	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/images/generations", req, &out)
+	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/images/generations", req, &out, req.Model, "")
 	if err != nil {
 		return nil, err
 	}

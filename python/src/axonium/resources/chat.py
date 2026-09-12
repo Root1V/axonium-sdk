@@ -25,7 +25,9 @@ class Completions:
     def __init__(self, client: Axonium) -> None:
         self._client = client
 
-    def create(self, *, timeout: float | None = None, **kwargs: Any) -> ChatCompletion:
+    def create(
+        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+    ) -> ChatCompletion:
         """Create a non-streaming chat completion.
 
         Requires the ``inference:read`` scope plus ``model:<id>`` for the model being called;
@@ -34,15 +36,30 @@ class Completions:
         ``timeout`` overrides the client's read timeout for this request alone. The default is
         deliberately long because some backends legitimately take minutes; setting it low and
         retrying is the documented way to end up paying for two generations at once.
+
+        ``instance`` pins the request to one instance, by label (``"#2"``) or by full instance
+        id. It rides on a header, never on ``model``: a grant covers a model, billing attributes
+        to a model, and the catalog lists models. A pin opts out of load balancing *and* of
+        failover — an unavailable pinned instance raises rather than quietly going elsewhere — so
+        it is for reproducing a problem or comparing machines, not for normal traffic. It is kept
+        across retries, because dropping it would answer a different question than the caller
+        asked.
         """
         request = _build(kwargs, stream=False)
         self._client._preflight(request.model, "chat")
         response = self._client._send(
-            "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
+            "POST",
+            ENDPOINT,
+            json=request.to_payload(),
+            model=request.model,
+            instance=instance,
+            timeout=timeout,
         )
         return dispatch.parse(response, ChatCompletion)
 
-    def stream(self, *, timeout: float | None = None, **kwargs: Any) -> ChatCompletionStream:
+    def stream(
+        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+    ) -> ChatCompletionStream:
         """Stream a chat completion.
 
         Requires the ``inference:stream`` scope, which is distinct from the ``inference:read``
@@ -52,11 +69,23 @@ class Completions:
         scope requirement is explicit, and there is somewhere to say that streams are never
         retried automatically — a failed stream has already delivered partial output, so retrying
         it is a fresh billable generation rather than a resumption.
+
+        ``instance`` pins the request to one instance, by label (``"#2"``) or by full instance
+        id. It rides on a header, never on ``model``: a grant covers a model, billing attributes
+        to a model, and the catalog lists models. A pin opts out of load balancing *and* of
+        failover — an unavailable pinned instance raises rather than quietly going elsewhere — so
+        it is for reproducing a problem or comparing machines, not for normal traffic. It is kept
+        across retries, because dropping it would answer a different question than the caller
+        asked.
         """
         request = _build(kwargs, stream=True)
         self._client._preflight(request.model, "chat")
         opener = self._client._open_stream(
-            ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
+            ENDPOINT,
+            json=request.to_payload(),
+            model=request.model,
+            instance=instance,
+            timeout=timeout,
         )
         return ChatCompletionStream(opener, self._client._stream_diagnoser(request.model))
 
@@ -65,20 +94,33 @@ class AsyncCompletions:
     def __init__(self, client: AsyncAxonium) -> None:
         self._client = client
 
-    async def create(self, *, timeout: float | None = None, **kwargs: Any) -> ChatCompletion:
+    async def create(
+        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+    ) -> ChatCompletion:
         """Create a non-streaming chat completion. See :meth:`Completions.create`."""
         request = _build(kwargs, stream=False)
         await self._client._preflight(request.model, "chat")
         response = await self._client._send(
-            "POST", ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
+            "POST",
+            ENDPOINT,
+            json=request.to_payload(),
+            model=request.model,
+            instance=instance,
+            timeout=timeout,
         )
         return dispatch.parse(response, ChatCompletion)
 
-    def stream(self, *, timeout: float | None = None, **kwargs: Any) -> AsyncChatCompletionStream:
+    def stream(
+        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+    ) -> AsyncChatCompletionStream:
         """Stream a chat completion. See :meth:`Completions.stream`."""
         request = _build(kwargs, stream=True)
         opener = self._client._open_stream(
-            ENDPOINT, json=request.to_payload(), model=request.model, timeout=timeout
+            ENDPOINT,
+            json=request.to_payload(),
+            model=request.model,
+            instance=instance,
+            timeout=timeout,
         )
 
         async def preflight() -> None:

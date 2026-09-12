@@ -2,6 +2,7 @@ package axonium
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,13 +11,44 @@ import (
 
 // Model is one entry of the gateway's catalog.
 type Model struct {
-	ID       string   `json:"id"`
-	Object   string   `json:"object"`
-	OwnedBy  string   `json:"owned_by"`
-	Modality string   `json:"modality"`
-	Aliases  []string `json:"aliases,omitempty"`
+	ID       string `json:"id"`
+	Object   string `json:"object"`
+	OwnedBy  string `json:"owned_by"`
+	Modality string `json:"modality"`
 
+	// ContextLength is nil for image models, which have no context window at all. A zero would
+	// read as "a window of zero" and make a caller checking prompt_tokens < context_length reject
+	// every image request -- the platform changed this from 0 to null for exactly that reason.
+	//
+	// For a model served by several instances this is the SMALLEST of them, so a request that
+	// fits the advertised number fits whichever instance serves it.
+	ContextLength *int `json:"context_length"`
+
+	// ServedBy is how many instances currently serve this model. Informational: an instance is
+	// never addressed through the model field -- see the Instance option for that.
+	ServedBy *int `json:"served_by"`
+
+	Family       string `json:"family"`
+	Quantization string `json:"quantization"`
+
+	// Aliases is not populated by the current gateway, which advertises only canonical slugs.
+	// Older names still resolve on request; they are simply no longer listed.
+	Aliases []string `json:"aliases,omitempty"`
+
+	// Raw is the decoded entry as received, so a field this SDK does not model stays reachable.
 	Raw map[string]any `json:"-"`
+}
+
+// UnmarshalJSON keeps the undecoded entry alongside the typed fields.
+func (m *Model) UnmarshalJSON(data []byte) error {
+	type plain Model
+	var typed plain
+	if err := json.Unmarshal(data, &typed); err != nil {
+		return err
+	}
+	*m = Model(typed)
+	_ = json.Unmarshal(data, &m.Raw)
+	return nil
 }
 
 // ModelList is a catalog response.
@@ -70,7 +102,7 @@ type ModelsService struct {
 // any credential is configured -- useful for checking connectivity.
 func (s *ModelsService) List(ctx context.Context) (*ModelList, error) {
 	var out ModelList
-	meta, err := s.client.doJSON(ctx, http.MethodGet, "/v1/models", nil, &out)
+	meta, err := s.client.doJSON(ctx, http.MethodGet, "/v1/models", nil, &out, "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +124,7 @@ func (s *ModelsService) Mine(ctx context.Context) (*ModelList, error) {
 	s.mu.Unlock()
 
 	var out ModelList
-	meta, err := s.client.doJSON(ctx, http.MethodGet, "/v1/models/mine", nil, &out)
+	meta, err := s.client.doJSON(ctx, http.MethodGet, "/v1/models/mine", nil, &out, "", "")
 	if err != nil {
 		return nil, err
 	}

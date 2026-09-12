@@ -135,6 +135,13 @@
       "meaning": "Request schema validation failed. Carries an additional `errors` array of field-level problems, each with `loc`, `msg`, `type` and the offending `input`, which is what tells a caller which field to fix.",
       "retryable": false,
       "$comment": "Verified against a live deployment on 2026-09-11. This used to be the one endpoint that broke the envelope -- FastAPI's default shape, with no request_id or trace_id -- and the platform team has since fixed it. Keep the status-keyed fallback anyway: the lesson was that an SDK must not assume every error carries a `type`."
+    },
+    {
+      "status": 400,
+      "suffix": "unknown-instance",
+      "meaning": "The X-Prometheus-Instance request header names something that does not serve the requested model. A pin never silently falls back to another instance.",
+      "retryable": false,
+      "$comment": "Verified live 2026-09-12. Not retryable by re-sending the same pin: a pinned request whose instance is unavailable returns 503 backend-unavailable instead, and the platform confirmed a pin should be kept across a client retry rather than dropped."
     }
   ],
   "oauth_errors": [
