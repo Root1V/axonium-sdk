@@ -61,6 +61,12 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-51 | Go: structured logging and optional OTel spans | 📋 | Python has both; Go has neither yet |
 | AXO-52 | Tag and publish `go/v0.1.0` | 📋 | Needs AXO-50; Aeon's MDL-009 waits on the tag |
 | AXO-53 | Go cannot express an absent `content` | 📋 | `Content()` returns "" for both null and empty; Python distinguishes them |
-| AXO-54 | `response.model` is not `request.model` | 📋 | The gateway routed `-local-2` to `-local-1`; nothing may assume they match |
+| AXO-54 | `response.model` is not `request.model` | 📋 | Explained by instances, but now worse: the returned id is absent from `/v1/models`. Reported |
 | AXO-55 | Type tool calls like the rest of the message | 📋 | They arrive as raw dicts while the message is a model; the asymmetry cost a consumer real work |
 | AXO-56 | Reassemble streamed tool calls | 📋 | Neither SDK does; fragments arrive keyed by index, identity only in the first |
+| AXO-57 | Expose `X-Prometheus-Instance*` on `ResponseMeta` | 📋 | The platform asks consumers to log it; today it is dropped |
+| AXO-58 | Catalogue and map `400 unknown-instance` | 📋 | New error type, verified live |
+| AXO-59 | Per-call instance pinning | 📋 | Header-based; opts out of failover, so it must be explicit and per-call |
+| AXO-62 | Revisit retry and cooldown for multi-instance models | ⛔ | Blocked on the platform team: mid-stream failover, 502 attempt counts, cooldown keying |
+| AXO-60 | Re-record fixtures against the slug catalog | 📋 | Yesterday's recordings are already stale: 6 entries and old ids |
+| AXO-61 | Migrate examples and docs to model slugs | 📋 | Aliases still resolve, so this is tidiness, not breakage |
