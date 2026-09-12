@@ -142,6 +142,13 @@
       "meaning": "The X-Prometheus-Instance request header names something that does not serve the requested model. A pin never silently falls back to another instance.",
       "retryable": false,
       "$comment": "Verified live 2026-09-12. Not retryable by re-sending the same pin: a pinned request whose instance is unavailable returns 503 backend-unavailable instead, and the platform confirmed a pin should be kept across a client retry rather than dropped."
+    },
+    {
+      "status": 409,
+      "suffix": "idempotency-conflict",
+      "meaning": "An Idempotency-Key was reused for something other than an identical retry. Three distinct causes verified live: a different request body, a different endpoint, and a concurrent request with the same key still in flight.",
+      "retryable": false,
+      "$comment": "Not retried automatically, and the choice is forced rather than preferred: all three causes share one type suffix and are distinguishable only by the prose in `detail`, which is exactly what an SDK must never branch on. Two of them must never be retried (the caller reused a key for a different request); one of them -- in flight -- is resolved by waiting. Not retrying is the safe default for all three, and the caller can decide from the message. Asked the platform team for a machine-readable discriminator."
     }
   ],
   "oauth_errors": [
@@ -174,6 +181,7 @@
     "There is no 404 for 'model not found' on the inference endpoints; that is 400 unknown-model. Reserve 404 handling for genuinely unmapped routes.",
     "Unknown type suffixes must not raise a parse error: fall back to a status-keyed base error, since the catalog will grow.",
     "There is no idempotency-key mechanism in this API. A retried chat/embeddings/images request is a genuinely new generation, billable and non-replayable.",
-    "Every gateway error observed on a live deployment carries the full RFC 9457 envelope including request_id and trace_id, 422 included. Fall back by status regardless: an SDK that hard-fails on an error without a `type` would break the moment one appears, and one did for a while."
+    "Every gateway error observed on a live deployment carries the full RFC 9457 envelope including request_id and trace_id, 422 included. Fall back by status regardless: an SDK that hard-fails on an error without a `type` would break the moment one appears, and one did for a while.",
+    "Idempotency-Key makes a retry safe on the non-streaming endpoints: a repeat with the same key and the same body returns the stored result with `Idempotent-Replay: true`, without reaching a model, recording usage, or counting against the spend cap. 24h window. Verified live 2026-09-12. STREAMING IS EXCLUDED and the exclusion is silent: a key sent on a streaming request is accepted, ignored, and generates again -- two calls with one key produced different bytes and no replay header. An SDK must not let a caller believe a streamed call is protected."
   ]
 }

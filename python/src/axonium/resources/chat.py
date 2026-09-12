@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from axonium.errors import InvalidRequestError
 from axonium.models.chat import ChatCompletion
 from axonium.models.requests import ChatCompletionRequest
 from axonium.streaming import AsyncChatCompletionStream, ChatCompletionStream
@@ -26,7 +27,12 @@ class Completions:
         self._client = client
 
     def create(
-        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+        self,
+        *,
+        timeout: float | None = None,
+        instance: str | None = None,
+        idempotency_key: str | None = None,
+        **kwargs: Any,
     ) -> ChatCompletion:
         """Create a non-streaming chat completion.
 
@@ -44,6 +50,13 @@ class Completions:
         it is for reproducing a problem or comparing machines, not for normal traffic. It is kept
         across retries, because dropping it would answer a different question than the caller
         asked.
+
+        ``idempotency_key`` makes a retry safe: a repeat with the same key and the same body returns
+        the stored result without reaching a model, recording usage, or counting against the spend
+        cap, for 24 hours. It is also what lets the SDK retry a client-side timeout at all —
+        without a key that retry would be a second billable generation, so it is not attempted.
+        Reuse a key only to retry the identical request; reusing it for a different one is
+        :class:`~axonium.errors.IdempotencyConflictError`.
         """
         request = _build(kwargs, stream=False)
         self._client._preflight(request.model, "chat")
@@ -53,12 +66,18 @@ class Completions:
             json=request.to_payload(),
             model=request.model,
             instance=instance,
+            idempotency_key=idempotency_key,
             timeout=timeout,
         )
         return dispatch.parse(response, ChatCompletion)
 
     def stream(
-        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+        self,
+        *,
+        timeout: float | None = None,
+        instance: str | None = None,
+        idempotency_key: str | None = None,
+        **kwargs: Any,
     ) -> ChatCompletionStream:
         """Stream a chat completion.
 
@@ -77,7 +96,22 @@ class Completions:
         it is for reproducing a problem or comparing machines, not for normal traffic. It is kept
         across retries, because dropping it would answer a different question than the caller
         asked.
+
+        ``idempotency_key`` makes a retry safe: a repeat with the same key and the same body returns
+        the stored result without reaching a model, recording usage, or counting against the spend
+        cap, for 24 hours. It is also what lets the SDK retry a client-side timeout at all —
+        without a key that retry would be a second billable generation, so it is not attempted.
+        Reuse a key only to retry the identical request; reusing it for a different one is
+        :class:`~axonium.errors.IdempotencyConflictError`.
         """
+        if idempotency_key is not None:
+            raise InvalidRequestError(
+                "Streaming requests cannot be made idempotent. The gateway accepts an "
+                "Idempotency-Key here and ignores it: the call generates again, and the response "
+                "carries no replay marker to say so. Refusing is the only way to stop a caller "
+                "believing a stream is protected when it is not."
+            )
+
         request = _build(kwargs, stream=True)
         self._client._preflight(request.model, "chat")
         opener = self._client._open_stream(
@@ -95,7 +129,12 @@ class AsyncCompletions:
         self._client = client
 
     async def create(
-        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+        self,
+        *,
+        timeout: float | None = None,
+        instance: str | None = None,
+        idempotency_key: str | None = None,
+        **kwargs: Any,
     ) -> ChatCompletion:
         """Create a non-streaming chat completion. See :meth:`Completions.create`."""
         request = _build(kwargs, stream=False)
@@ -106,14 +145,28 @@ class AsyncCompletions:
             json=request.to_payload(),
             model=request.model,
             instance=instance,
+            idempotency_key=idempotency_key,
             timeout=timeout,
         )
         return dispatch.parse(response, ChatCompletion)
 
     def stream(
-        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+        self,
+        *,
+        timeout: float | None = None,
+        instance: str | None = None,
+        idempotency_key: str | None = None,
+        **kwargs: Any,
     ) -> AsyncChatCompletionStream:
         """Stream a chat completion. See :meth:`Completions.stream`."""
+        if idempotency_key is not None:
+            raise InvalidRequestError(
+                "Streaming requests cannot be made idempotent. The gateway accepts an "
+                "Idempotency-Key here and ignores it: the call generates again, and the response "
+                "carries no replay marker to say so. Refusing is the only way to stop a caller "
+                "believing a stream is protected when it is not."
+            )
+
         request = _build(kwargs, stream=True)
         opener = self._client._open_stream(
             ENDPOINT,

@@ -84,6 +84,14 @@ class RetryPolicy:
 
         return self._backoff(attempt)
 
+    def backoff_for(self, attempt: int) -> float:
+        """Exponential backoff with jitter for attempt ``attempt``, 1-based.
+
+        Public because a transport failure retried under an idempotency key needs the same wait
+        schedule as an API error, and that decision is made outside this class.
+        """
+        return self._backoff(attempt)
+
     def _backoff(self, attempt: int) -> float:
         delay: float = min(self.initial_backoff * (2 ** (attempt - 1)), self.max_backoff)
         if self.jitter:

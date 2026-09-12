@@ -69,6 +69,8 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-59 | Per-call instance pinning | ✅ | Header-based, kept across retries as the platform confirmed |
 | AXO-62 | Revisit retry and cooldown for multi-instance models | ✅ | Answered: cooldown by model, no mid-stream failover, pin kept. Go was keyed by gateway; fixed |
 | AXO-63 | Go: model the catalog fields and keep per-model `Raw` | ✅ | `context_length`/`served_by` as pointers; `Raw` was never populated per model |
-| AXO-64 | `RemoteProtocolError` can double-bill | ⛔ | Unfixable client-side; waits on the platform's idempotency keys (their RM-78) |
+| AXO-64 | `RemoteProtocolError` can double-bill | 🚫 | Withdrawn: the platform corrected us — usage is recorded per response returned, never per attempt |
+| AXO-65 | `Idempotency-Key` support | ✅ | Makes a keyed client-timeout retryable, the one case that did double-bill |
+| AXO-66 | Ask for a machine-readable 409 discriminator | 📋 | Three causes share `idempotency-conflict`; only `detail` prose tells them apart |
 | AXO-60 | Re-record fixtures against the slug catalog | 📋 | Yesterday's recordings are already stale: 6 entries and old ids |
 | AXO-61 | Migrate examples and docs to model slugs | 📋 | Aliases still resolve, so this is tidiness, not breakage |

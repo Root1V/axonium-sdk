@@ -102,7 +102,7 @@ type ModelsService struct {
 // any credential is configured -- useful for checking connectivity.
 func (s *ModelsService) List(ctx context.Context) (*ModelList, error) {
 	var out ModelList
-	meta, err := s.client.doJSON(ctx, http.MethodGet, "/v1/models", nil, &out, "", "")
+	meta, err := s.client.doJSON(ctx, http.MethodGet, "/v1/models", nil, &out, "", "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (s *ModelsService) Mine(ctx context.Context) (*ModelList, error) {
 	s.mu.Unlock()
 
 	var out ModelList
-	meta, err := s.client.doJSON(ctx, http.MethodGet, "/v1/models/mine", nil, &out, "", "")
+	meta, err := s.client.doJSON(ctx, http.MethodGet, "/v1/models/mine", nil, &out, "", "", "")
 	if err != nil {
 		return nil, err
 	}

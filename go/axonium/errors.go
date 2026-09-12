@@ -40,6 +40,12 @@ var (
 	// silently falls back: you get that instance or an error.
 	ErrUnknownInstance = errors.New("axonium: unknown-instance")
 
+	// ErrIdempotencyConflict means a key was reused for something other than an identical retry.
+	// Three causes share it -- a different body, a different endpoint, or a concurrent request
+	// with the same key still in flight -- and the gateway tells them apart only in Detail, which
+	// is prose. Read it; do not branch on it.
+	ErrIdempotencyConflict = errors.New("axonium: idempotency-conflict")
+
 	// 401
 	ErrMissingCredentials = errors.New("axonium: missing-credentials")
 	ErrInvalidToken       = errors.New("axonium: invalid-token")
@@ -97,6 +103,7 @@ var suffixSentinels = map[string]error{
 	"context-exceeded":             ErrContextExceeded,
 	"validation-error":             ErrValidation,
 	"unknown-instance":             ErrUnknownInstance,
+	"idempotency-conflict":         ErrIdempotencyConflict,
 	"missing-credentials":          ErrMissingCredentials,
 	"invalid-token":                ErrInvalidToken,
 	"token-expired":                ErrTokenExpired,

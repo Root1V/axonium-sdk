@@ -21,7 +21,12 @@ class Images:
         self._client = client
 
     def generate(
-        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+        self,
+        *,
+        timeout: float | None = None,
+        instance: str | None = None,
+        idempotency_key: str | None = None,
+        **kwargs: Any,
     ) -> ImagesResponse:
         """Generate images.
 
@@ -39,6 +44,7 @@ class Images:
             json=request.to_payload(),
             model=request.model,
             instance=instance,
+            idempotency_key=idempotency_key,
             timeout=timeout,
         )
         return dispatch.parse(response, ImagesResponse)
@@ -49,7 +55,12 @@ class AsyncImages:
         self._client = client
 
     async def generate(
-        self, *, timeout: float | None = None, instance: str | None = None, **kwargs: Any
+        self,
+        *,
+        timeout: float | None = None,
+        instance: str | None = None,
+        idempotency_key: str | None = None,
+        **kwargs: Any,
     ) -> ImagesResponse:
         """Generate images. See :meth:`Images.generate`."""
         request = ImageGenerationRequest.build(kwargs)
@@ -60,6 +71,7 @@ class AsyncImages:
             json=request.to_payload(),
             model=request.model,
             instance=instance,
+            idempotency_key=idempotency_key,
             timeout=timeout,
         )
         return dispatch.parse(response, ImagesResponse)

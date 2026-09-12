@@ -24,6 +24,12 @@ const maxErrorBody = 1 << 20
 // instanceHeader pins a request to one instance, and names the serving instance on the response.
 const instanceHeader = "X-Prometheus-Instance"
 
+// idempotencyHeader makes a retry safe on the non-streaming endpoints: a repeat with the same key
+// and body returns the stored result without reaching a model, recording usage, or counting
+// against the spend cap. Streaming is excluded, and silently -- the gateway takes the key, ignores
+// it, and generates again -- so the SDK refuses to send one there.
+const idempotencyHeader = "Idempotency-Key"
+
 // retryAfterSeconds reads Retry-After, which may be either delta-seconds or an HTTP date.
 //
 // The result is always a finite, non-negative number of seconds or nil. A caller is likely to pass
@@ -113,7 +119,7 @@ func translateTransportError(ctx context.Context, err error) error {
 }
 
 // doJSON sends a request with retries and decodes a successful JSON response into out.
-func (c *Client) doJSON(ctx context.Context, method, path string, payload any, out any, model, instance string) (ResponseMeta, error) {
+func (c *Client) doJSON(ctx context.Context, method, path string, payload any, out any, model, instance, idemKey string) (ResponseMeta, error) {
 	var body []byte
 	if payload != nil {
 		encoded, err := json.Marshal(payload)
@@ -123,7 +129,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, o
 		body = encoded
 	}
 
-	resp, meta, err := c.send(ctx, method, path, body, false, model, instance)
+	resp, meta, err := c.send(ctx, method, path, body, false, model, instance, idemKey)
 	if err != nil {
 		return meta, err
 	}
@@ -156,7 +162,7 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, o
 //
 // On success the response body is still open and belongs to the caller. streaming suppresses the
 // whole-request timeout, because a long generation is not a stalled one.
-func (c *Client) send(ctx context.Context, method, path string, body []byte, streaming bool, model, instance string) (*http.Response, ResponseMeta, error) {
+func (c *Client) send(ctx context.Context, method, path string, body []byte, streaming bool, model, instance, idemKey string) (*http.Response, ResponseMeta, error) {
 	// Keyed by model, not by gateway. 503 backend-unavailable is a per-model condition -- it means
 	// every instance of that model is out, and other models on the same gateway keep serving.
 	// Cooling the whole gateway would refuse requests the platform would have answered.
@@ -180,16 +186,24 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 	}
 
 	for attempt := 1; ; attempt++ {
-		resp, meta, err := c.attempt(ctx, method, path, body, streaming, instance)
+		resp, meta, err := c.attempt(ctx, method, path, body, streaming, instance, idemKey)
 		if err == nil {
 			return resp, meta, nil
 		}
 
 		var apiErr *APIError
 		if !errors.As(err, &apiErr) {
-			// Transport failures and cancellation are never retried here: a client-side timeout
-			// leaves the backend probably still working, and a retry would queue a second billable
-			// generation on top of the first.
+			// A client-side timeout normally ends the call: the backend is probably still
+			// generating, so a retry would queue a second billable generation rather than resume
+			// the first. An Idempotency-Key removes exactly that objection -- the repeat returns
+			// the stored result without reaching a model -- so it is the one thing that makes this
+			// retryable, and only for a timeout. Connection failures stay untouched either way.
+			if idemKey != "" && errors.Is(err, ErrTimeout) && attempt < policy.MaxAttempts {
+				if !sleepFor(ctx, policy.backoff(attempt)) {
+					return nil, meta, ctx.Err()
+				}
+				continue
+			}
 			return nil, meta, err
 		}
 
@@ -200,17 +214,13 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 			return nil, meta, err
 		}
 
-		timer := time.NewTimer(delay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
+		if !sleepFor(ctx, delay) {
 			return nil, meta, ctx.Err()
-		case <-timer.C:
 		}
 	}
 }
 
-func (c *Client) attempt(ctx context.Context, method, path string, body []byte, streaming bool, instance string) (*http.Response, ResponseMeta, error) {
+func (c *Client) attempt(ctx context.Context, method, path string, body []byte, streaming bool, instance, idemKey string) (*http.Response, ResponseMeta, error) {
 	if !streaming {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.config.Timeouts.Request)
@@ -237,6 +247,9 @@ func (c *Client) attempt(ctx context.Context, method, path string, body []byte, 
 	req.Header.Set("User-Agent", userAgent)
 	if instance != "" {
 		req.Header.Set(instanceHeader, instance)
+	}
+	if idemKey != "" {
+		req.Header.Set(idempotencyHeader, idemKey)
 	}
 
 	token, err := c.auth.apply(ctx, req)
@@ -322,4 +335,16 @@ func cooldownKey(gateway, model string) string {
 		model = "-"
 	}
 	return gateway + "|" + model
+}
+
+// sleepFor waits, returning false if the caller's context ended first.
+func sleepFor(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }

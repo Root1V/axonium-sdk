@@ -63,6 +63,17 @@ type ChatRequest struct {
 	// this model returns ErrUnknownInstance. The pin is kept across retries -- dropping it would
 	// answer a different question than the caller asked.
 	Instance string `json:"-"`
+
+	// IdempotencyKey makes a retry safe: a repeat with the same key and the same body returns the
+	// stored result for 24 hours, without reaching a model, recording usage, or counting against
+	// the spend cap. It is also what lets this SDK retry a client-side timeout at all -- without a
+	// key that retry would be a second billable generation, so it is not attempted.
+	//
+	// Reuse a key only to retry the identical request. Reusing it for a different one, on a
+	// different endpoint, or while the first is still in flight is ErrIdempotencyConflict.
+	//
+	// Ignored on Stream: the gateway accepts a key there, ignores it, and generates again.
+	IdempotencyKey string `json:"-"`
 }
 
 func (r *ChatRequest) validate() error {
@@ -288,7 +299,7 @@ func (s *ChatService) Create(ctx context.Context, req ChatRequest) (*ChatComplet
 	}
 
 	var raw map[string]any
-	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/chat/completions", req, &raw, req.Model, req.Instance)
+	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/chat/completions", req, &raw, req.Model, req.Instance, req.IdempotencyKey)
 	if err != nil {
 		return nil, err
 	}
@@ -323,6 +334,12 @@ func (s *ChatService) Stream(ctx context.Context, req ChatRequest) (*ChatComplet
 	if err := s.client.checkModality(ctx, req.Model, modalitiesChat); err != nil {
 		return nil, err
 	}
+	if req.IdempotencyKey != "" {
+		// The gateway takes a key here, ignores it, and generates again, with nothing in the
+		// response to say so. Refusing is the only way to stop a caller believing a stream is
+		// protected when it is not.
+		return nil, fmt.Errorf("%w: streaming requests cannot be made idempotent; the gateway accepts an Idempotency-Key here and ignores it, so the call generates again with no replay marker", ErrInvalidRequest)
+	}
 
 	payload := map[string]any{}
 	encoded, err := json.Marshal(req)
@@ -341,7 +358,7 @@ func (s *ChatService) Stream(ctx context.Context, req ChatRequest) (*ChatComplet
 
 	// The stream owns this cancel for its whole life, so Close can tear the connection down.
 	streamCtx, cancel := context.WithCancel(ctx)
-	resp, meta, err := s.client.send(streamCtx, http.MethodPost, "/v1/chat/completions", body, true, req.Model, req.Instance)
+	resp, meta, err := s.client.send(streamCtx, http.MethodPost, "/v1/chat/completions", body, true, req.Model, req.Instance, "")
 	if err != nil {
 		cancel()
 		return nil, err

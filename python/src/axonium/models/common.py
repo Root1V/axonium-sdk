@@ -167,6 +167,11 @@ class ResponseMeta(BaseModel):
     #: the platform team about a slow or odd response.
     instance_id: str | None = None
 
+    #: True when this response was replayed from an ``Idempotency-Key`` rather than generated. A
+    #: replay reached no model, recorded no usage, and counted against no spend cap — so a
+    #: ``usage`` on a replay describes the original generation, not a second one.
+    idempotent_replay: bool = False
+
     @classmethod
     def from_headers(cls, headers: Any) -> ResponseMeta:
         rate_limit = RateLimitSnapshot.from_headers(headers)
@@ -175,5 +180,6 @@ class ResponseMeta(BaseModel):
             trace_id=headers.get("X-Trace-ID"),
             instance=headers.get("X-Prometheus-Instance"),
             instance_id=headers.get("X-Prometheus-Instance-Id"),
+            idempotent_replay=headers.get("Idempotent-Replay", "").lower() == "true",
             rate_limit=None if rate_limit.is_empty else rate_limit,
         )

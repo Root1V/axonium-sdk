@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // RateLimitSnapshot is the rate-limit budget as of one response, parsed from the X-RateLimit-*
@@ -78,15 +79,21 @@ type ResponseMeta struct {
 	// InstanceID is the full id of the instance that served this response. This is the value to
 	// report when asking the platform team about a slow or odd response.
 	InstanceID string
+
+	// IdempotentReplay is true when this response was replayed from an Idempotency-Key rather than
+	// generated. A replay reached no model, recorded no usage and counted against no spend cap, so
+	// its Usage describes the original generation rather than a second one.
+	IdempotentReplay bool
 }
 
 func metaFromHeaders(h http.Header) ResponseMeta {
 	return ResponseMeta{
-		RequestID:  h.Get("X-Request-ID"),
-		TraceID:    h.Get("X-Trace-ID"),
-		Instance:   h.Get("X-Prometheus-Instance"),
-		InstanceID: h.Get("X-Prometheus-Instance-Id"),
-		RateLimit:  rateLimitFromHeaders(h),
+		RequestID:        h.Get("X-Request-ID"),
+		TraceID:          h.Get("X-Trace-ID"),
+		Instance:         h.Get("X-Prometheus-Instance"),
+		InstanceID:       h.Get("X-Prometheus-Instance-Id"),
+		IdempotentReplay: strings.EqualFold(h.Get("Idempotent-Replay"), "true"),
+		RateLimit:        rateLimitFromHeaders(h),
 	}
 }
 

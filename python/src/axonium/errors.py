@@ -29,6 +29,7 @@ __all__ = [
     "ConfigurationError",
     "ContextExceededError",
     "ForbiddenError",
+    "IdempotencyConflictError",
     "InvalidClientError",
     "InvalidRequestError",
     "InvalidScopeError",
@@ -237,6 +238,18 @@ class UnknownInstanceError(BadRequestError):
     """
 
     type_suffix = "unknown-instance"
+
+
+class IdempotencyConflictError(APIError):
+    """An ``Idempotency-Key`` was reused for something that is not an identical retry.
+
+    Three causes share this one type: a different request body, a different endpoint, or a
+    concurrent request with the same key still in flight. Only the last is resolved by waiting,
+    and the gateway distinguishes them only in ``detail`` — human-readable prose. Read it, but do
+    not branch on it.
+    """
+
+    type_suffix = "idempotency-conflict"
 
 
 class ValidationError(BadRequestError):
@@ -480,6 +493,7 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         ModalityMismatchError,
         ContextExceededError,
         ValidationError,
+        IdempotencyConflictError,
         UnknownInstanceError,
         MissingCredentialsError,
         InvalidTokenError,

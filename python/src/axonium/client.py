@@ -25,6 +25,8 @@ from axonium.errors import (
     BackendUnavailableError,
     ConfigurationError,
     ForbiddenError,
+    TimeoutError,
+    TransportError,
     UnusedCredentialWarning,
 )
 from axonium.models.catalog import ModelList
@@ -46,11 +48,31 @@ __all__ = ["AsyncAxonium", "Axonium"]
 
 logger = logging.getLogger("axonium.client")
 
+
+def _request_headers(instance: str | None, idempotency_key: str | None) -> dict[str, str] | None:
+    headers = {}
+    if instance is not None:
+        headers[INSTANCE_HEADER] = instance
+    if idempotency_key is not None:
+        headers[IDEMPOTENCY_HEADER] = idempotency_key
+    return headers or None
+
+
 #: Pins a request to one instance, and names the serving instance on every response. Sent as a
 #: header and never in ``model``: a grant covers a model, billing attributes to a model, and the
 #: catalog lists models. A pin opts out of load balancing *and* of failover, so it is for
 #: reproducing a problem or comparing machines rather than for normal traffic.
 INSTANCE_HEADER = "X-Prometheus-Instance"
+
+#: Makes a retry safe on the non-streaming endpoints. A repeat with the same key and the same body
+#: returns the stored result without reaching a model, recording usage, or counting against the
+#: spend cap. This is what lets a client-side timeout be retried at all: without it, a retry is a
+#: second billable generation, because the backend is probably still working on the first.
+#:
+#: **Streaming is excluded, and silently.** A key on a streaming request is accepted and ignored,
+#: and the call generates again. The SDK refuses to send one there rather than let a caller believe
+#: a stream is protected.
+IDEMPOTENCY_HEADER = "Idempotency-Key"
 
 
 def _credentials_were_explicit(settings: dict[str, Any]) -> bool:
@@ -170,6 +192,32 @@ class _BaseAxonium:
 
     def _url(self, path: str) -> str:
         return f"{self._config.gateway_base_url}{path}"
+
+    def _after_transport_failure(
+        self, failure: TransportError, attempt: int, *, idempotency_key: str | None
+    ) -> float | None:
+        """Whether to retry a request that never produced a response, and how long to wait.
+
+        A client-side timeout is normally the one failure this SDK will not retry: the backend is
+        probably still generating, so a retry queues a second billable generation on top of the
+        first rather than resuming it.
+
+        An ``Idempotency-Key`` removes exactly that objection. With one, the repeat returns the
+        stored result — no model reached, no usage recorded, nothing counted against the spend cap
+        — so the retry costs a round trip instead of a generation. Without one the old rule stands,
+        because nothing about the danger has changed.
+
+        Connection failures are left alone either way. They are not the expensive case, and a host
+        refusing traffic is already covered by the cooldown registry.
+        """
+        if idempotency_key is None or not isinstance(failure, TimeoutError):
+            return None
+        if attempt >= self._retry.max_attempts:
+            return None
+        logger.debug(
+            "Retrying a timed-out request under its idempotency key", extra={"attempt": attempt}
+        )
+        return self._retry.backoff_for(attempt)
 
     def _cooldown_key(self, model: str | None) -> str:
         return f"{httpx.URL(self._config.gateway_base_url).host}:{model or '-'}"
@@ -347,6 +395,7 @@ class Axonium(_BaseAxonium):
         authenticate: bool = True,
         model: str | None = None,
         instance: str | None = None,
+        idempotency_key: str | None = None,
         timeout: float | None = None,
     ) -> httpx.Response:
         key = self._cooldown_key(model)
@@ -361,12 +410,20 @@ class Axonium(_BaseAxonium):
                         method,
                         self._url(path),
                         json=json,
-                        headers=None if instance is None else {INSTANCE_HEADER: instance},
+                        headers=_request_headers(instance, idempotency_key),
                         auth=None if not authenticate else httpx.USE_CLIENT_DEFAULT,
                         timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout,
                     )
                 except httpx.HTTPError as exc:
-                    raise dispatch.translate_transport_error(exc) from exc
+                    failure = dispatch.translate_transport_error(exc)
+                    delay = self._after_transport_failure(
+                        failure, attempt, idempotency_key=idempotency_key
+                    )
+                    if delay is None:
+                        raise failure from exc
+                    time.sleep(delay)
+                    attempt += 1
+                    continue
 
                 self._record(response)
                 try:
@@ -477,6 +534,7 @@ class AsyncAxonium(_BaseAxonium):
         authenticate: bool = True,
         model: str | None = None,
         instance: str | None = None,
+        idempotency_key: str | None = None,
         timeout: float | None = None,
     ) -> httpx.Response:
         key = self._cooldown_key(model)
@@ -491,12 +549,20 @@ class AsyncAxonium(_BaseAxonium):
                         method,
                         self._url(path),
                         json=json,
-                        headers=None if instance is None else {INSTANCE_HEADER: instance},
+                        headers=_request_headers(instance, idempotency_key),
                         auth=None if not authenticate else httpx.USE_CLIENT_DEFAULT,
                         timeout=httpx.USE_CLIENT_DEFAULT if timeout is None else timeout,
                     )
                 except httpx.HTTPError as exc:
-                    raise dispatch.translate_transport_error(exc) from exc
+                    failure = dispatch.translate_transport_error(exc)
+                    delay = self._after_transport_failure(
+                        failure, attempt, idempotency_key=idempotency_key
+                    )
+                    if delay is None:
+                        raise failure from exc
+                    await asyncio.sleep(delay)
+                    attempt += 1
+                    continue
 
                 self._record(response)
                 try:

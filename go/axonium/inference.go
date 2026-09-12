@@ -15,6 +15,17 @@ type EmbeddingRequest struct {
 	Input []string `json:"input"`
 
 	EncodingFormat string `json:"encoding_format,omitempty"`
+
+	// IdempotencyKey makes a retry safe: a repeat with the same key and the same body returns the
+	// stored result for 24 hours, without reaching a model, recording usage, or counting against
+	// the spend cap. It is also what lets this SDK retry a client-side timeout at all -- without a
+	// key that retry would be a second billable generation, so it is not attempted.
+	//
+	// Reuse a key only to retry the identical request. Reusing it for a different one, on a
+	// different endpoint, or while the first is still in flight is ErrIdempotencyConflict.
+	//
+	// Ignored on Stream: the gateway accepts a key there, ignores it, and generates again.
+	IdempotencyKey string `json:"-"`
 }
 
 func (r *EmbeddingRequest) validate() error {
@@ -70,7 +81,7 @@ func (s *EmbeddingsService) Create(ctx context.Context, req EmbeddingRequest) (*
 	}
 
 	var out EmbeddingList
-	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/embeddings", req, &out, req.Model, "")
+	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/embeddings", req, &out, req.Model, "", req.IdempotencyKey)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +95,17 @@ type ImageRequest struct {
 	Prompt string `json:"prompt"`
 	N      int    `json:"n,omitempty"`
 	Size   string `json:"size,omitempty"`
+
+	// IdempotencyKey makes a retry safe: a repeat with the same key and the same body returns the
+	// stored result for 24 hours, without reaching a model, recording usage, or counting against
+	// the spend cap. It is also what lets this SDK retry a client-side timeout at all -- without a
+	// key that retry would be a second billable generation, so it is not attempted.
+	//
+	// Reuse a key only to retry the identical request. Reusing it for a different one, on a
+	// different endpoint, or while the first is still in flight is ErrIdempotencyConflict.
+	//
+	// Ignored on Stream: the gateway accepts a key there, ignores it, and generates again.
+	IdempotencyKey string `json:"-"`
 }
 
 func (r *ImageRequest) validate() error {
@@ -158,7 +180,7 @@ func (s *ImagesService) Generate(ctx context.Context, req ImageRequest) (*ImageL
 	}
 
 	var out ImageList
-	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/images/generations", req, &out, req.Model, "")
+	meta, err := s.client.doJSON(ctx, http.MethodPost, "/v1/images/generations", req, &out, req.Model, "", req.IdempotencyKey)
 	if err != nil {
 		return nil, err
 	}
