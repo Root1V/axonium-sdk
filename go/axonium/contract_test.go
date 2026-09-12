@@ -336,6 +336,10 @@ func chatRequestFrom(raw map[string]any) ChatRequest {
 			})
 		}
 	}
+	// Carried through so a case naming a pin or a key exercises the header path rather than only
+	// asserting that the recorded envelope parses.
+	req.Instance = stringOr(raw["instance"])
+	req.IdempotencyKey = stringOr(raw["idempotency_key"])
 	return req
 }
 

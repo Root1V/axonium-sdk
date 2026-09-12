@@ -54,13 +54,13 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-44 | Unified error surface: everything raises an `AxoniumError` | ✅ | Request validation no longer leaks pydantic's exception |
 | AXO-45 | Ask the platform team about the 422 envelope | ✅ | Fixed on the platform: full RFC 9457 with correlation IDs, now catalogued |
 | AXO-46 | Injected token provider as an alternative to client credentials | ✅ | Rejected token passed back, not a flag, so a provider can deduplicate exactly |
-| AXO-47 | Re-record contract fixtures from a live deployment | 🚧 | 9 of 17 cases recorded; tool calls, images and the empty catalog still authored |
+| AXO-47 | Re-record contract fixtures from a live deployment | ✅ | Superseded by AXO-60, which re-recorded against the slug catalog |
 | AXO-48 | Map `Usage` onto the agreed H3 vocabulary | ✅ | `cache_read` exposed as a subset of input; `reasoning`/`cache_write` stay null, unsourceable |
 | AXO-49 | Two permanent credential modes with construction-time validation | ✅ | Environment credentials are discarded, not merely unused |
 | AXO-50 | Go: raise coverage to the Python bar | 📋 | 78.7% today; Python is at 100% line and branch |
 | AXO-51 | Go: structured logging and optional OTel spans | 📋 | Python has both; Go has neither yet |
 | AXO-52 | Tag and publish `go/v0.1.0` | 📋 | Needs AXO-50; Aeon's MDL-009 waits on the tag |
-| AXO-53 | Go cannot express an absent `content` | 📋 | `Content()` returns "" for both null and empty; Python distinguishes them |
+| AXO-53 | Go cannot express an absent `content` | 📋 | Downgraded: the real gateway sends "", never null. An authored fixture provoked it |
 | AXO-54 | `response.model` is not `request.model` | ✅ | Was a platform bug; fixed. An alias request now answers with the canonical slug |
 | AXO-55 | Type tool calls like the rest of the message | 📋 | They arrive as raw dicts while the message is a model; the asymmetry cost a consumer real work |
 | AXO-56 | Reassemble streamed tool calls | 📋 | Neither SDK does; fragments arrive keyed by index, identity only in the first |
@@ -73,5 +73,5 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-65 | `Idempotency-Key` support | ✅ | Makes a keyed client-timeout retryable, the one case that did double-bill |
 | AXO-66 | Ask for a machine-readable 409 discriminator | 🚧 | Sent. Four causes now share the type, including a malformed key |
 | AXO-67 | Validate idempotency key length client-side | ✅ | 255 max; the gateway reports over-length as a *conflict*, which misdirects |
-| AXO-60 | Re-record fixtures against the slug catalog | 📋 | Yesterday's recordings are already stale: 6 entries and old ids |
+| AXO-60 | Re-record fixtures against the slug catalog | ✅ | 16 of 20 recorded; the other 4 say why they cannot be produced here |
 | AXO-61 | Migrate examples and docs to model slugs | 📋 | Aliases still resolve, so this is tidiness, not breakage |

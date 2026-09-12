@@ -1,0 +1,9 @@
+{
+  "type": "https://prometheus.internal/errors/idempotency-conflict",
+  "title": "Idempotency Conflict",
+  "status": 409,
+  "detail": "Idempotency-Key '2c29cce6-f205-4207-b806-2bea40afe8ba' was already used for a different request. A key identifies one request; reuse it only to retry that same one.",
+  "instance": "/v1/chat/completions",
+  "request_id": "359f09c3-5a82-4e6f-9817-e6e83bfb2feb",
+  "trace_id": "db03e2f4b8b86394a854cee652238a4b"
+}
