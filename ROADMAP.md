@@ -35,6 +35,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-23 | PyPI + TestPyPI pending publishers, GitHub environments | ✅ | Trusted Publishing on both; no API token stored anywhere |
 | AXO-24 | TestPyPI dry run | ✅ | `1.0.0rc1` published, installed from the index and run against the live gateway |
 | AXO-25 | Publish `python/v1.0.0rc1` | ✅ | Live on PyPI; verified by `pip install axonium` against the running gateway |
+| AXO-78 | Publish `python/v1.0.0rc3` and `go/v0.2.0` | ✅ | Both live and verified from their public indexes with no URLs configured |
 | AXO-26 | Integration tests against a real deployment | ✅ | Validated by hand against a local gateway; not yet automated |
 | AXO-27 | Go SDK | ✅ | v0.1.0 published; 24/24 contract cases, 94% coverage, zero dependencies |
 | AXO-28 | Rust SDK | 🚧 | Core done: 24/24 contract cases. Logging, tracing and publication remain |
