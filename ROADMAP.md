@@ -35,7 +35,8 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-25 | Publish `python/v1.0.0rc1` | ✅ | Live on PyPI; verified by `pip install axonium` against the running gateway |
 | AXO-26 | Integration tests against a real deployment | ✅ | Validated by hand against a local gateway; not yet automated |
 | AXO-27 | Go SDK | ✅ | v0.1.0 published; 24/24 contract cases, 94% coverage, zero dependencies |
-| AXO-28 | Rust SDK | 📋 | Contract already defined by AXO-18 |
+| AXO-28 | Rust SDK | 🚧 | Contract already defined by AXO-18 |
+| AXO-73 | Ask for a per-request usage lookup without `admin:read` | 📋 | `termination_reason` is invisible to the caller; both usage endpoints need admin |
 | AXO-29 | Optional caller-supplied `X-Trace-ID` | 📋 | Only adopted in legacy-mode deployments, and only as UUID4 |
 | AXO-30 | Error-catalog cases in the contract manifest | ✅ | 4 recorded failures, asserting suffix, retryability and correlation IDs |
 | AXO-31 | Refresh GitHub Actions off deprecated Node 20 | 📋 | Confirmed live: the release run warns on checkout@v4, upload-artifact@v4, setup-uv@v5 |
