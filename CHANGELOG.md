@@ -53,6 +53,10 @@ behaviour change worth reading.
 
 **Fixed**
 
+- Six error classes added after `rc1` were exported from `axonium.errors` but not from the package
+  itself, so `from axonium import IdempotencyInProgressError` failed. All of them are importable
+  from the package now, and a test pins the invariant -- nothing failed in CI before, because every
+  test imported from the submodule.
 - `cache_n` present with a null value was reported as a measured zero rather than as unmeasured,
   making an unknown cache indistinguishable from a cold one.
 

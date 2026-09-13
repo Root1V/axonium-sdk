@@ -6,7 +6,12 @@ See ``spec/prometheus-gateway.md`` in the repository for the API contract this p
 from axonium._version import __version__
 from axonium.auth import TokenClaims, TokenSet
 from axonium.client import AsyncAxonium, Axonium
-from axonium.config import AxoniumConfig, Timeouts
+from axonium.config import (
+    DEFAULT_AUTH_BASE_URL,
+    DEFAULT_GATEWAY_BASE_URL,
+    AxoniumConfig,
+    Timeouts,
+)
 from axonium.errors import (
     APIError,
     AuthTransportError,
@@ -16,7 +21,11 @@ from axonium.errors import (
     ConfigurationError,
     ContextExceededError,
     ForbiddenError,
+    IdempotencyInProgressError,
+    IdempotencyKeyReuseError,
+    IdempotencyResponseNotRetainedError,
     InvalidClientError,
+    InvalidIdempotencyKeyError,
     InvalidRequestError,
     InvalidScopeError,
     InvalidTokenError,
@@ -35,12 +44,14 @@ from axonium.errors import (
     TransportError,
     UnauthorizedClientError,
     UnauthorizedError,
+    UnknownInstanceError,
     UnknownModelError,
     UnsupportedFieldWarning,
     UnsupportedGrantTypeError,
     UnusedCredentialWarning,
     UpstreamError,
     UsageStoreUnavailableError,
+    ValidationError,
 )
 from axonium.models.catalog import Model, ModelList
 from axonium.models.chat import (
@@ -71,6 +82,8 @@ from axonium.streaming import AsyncChatCompletionStream, ChatCompletionStream
 from axonium.transport.retry import CooldownRegistry, RetryPolicy
 
 __all__ = [
+    "DEFAULT_AUTH_BASE_URL",
+    "DEFAULT_GATEWAY_BASE_URL",
     "APIError",
     "APIObject",
     "AsyncAxonium",
@@ -98,9 +111,13 @@ __all__ = [
     "EmbeddingsRequest",
     "ForbiddenError",
     "GeneratedImage",
+    "IdempotencyInProgressError",
+    "IdempotencyKeyReuseError",
+    "IdempotencyResponseNotRetainedError",
     "ImageGenerationRequest",
     "ImagesResponse",
     "InvalidClientError",
+    "InvalidIdempotencyKeyError",
     "InvalidRequestError",
     "InvalidScopeError",
     "InvalidTokenError",
@@ -131,6 +148,7 @@ __all__ = [
     "TransportError",
     "UnauthorizedClientError",
     "UnauthorizedError",
+    "UnknownInstanceError",
     "UnknownModelError",
     "UnsupportedFieldWarning",
     "UnsupportedGrantTypeError",
@@ -138,5 +156,6 @@ __all__ = [
     "UpstreamError",
     "Usage",
     "UsageStoreUnavailableError",
+    "ValidationError",
     "__version__",
 ]
