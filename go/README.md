@@ -110,6 +110,52 @@ and typos, before the request is sent. Off by default because it costs one catal
 catalog cannot be loaded the check is skipped rather than failing your request: a guard rail should
 not become a new way for inference to break.
 
+## Observability
+
+The platform owns tracing. This SDK provides only the complementary piece: enough for your traces
+and logs to line up with the platform's, and nothing that duplicates what it already records.
+
+**Structured logging** through `log/slog`, silent until you supply a logger:
+
+```go
+client, err := axonium.New(axonium.Config{
+	Logger: slog.New(slog.NewJSONHandler(os.Stderr, nil)),
+})
+```
+
+Each completed attempt logs `method`, `path`, `model`, `status`, `duration_ms`, `attempt` and the
+gateway's `request_id`, `trace_id` and `instance_id`.
+
+**Prompts, completions and credentials are never logged, and there is no flag to enable it.**
+Correlating a request with the platform's traces needs the IDs, not the content — and a library
+that can be configured to log prompts is how prompts end up in an aggregator nobody audited.
+Whatever you need to log about the content, you have at the call site.
+
+**Tracing through an interface**, not a dependency:
+
+```go
+type Tracer interface {
+	StartSpan(ctx context.Context, name string, attrs map[string]any) (context.Context, Span)
+}
+```
+
+This is deliberately not an OpenTelemetry import. Zero third-party dependencies is a property
+worth keeping for something other people vendor, and importing an OTel SDK here would put it in
+every consumer's tree — including the ones tracing with something else, or not at all. Wiring it
+is a few lines on your side, and the attribute names follow the GenAI semantic conventions so the
+spans are readable by tooling that already understands LLM traffic.
+
+Spans carry `gen_ai.system`, `gen_ai.request.model`, and on completion the gateway's
+`prometheus.request_id`, `prometheus.trace_id` and `prometheus.instance_id` — which is the whole
+reason the span exists.
+
+**Trace context is not propagated outbound.** The gateway does not read `traceparent`, so sending
+one would be decoration; correlation runs inbound through the IDs above.
+
+**Scope diagnostics.** A `403` is matched against the scopes your token actually holds, so the
+error says what is missing rather than only that access was refused. `client.TokenClaims()` answers
+the same question before a call rather than after one.
+
 ## Credential modes
 
 Two modes, permanent and mutually exclusive. Which one you use follows from how the SDK is

@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -198,11 +199,18 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 		policy = *c.config.Retry
 	}
 
+	ctx, span := c.startSpan(ctx, spanName(path), model)
+	defer span.End()
+
 	for attempt := 1; ; attempt++ {
+		started := time.Now()
 		resp, meta, err := c.attempt(ctx, method, path, body, streaming, instance, idemKey)
+		c.logRequest(method, path, model, statusOf(resp, err), attempt, started, meta, err)
 		if err == nil {
+			recordResponse(span, meta)
 			return resp, meta, nil
 		}
+		span.RecordError(err)
 
 		var apiErr *APIError
 		if !errors.As(err, &apiErr) {
@@ -360,4 +368,34 @@ func sleepFor(ctx context.Context, d time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
+}
+
+// statusOf reports the HTTP status of an attempt, from the response or from a typed error, so a
+// failed attempt is logged with the code that caused it rather than as a bare failure.
+func statusOf(resp *http.Response, err error) int {
+	if resp != nil {
+		return resp.StatusCode
+	}
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.Status
+	}
+	return 0
+}
+
+// spanName names the operation rather than the URL, so spans group by what was done.
+func spanName(path string) string {
+	switch {
+	case strings.HasSuffix(path, "/chat/completions"):
+		return "chat.completions"
+	case strings.HasSuffix(path, "/embeddings"):
+		return "embeddings"
+	case strings.HasSuffix(path, "/generations"):
+		return "images.generations"
+	case strings.HasSuffix(path, "/mine"):
+		return "models.mine"
+	case strings.HasSuffix(path, "/models"):
+		return "models.list"
+	}
+	return "request"
 }

@@ -2,6 +2,7 @@ package axonium
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -97,6 +98,17 @@ type Config struct {
 
 	// TokenProvider selects the governed credential mode. See the TokenProvider docs.
 	TokenProvider TokenProvider
+
+	// Logger receives one structured record per completed attempt, carrying method, path, model,
+	// status, duration, attempt number and the gateway's correlation IDs. Never prompts,
+	// completions or credentials -- see observability.go.
+	//
+	// Nil means silent: a library should not decide a host application's logging.
+	Logger *slog.Logger
+
+	// Tracer emits a span per operation when set. An interface rather than an OpenTelemetry
+	// dependency, so this module stays free of third-party code for the people who vendor it.
+	Tracer Tracer
 
 	// Retry governs when a failed request is retried. The zero value means DefaultRetryPolicy.
 	Retry *RetryPolicy

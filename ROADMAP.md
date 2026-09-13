@@ -58,8 +58,8 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-48 | Map `Usage` onto the agreed H3 vocabulary | ✅ | `cache_read` exposed as a subset of input; `reasoning`/`cache_write` stay null, unsourceable |
 | AXO-49 | Two permanent credential modes with construction-time validation | ✅ | Environment credentials are discarded, not merely unused |
 | AXO-50 | Go: raise coverage to the Python bar | ✅ | 79% -> 94%, and the new tests found a real divergence from Python |
-| AXO-51 | Go: structured logging and optional OTel spans | 📋 | Python has both; Go has neither yet |
-| AXO-52 | Tag and publish `go/v0.1.0` | 📋 | Needs AXO-50; Aeon's MDL-009 waits on the tag |
+| AXO-51 | Go: structured logging and optional OTel spans | ✅ | `log/slog` plus a Tracer interface, so zero dependencies stay zero |
+| AXO-52 | Tag and publish `go/v0.1.0` | 🚧 | AXO-50 and AXO-51 done; the tag is the last step |
 | AXO-53 | Go cannot express an absent `content` | 🚫 | Closed: the real gateway sends "", never null. The divergence was a fixture I invented |
 | AXO-72 | Go: expose `TokenClaims()` | ✅ | Was dead code; Python exposed it and Go did not |
 | AXO-54 | `response.model` is not `request.model` | ✅ | Was a platform bug; fixed. An alias request now answers with the canonical slug |
