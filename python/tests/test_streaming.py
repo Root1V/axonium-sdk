@@ -425,8 +425,12 @@ class TestAsyncStreaming:
         assert reasoning, "the chain of thought must survive an empty answer"
         assert chunks[-1].finish_reason == "length"
         assert usage is not None
-        assert usage.prompt_tokens == 15, "prompt_n plus cache_n"
-        assert usage.cache_read_tokens == 14
+        # The invariant, not the split: how much of the prompt came from cache varies between
+        # recordings as the backend warms, so pinning the exact figure would break on every
+        # re-record for no gain. What must hold is that input INCLUDES the cached prefix.
+        assert usage.prompt_tokens is not None
+        assert usage.cache_read_tokens is not None
+        assert usage.cache_read_tokens <= usage.prompt_tokens, "cache_read is a subset of input"
 
     @respx.mock
     async def test_detects_an_interrupted_stream(

@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 7,
+  "version": 8,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -153,10 +153,15 @@
           "data.2.context_length": 4096,
           "data.3.context_length": null,
           "data.4.context_length": 8192,
+          "data.0.family": "gpt-oss",
+          "data.1.family": "qwen3",
+          "data.2.family": "qwen3",
+          "data.3.family": "sd-turbo",
+          "data.4.family": "qwen3vl",
           "data.1.served_by": 2
         }
       },
-      "$comment": "Recorded. One entry per model, not per replica: served_by counts the instances. context_length is null for the image model -- zero would read as a window of zero and make a prompt_tokens < context_length check reject every image request. text and vision are BOTH served on the chat endpoint, so the mapping to a consumer's own vocabulary is not one to one."
+      "$comment": "Re-recorded 2026-09-13, with family finally populated on every entry. One entry per model, not per replica: served_by counts the instances. context_length is null for the image model, because zero would read as a window of zero. text and vision are BOTH served on the chat endpoint, so the mapping to a consumer's own vocabulary is not one to one."
     },
     {
       "id": "catalog-mine-empty",
@@ -242,7 +247,7 @@
     },
     {
       "id": "stream-basic",
-      "$comment": "Recorded. Ends with [DONE] TWICE -- the backend sends one and the gateway appends its own -- so a client must stop at the first. No usage chunk arrives at all, so the counts come from the final chunk's timings and are flagged estimated.",
+      "$comment": "Re-recorded 2026-09-13. ONE terminal frame now, not two: the gateway used to forward the backend's [DONE] and append its own, and everything that recorded the request lived past that point -- so a client stopping at the first sentinel, which is correct, was never billed at all. Reported as unreliable idempotent replay; the replay was only the visible symptom.",
       "operation": "chat.completions.stream",
       "request": {
         "model": "qwen3-0.6b",
@@ -265,7 +270,7 @@
         "usage": {
           "prompt_tokens": 15,
           "completion_tokens": 24,
-          "cache_read_tokens": 14,
+          "cache_read_tokens": 8,
           "estimated": true
         }
       }
@@ -447,7 +452,7 @@
     },
     {
       "id": "stream-tool-calls",
-      "$comment": "Recorded. Tool calls arrive fragmented: the first delta carries index, id, type and function.name; every later one carries only index and an arguments fragment. The fragments are individually invalid JSON ('{', '\"', 'city') and must be concatenated and parsed once at the end. index is the correlation key, since id never repeats. This case pins today's behaviour -- the SDK passes fragments through without reassembling them, which is AXO-56 -- so it will gain assertions rather than change when that lands.",
+      "$comment": "Re-recorded 2026-09-13 with a single terminal frame. Tool calls arrive fragmented: the first delta carries index, id, type and function.name; every later one carries only index and an arguments fragment, individually invalid JSON. index is the correlation key, since id never repeats.",
       "operation": "chat.completions.stream",
       "request": {
         "model": "qwen3-0.6b",
@@ -466,11 +471,11 @@
       "expect": {
         "kind": "stream",
         "content": "",
-        "chunks": 92,
+        "chunks": 85,
         "usage": {
           "prompt_tokens": 154,
-          "completion_tokens": 107,
-          "cache_read_tokens": 84,
+          "completion_tokens": 100,
+          "cache_read_tokens": 153,
           "estimated": true
         }
       }
@@ -610,7 +615,7 @@
     },
     {
       "id": "stream-idempotent-replay",
-      "$comment": "Recorded 2026-09-13. A stream the gateway FINISHED, replayed under its key: byte for byte identical to the original, marked Idempotent-Replay, with no second generation and no second charge. It arrives as one flush rather than paced out, which is invisible to a frame parser and the reason replay is possible at all. A stream the MODEL broke cannot be replayed -- that needs resuming, which nobody has built.",
+      "$comment": "Re-recorded 2026-09-13, and no longer carries a caution. A streamed replay is now as reliable as a non-streaming one -- measured 6 of 6 with NO wait between calls, against 0 of 6 before the fix. Byte for byte identical to the original, marked Idempotent-Replay, with no second generation and no second charge.",
       "operation": "chat.completions.stream",
       "request": {
         "model": "qwen3-0.6b",
@@ -644,5 +649,5 @@
     }
   ],
   "$recording": "20 of 24 cases carry bytes recorded from a live deployment; each says so in its $comment. The four that do not explain why they cannot be produced. Only the recorded ones are evidence about the gateway.",
-  "$version_note": "Version 7 (2026-09-13): the four idempotency types are now RECORDED rather than authored, and a replayed stream is captured. Everything except four cases is now recorded from a live deployment; those four say why they cannot be."
+  "$version_note": "Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame."
 }

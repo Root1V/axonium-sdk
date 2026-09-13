@@ -103,14 +103,11 @@ class Completions:
         Reuse a key only to retry the identical request; reusing it for a different one is
         :class:`~axonium.errors.IdempotencyKeyReuseError`.
 
-        On a stream the key has two caveats. The documented boundary: it replays a stream the
-        gateway **finished** and whose delivery your connection dropped, never one the model itself
-        broke — that needs resuming rather than replaying, and nothing in this space has built it.
-        The measured one: on the deployment tested 2026-09-13 a streamed replay was **not
-        reproducible** — six attempts three seconds apart raised
-        :class:`~axonium.errors.IdempotencyInProgressError` five times and regenerated once, while
-        non-streaming replayed six out of six. Send the key anyway, it costs nothing, but read
-        ``meta.idempotent_replay`` rather than assuming a second call was free.
+        On a stream the key has one boundary worth knowing: it replays a stream the gateway
+        **finished** and whose delivery your connection dropped, never one the model itself broke —
+        that needs resuming rather than replaying, and nothing in this space has built it. Within
+        that boundary a streamed replay is as reliable as a non-streaming one, including with no
+        wait between calls. Read ``meta.idempotent_replay`` to know which you got.
         """
 
         request = _build(kwargs, stream=True)

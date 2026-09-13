@@ -75,8 +75,8 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-66 | Ask for a machine-readable 409 discriminator | ✅ | Answered with four distinct types; `idempotency-conflict` retired |
 | AXO-68 | Idempotency on streaming | ✅ | The platform reversed its refusal; the key now replays a stream it finished |
 | AXO-69 | Verify the four idempotency types against a deployment | ✅ | All four recorded; the envelopes matched what we had implemented blind |
-| AXO-70 | Tell the fronts a broken stream is now billed | 📋 | Was zero by defect; usage rows carry an `interrupted` flag |
-| AXO-71 | Streamed replay is not reproducible | 📋 | Measured 0/6 against 6/6 non-streaming; reported, documented as best-effort |
+| AXO-70 | Tell the fronts that streaming billing changed | 🚧 | Bigger than first reported: ALL streaming was unbilled, not just broken streams |
+| AXO-71 | Streamed replay is not reproducible | ✅ | Fixed upstream: 6/6 now, with no wait. It was the visible end of unbilled streaming |
 | AXO-67 | Validate idempotency key length client-side | ✅ | 255 max; the gateway reports over-length as a *conflict*, which misdirects |
 | AXO-60 | Re-record fixtures against the slug catalog | ✅ | 16 of 20 recorded; the other 4 say why they cannot be produced here |
 | AXO-61 | Migrate examples and docs to model slugs | 📋 | Aliases still resolve, so this is tidiness, not breakage |

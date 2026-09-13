@@ -72,11 +72,11 @@ type ChatRequest struct {
 	// Reuse a key only to retry the identical request. Reusing it for a different one, on a
 	// different endpoint, or while the first is still in flight is ErrIdempotencyConflict.
 	//
-	// Works on Stream too, with a boundary worth knowing: if the gateway's stream from the model
-	// completed and it was the caller's connection that dropped, the key replays the stored frames
-	// byte for byte, as one flush rather than paced out. If the model's own stream broke
-	// mid-generation there is nothing complete to replay and the retry is a genuine new
-	// generation -- that case needs resuming, not replaying, and no key can cover it.
+	// Works on Stream too, with one boundary worth knowing: a key replays a stream the gateway
+	// FINISHED and whose delivery the caller's connection dropped, never one the model itself
+	// broke -- that needs resuming rather than replaying, which nobody has built. Within that
+	// boundary a streamed replay is as reliable as a non-streaming one, including with no wait
+	// between calls. Read Meta().IdempotentReplay to know which you got.
 	IdempotencyKey string `json:"-"`
 }
 

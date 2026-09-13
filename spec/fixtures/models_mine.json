@@ -16,7 +16,7 @@
       "object": "model",
       "owned_by": "prometheus",
       "context_length": 4096,
-      "family": "",
+      "family": "qwen3",
       "quantization": "IQ4_NL",
       "modality": "text",
       "served_by": 2
@@ -26,7 +26,7 @@
       "object": "model",
       "owned_by": "prometheus",
       "context_length": 4096,
-      "family": "",
+      "family": "qwen3",
       "quantization": "Q8_0",
       "modality": "embedding",
       "served_by": 1
