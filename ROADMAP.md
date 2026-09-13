@@ -34,7 +34,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-24 | TestPyPI dry run | ✅ | `1.0.0rc1` published, installed from the index and run against the live gateway |
 | AXO-25 | Publish `python/v1.0.0rc1` | ✅ | Live on PyPI; verified by `pip install axonium` against the running gateway |
 | AXO-26 | Integration tests against a real deployment | ✅ | Validated by hand against a local gateway; not yet automated |
-| AXO-27 | Go SDK | 🚧 | v0.1: streaming, cancellation, both credential modes, 12/12 contract cases |
+| AXO-27 | Go SDK | ✅ | v0.1.0 published; 24/24 contract cases, 94% coverage, zero dependencies |
 | AXO-28 | Rust SDK | 📋 | Contract already defined by AXO-18 |
 | AXO-29 | Optional caller-supplied `X-Trace-ID` | 📋 | Only adopted in legacy-mode deployments, and only as UUID4 |
 | AXO-30 | Error-catalog cases in the contract manifest | ✅ | 4 recorded failures, asserting suffix, retryability and correlation IDs |
@@ -59,7 +59,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-49 | Two permanent credential modes with construction-time validation | ✅ | Environment credentials are discarded, not merely unused |
 | AXO-50 | Go: raise coverage to the Python bar | ✅ | 79% -> 94%, and the new tests found a real divergence from Python |
 | AXO-51 | Go: structured logging and optional OTel spans | ✅ | `log/slog` plus a Tracer interface, so zero dependencies stay zero |
-| AXO-52 | Tag and publish `go/v0.1.0` | 🚧 | AXO-50 and AXO-51 done; the tag is the last step |
+| AXO-52 | Tag and publish `go/v0.1.0` | ✅ | Live on the module proxy; verified by installing it and running against the gateway |
 | AXO-53 | Go cannot express an absent `content` | 🚫 | Closed: the real gateway sends "", never null. The divergence was a fixture I invented |
 | AXO-72 | Go: expose `TokenClaims()` | ✅ | Was dead code; Python exposed it and Go did not |
 | AXO-54 | `response.model` is not `request.model` | ✅ | Was a platform bug; fixed. An alias request now answers with the canonical slug |
