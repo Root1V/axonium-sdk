@@ -1,0 +1,57 @@
+name: rust-release
+
+# Publishes the Rust SDK to crates.io via Trusted Publishing (OIDC) — no API token is stored here.
+#
+# One-time setup required by the crate owner before the first run:
+#   1. Create a crates.io account (it signs in with GitHub).
+#   2. Configure Trusted Publishing for the crate `axonium`: owner `Root1V`, repository
+#      `axonium-sdk`, workflow `rust-release.yml`, environment `crates-io`.
+#      crates.io configures this against a crate, so if it will not accept one that does not exist
+#      yet, publish `0.1.0` once with a scoped API token and switch to OIDC immediately after —
+#      after that first upload no long-lived token is needed again.
+#   3. Create the `crates-io` environment in this repository's settings, with a required reviewer.
+#      A crates.io version cannot be deleted, only yanked.
+
+on:
+  push:
+    tags: ["rust/v*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: crates-io
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Tag matches the packaged version
+        # Publishing a crate whose version disagrees with its tag is unfixable after the fact: a
+        # crates.io version can be yanked but never replaced or reused.
+        if: github.event_name == 'push'
+        run: |
+          tagged="${GITHUB_REF_NAME#rust/v}"
+          packaged="$(grep -m1 '^version = ' Cargo.toml | cut -d'"' -f2)"
+          if [ "$tagged" != "$packaged" ]; then
+            echo "Tag says $tagged but the crate says $packaged" >&2
+            exit 1
+          fi
+          echo "Both say $packaged"
+
+      # The corpus is not part of the package, so this runs it from the checkout -- where it is the
+      # only place it can run at all.
+      - run: cargo test
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo fmt --check
+
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

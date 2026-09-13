@@ -21,10 +21,17 @@ fn spec_dir() -> PathBuf {
         .join("spec")
 }
 
-fn manifest() -> Value {
-    let raw = std::fs::read_to_string(spec_dir().join("cases").join("manifest.json"))
-        .expect("the shared manifest must be readable");
-    serde_json::from_str(&raw).expect("the shared manifest must parse")
+/// The corpus lives in the monorepo, one level above this crate, so it is present when the tests
+/// run from a checkout and absent from the published package. Returning `None` there is the honest
+/// outcome: the case files simply are not shipped, and panicking would fail `cargo test` for every
+/// consumer who vendors this crate.
+fn manifest() -> Option<Value> {
+    let path = spec_dir().join("cases").join("manifest.json");
+    if !path.exists() {
+        return None;
+    }
+    let raw = std::fs::read_to_string(&path).expect("the shared manifest must be readable");
+    Some(serde_json::from_str(&raw).expect("the shared manifest must parse"))
 }
 
 fn fixture(name: &str) -> Vec<u8> {
@@ -155,7 +162,13 @@ fn kind_for(suffix: &str) -> ErrorKind {
 
 #[tokio::test]
 async fn contract_corpus() {
-    let manifest = manifest();
+    let Some(manifest) = manifest() else {
+        println!(
+            "skipped: the shared corpus lives in the monorepo's spec/ and is not part of the \
+             published crate. Run these from a checkout of Root1V/axonium-sdk."
+        );
+        return;
+    };
     let cases = manifest["cases"].as_array().expect("cases");
     assert!(
         !cases.is_empty(),

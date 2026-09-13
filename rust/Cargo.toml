@@ -8,7 +8,11 @@ license = "MIT"
 repository = "https://github.com/Root1V/axonium-sdk"
 keywords = ["llm", "inference", "sdk", "openai"]
 categories = ["api-bindings"]
-publish = false
+publish = true
+readme = "README.md"
+# The repo-root LICENSE is copied in so the package carries its own, rather than relying on the
+# `license` field alone.
+include = ["src/**/*", "tests/**/*", "README.md", "LICENSE", "Cargo.toml"]
 
 # Unlike the Go SDK, which gets by on the standard library alone, Rust has neither HTTP nor JSON in
 # std. These four are the minimum, all of them ubiquitous in the ecosystem, and rustls is chosen
