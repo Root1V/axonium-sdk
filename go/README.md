@@ -2,8 +2,15 @@
 
 Go SDK for the Prometheus Gateway inference API.
 
-> **Status: v0.1, under construction.** Streaming, cancellation, both credential modes and the
-> shared contract fixtures are implemented and tested. Not yet tagged or published.
+> **Status: v0.1.0.** Streaming with real cancellation, both credential modes, idempotency keys,
+> instance pinning, the full error taxonomy and the shared contract corpus — all implemented and
+> tested, with 24 of 24 contract cases replaying the same recorded wire bytes the Python SDK does.
+>
+> The version is `0.1.0` rather than `1.0.0` deliberately. The surface is complete against the
+> current gateway contract and is not going to churn for its own sake, but the tri-party
+> coordination this SDK is built inside keeps surfacing things — two error types were split and
+> streaming idempotency arrived in a single week. If something there requires changing this
+> surface, doing it before `1.0.0` costs a consumer far less than doing it after.
 
 ## Installation
 
