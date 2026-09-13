@@ -5,7 +5,58 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ## Python
 
-### 1.0.0rc1 — unreleased
+### 1.0.0rc2
+
+Everything learned from running `rc1` against a live deployment and from three rounds of
+coordination with the platform team. No breaking change to code written against `rc1`; one
+behaviour change worth reading.
+
+**Credentials are now the only required setting**
+
+- `auth_base_url` and `gateway_base_url` default to the official Prometheus platform. Precedence is
+  unchanged — explicit argument, then environment, then the default — and overriding one does not
+  force restating the other.
+- **The default addresses are provisional.** The platform has not moved to its cloud host yet, so
+  they currently point at a local deployment. Upgrading will pick up the new address automatically;
+  **a pinned version will not**, and the release that changes them will say so prominently.
+
+**Idempotency**
+
+- `idempotency_key` on `chat.completions.create()`, `.stream()`, `embeddings.create()` and
+  `images.generate()`. A repeat with the same key and body returns the stored result without
+  reaching a model, recording usage, or counting against the spend cap.
+- **A client-side timeout is now retried — but only under a key.** Without one the old rule stands:
+  the backend is probably still generating, so a retry would be a second billable generation.
+- Four typed refusals, only one of them retryable: `InvalidIdempotencyKeyError`,
+  `IdempotencyKeyReuseError`, `IdempotencyInProgressError` (retryable, carries `retry_after`) and
+  `IdempotencyResponseNotRetainedError` — which is proof the original succeeded.
+- Key length is checked before the wire, so an over-long key names its own problem.
+
+**Multi-instance deployments**
+
+- `instance` pins a call to one replica, by label (`"#2"`) or full id, and is kept across retries.
+  It opts out of load balancing *and* failover, so it is for reproducing a problem rather than for
+  normal traffic.
+- `meta.instance` and `meta.instance_id` on every response — the values to quote when reporting a
+  slow or odd one.
+- `UnknownInstanceError` for a pin that names something not serving the model.
+
+**Usage and correlation**
+
+- `usage.cache_read_tokens`: how much of the input came from cache, read from the reported
+  `prompt_tokens_details` where the gateway supplies it and derived from `timings` otherwise.
+  `input` **includes** the cached prefix, which is the convention the three fronts settled on.
+- `meta.idempotent_replay` says whether a response was replayed rather than generated — so a
+  `usage` on a replay is not added to a running total by mistake.
+- `ValidationError` for `422`, which now arrives in the same problem-details envelope as every
+  other error.
+
+**Fixed**
+
+- `cache_n` present with a null value was reported as a measured zero rather than as unmeasured,
+  making an unknown cache indistinguishable from a cold one.
+
+### 1.0.0rc1
 
 Ground-up rewrite targeting the Prometheus Gateway API. Not backward compatible with `v0.6.0`,
 which spoke to a platform generation that no longer exists.
@@ -68,11 +119,35 @@ which spoke to a platform generation that no longer exists.
 
 ## Go
 
-Not yet released. See [`go/`](go/).
+### 0.2.0
+
+- **Credentials are the only required setting.** `AuthBaseURL` and `GatewayBaseURL` default to the
+  official Prometheus platform, with the same precedence as everywhere else. **The defaults are
+  provisional** until the platform moves to its cloud host; a pinned version will keep the old
+  address after it moves.
+- Contract corpus re-recorded after the platform fixed a defect that left streaming generations
+  unbilled. Streams now carry one terminal frame rather than two.
+
+### 0.1.0
+
+First release. Streaming with cancellation that reaches Prometheus — measured by counting the
+chunks the upstream produced after the client went away, not asserted. Both credential modes,
+idempotency keys, instance pinning, the full error taxonomy from `spec/errors.json`, structured
+logging through `log/slog`, and a tracing hook that is an interface rather than an OpenTelemetry
+dependency. All 24 shared contract cases replay the same recorded wire bytes as the Python SDK.
+
+No third-party dependencies: standard library only.
 
 ## Rust
 
-Not yet released. See [`rust/`](rust/).
+### 0.1.0 — unreleased
+
+Core implemented: chat, streaming with cancellation on drop, embeddings, images, both credential
+modes, idempotency keys, instance pinning and the full error taxonomy. All 24 shared contract cases
+pass. Structured logging, a tracing hook and publication to crates.io remain.
+
+`Config` and `Client` redact the client secret from `Debug`, which a derived implementation printed
+in full.
 
 ---
 

@@ -5,4 +5,4 @@ version and the attribute callers see can never disagree. The legacy SDK kept th
 files and they drifted by three releases.
 """
 
-__version__ = "1.0.0rc1"
+__version__ = "1.0.0rc2"
