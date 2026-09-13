@@ -145,14 +145,17 @@ No third-party dependencies: standard library only.
 
 ## Rust
 
-### 0.1.0 — unreleased
+### 0.1.0
 
-Core implemented: chat, streaming with cancellation on drop, embeddings, images, both credential
+First release. Core implemented: chat, streaming with cancellation on drop, embeddings, images, both credential
 modes, idempotency keys, instance pinning and the full error taxonomy. All 24 shared contract cases
 pass. Structured logging, a tracing hook and publication to crates.io remain.
 
 `Config` and `Client` redact the client secret from `Debug`, which a derived implementation printed
 in full.
+
+**Not in this release, and a crates.io version cannot be replaced:** structured logging, a tracing
+hook, and reassembly of streamed tool calls. See the crate README.
 
 ---
 

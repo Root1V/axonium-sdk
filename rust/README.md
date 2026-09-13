@@ -89,10 +89,19 @@ Unset fields fall back to `AXONIUM_AUTH_BASE_URL`, `AXONIUM_GATEWAY_BASE_URL`,
 `AXONIUM_VERIFY_MODALITY`. A missing required setting fails at construction, naming both the field
 and the variable that can supply it.
 
-## Still to come
+## What 0.1.0 does not have
 
-Structured logging and a tracing hook (the Go SDK has both), a published crate, and the remaining
-polish that would justify calling it 1.0.
+Stated here rather than discovered, because a crates.io version can be yanked but never replaced.
+
+- **No structured logging and no tracing hook.** The Go SDK has both; this does not yet. Nothing is
+  emitted anywhere, so there is no way to see what a call did beyond its return value.
+- **Streamed tool calls are not reassembled.** The fragments reach you as they arrive, keyed by
+  `index`, with the identity only in the first — joining them is yours to do for now.
+- **Not published to crates.io as a stable API.** `0.1.x` is where the surface settles.
+
+Everything else — chat, streaming with cancellation, embeddings, images, both credential modes,
+idempotency, instance pinning, the error taxonomy — is implemented and pinned by the shared
+contract corpus.
 
 ## Development
 
