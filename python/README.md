@@ -151,7 +151,7 @@ secret really does leave the process rather than sitting unused.
 default, so the common case is:
 
 ```python
-client = Axonium(client_id=..., client_secret=...)   # or AXONIUM_CLIENT_ID / _SECRET
+client = Axonium(client_id=..., client_secret=...)  # or AXONIUM_CLIENT_ID / _SECRET
 ```
 
 > **The default addresses are provisional.** The platform has not moved to its cloud host yet, so
