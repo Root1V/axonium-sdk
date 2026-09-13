@@ -145,6 +145,13 @@ No third-party dependencies: standard library only.
 
 ## Rust
 
+### 0.2.0
+
+- **Spans and events behind a `tracing` feature**, off by default so the crate stays free of the
+  dependency for anyone tracing with something else. Each attempt carries method, path, model,
+  status, attempt, duration and the gateway's correlation IDs. Prompts, completions and credentials
+  are never emitted, pinned by a test that fails if the crate is changed to emit any.
+
 ### 0.1.0
 
 First release. Core implemented: chat, streaming with cancellation on drop, embeddings, images, both credential
@@ -154,8 +161,8 @@ pass. Structured logging, a tracing hook and publication to crates.io remain.
 `Config` and `Client` redact the client secret from `Debug`, which a derived implementation printed
 in full.
 
-**Not in this release, and a crates.io version cannot be replaced:** structured logging, a tracing
-hook, and reassembly of streamed tool calls. See the crate README.
+**Not in 0.1.0, and a crates.io version cannot be replaced:** structured logging, a tracing hook,
+and reassembly of streamed tool calls. The first two arrived in `0.2.0`.
 
 ---
 

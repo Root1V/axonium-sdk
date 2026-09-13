@@ -39,6 +39,7 @@ mod client;
 mod config;
 mod error;
 mod inference;
+mod observability;
 mod retry;
 mod stream;
 mod types;

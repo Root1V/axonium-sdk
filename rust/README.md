@@ -89,19 +89,34 @@ Unset fields fall back to `AXONIUM_AUTH_BASE_URL`, `AXONIUM_GATEWAY_BASE_URL`,
 `AXONIUM_VERIFY_MODALITY`. A missing required setting fails at construction, naming both the field
 and the variable that can supply it.
 
-## What 0.1.0 does not have
+## Observability
+
+Off by default, behind a feature, so the crate stays free of a tracing dependency for anyone who
+traces with something else or not at all:
+
+```toml
+axonium = { version = "0.2", features = ["tracing"] }
+```
+
+With it on, each operation opens a span and each attempt emits an event carrying `method`, `path`,
+`model`, `status`, `attempt`, `duration_ms` and the gateway's `request_id`, `trace_id` and
+`instance_id`. Attribute names follow the GenAI semantic conventions, so the spans are readable by
+tooling that already understands LLM traffic.
+
+**Prompts, completions and credentials are never emitted, and there is no option to enable it.**
+Correlating a request with the platform's traces needs the IDs, not the content — and a library
+that can be configured to log prompts is how prompts reach a collector nobody audited. A test
+fails if the crate is changed to emit any.
+
+## What 0.2.0 does not have
 
 Stated here rather than discovered, because a crates.io version can be yanked but never replaced.
 
-- **No structured logging and no tracing hook.** The Go SDK has both; this does not yet. Nothing is
-  emitted anywhere, so there is no way to see what a call did beyond its return value.
 - **Streamed tool calls are not reassembled.** The fragments reach you as they arrive, keyed by
   `index`, with the identity only in the first — joining them is yours to do for now.
-- **Not published to crates.io as a stable API.** `0.1.x` is where the surface settles.
-
-Everything else — chat, streaming with cancellation, embeddings, images, both credential modes,
-idempotency, instance pinning, the error taxonomy — is implemented and pinned by the shared
-contract corpus.
+- **The surface is still `0.x`.** It is complete against the current gateway contract, but the
+  tri-party coordination this SDK is built inside keeps surfacing things, and changing shape before
+  `1.0` costs a consumer far less than after.
 
 ## Development
 

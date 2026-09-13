@@ -180,11 +180,22 @@ impl Client {
             })));
         }
 
+        let op = crate::observability::Operation::start(
+            crate::observability::operation_name(path),
+            &opts.model,
+        );
+        let method = if body.is_some() { "POST" } else { "GET" };
+
         let mut attempt = 1u32;
         loop {
-            match self.attempt(path, body, opts).await {
+            let started = std::time::Instant::now();
+            let outcome = self.attempt(path, body, opts).await;
+            record(&op, method, path, opts, attempt, started, &outcome);
+
+            match outcome {
                 Ok(pair) => {
                     self.cooldowns.clear(&key);
+                    op.record_response(&pair.1);
                     return Ok(pair);
                 }
                 Err(Error::Api(api)) => {
@@ -312,6 +323,35 @@ impl Client {
             error.hint = format!("Scope check: the token holds {}.", held.join(" "));
         }
     }
+}
+
+/// Emits one record per attempt, with the status taken from the response or from a typed error so
+/// a failure is reported with the code that caused it rather than as a bare failure.
+fn record(
+    op: &crate::observability::Operation,
+    method: &str,
+    path: &str,
+    opts: &CallOptions,
+    attempt: u32,
+    started: std::time::Instant,
+    outcome: &Result<(reqwest::Response, ResponseMeta)>,
+) {
+    let blank = ResponseMeta::default();
+    let (status, meta, error) = match outcome {
+        Ok((response, meta)) => (response.status().as_u16(), meta, None),
+        Err(Error::Api(api)) => (api.status, &blank, Some(api.to_string())),
+        Err(other) => (0, &blank, Some(other.to_string())),
+    };
+    op.record_attempt(&crate::observability::AttemptRecord {
+        method,
+        path,
+        model: &opts.model,
+        status,
+        attempt,
+        elapsed: started.elapsed(),
+        meta,
+        error: error.as_deref(),
+    });
 }
 
 /// Reads `Retry-After`, which may be delta-seconds or an HTTP date.

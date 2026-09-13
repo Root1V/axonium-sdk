@@ -1,6 +1,6 @@
 [package]
 name = "axonium"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Rust SDK for the Prometheus Gateway inference API"
@@ -17,6 +17,14 @@ include = ["src/**/*", "tests/**/*", "README.md", "LICENSE", "Cargo.toml"]
 # Unlike the Go SDK, which gets by on the standard library alone, Rust has neither HTTP nor JSON in
 # std. These four are the minimum, all of them ubiquitous in the ecosystem, and rustls is chosen
 # over native-tls so building this never depends on a system OpenSSL.
+[features]
+default = []
+# Emits spans and events through the `tracing` facade. Off by default so the crate stays free of
+# it for consumers who trace with something else or not at all -- the same reason the Go SDK takes
+# an interface instead of an OpenTelemetry dependency, and the same shape as Python's
+# `axonium[otel]` extra.
+tracing = ["dep:tracing"]
+
 [dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
@@ -25,8 +33,11 @@ tokio = { version = "1", features = ["time", "sync"] }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 base64 = "0.22"
 httpdate = "1"
+tracing = { version = "0.1", optional = true }
 bytes = "1.12.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 wiremock = "0.6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
