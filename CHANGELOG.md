@@ -5,9 +5,10 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ## Python
 
-### 1.0.0rc2
+### 1.0.0rc3
 
-Everything learned from running `rc1` against a live deployment and from three rounds of
+`rc2` reached TestPyPI missing six error exports and was replaced rather than patched, since a
+version is never reusable. Everything learned from running `rc1` against a live deployment and from three rounds of
 coordination with the platform team. No breaking change to code written against `rc1`; one
 behaviour change worth reading.
 
