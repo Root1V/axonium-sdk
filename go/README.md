@@ -2,11 +2,11 @@
 
 Go SDK for the Prometheus Gateway inference API.
 
-> **Status: v0.1.0.** Streaming with real cancellation, both credential modes, idempotency keys,
+> **Status: v0.2.0.** Streaming with real cancellation, both credential modes, idempotency keys,
 > instance pinning, the full error taxonomy and the shared contract corpus — all implemented and
-> tested, with 24 of 24 contract cases replaying the same recorded wire bytes the Python SDK does.
+> tested, with 25 of 25 contract cases replaying the same recorded wire bytes the Python SDK does.
 >
-> The version is `0.1.0` rather than `1.0.0` deliberately. The surface is complete against the
+> The version is `0.x` rather than `1.0.0` deliberately. The surface is complete against the
 > current gateway contract and is not going to churn for its own sake, but the tri-party
 > coordination this SDK is built inside keeps surfacing things — two error types were split and
 > streaming idempotency arrived in a single week. If something there requires changing this
@@ -60,6 +60,29 @@ for stream.Next() {
 }
 return stream.Err()
 ```
+
+### Streamed tool calls
+
+Tool calls arrive split across as many deltas as it takes — `{`, `"`, `city` — and the fragments
+are individually invalid JSON. The SDK reassembles them, keyed by the wire `index` (the identity
+arrives only in the first fragment, and `id` never repeats), and hands back **exactly the shape a
+non-streaming completion returns**:
+
+```go
+for stream.Next() {
+}
+if err := stream.Err(); err != nil {
+	return err
+}
+for _, call := range stream.ToolCalls() {
+	fmt.Printf("%v\n", call) // map[id:... type:function function:map[name:... arguments:...]]
+}
+```
+
+`arguments` stays a JSON *string* in both cases rather than a decoded object, so the same code
+handles streaming and non-streaming. A stream that stopped on a `finish_reason` of `length` leaves
+a truncated `arguments` that will not parse — check the finish reason before decoding.
+
 
 **Always close the stream.** Closing is what propagates cancellation to the gateway and on to
 Prometheus, which stops generating and frees the backend slot. A stream that is merely abandoned

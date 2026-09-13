@@ -2,10 +2,10 @@
 
 Rust SDK for the Prometheus Gateway inference API.
 
-> **Status: 0.1.0, in progress.** Chat, streaming with cancellation, embeddings, images, both
-> credential modes, idempotency keys, instance pinning and the full error taxonomy are implemented,
-> and all 24 shared contract cases replay against the same recorded wire bytes the Python and Go
-> SDKs use. Not yet published to crates.io.
+> **Status: 0.2.0, published to crates.io.** Chat, streaming with cancellation, embeddings,
+> images, both credential modes, idempotency keys, instance pinning and the full error taxonomy are
+> implemented, and all 25 shared contract cases replay against the same recorded wire bytes the
+> Python and Go SDKs use. Structured logging and an optional tracing hook are in.
 
 Requires Rust 1.75+. Async, on any runtime — `tokio` is used for timers only.
 
@@ -40,6 +40,28 @@ while let Some(chunk) = stream.next().await? {
 }
 println!("{:?}", stream.usage());
 ```
+
+### Streamed tool calls
+
+Tool calls arrive split across as many deltas as it takes — `{`, `"`, `city` — and the fragments
+are individually invalid JSON. The SDK reassembles them, keyed by the wire `index` (the identity
+arrives only in the first fragment, and `id` never repeats), and hands back **exactly the shape a
+non-streaming completion returns**:
+
+```rust
+let mut stream = client.chat_stream(&request).await?;
+while stream.next().await?.is_some() {}
+for call in stream.tool_calls() {
+    let name = call["function"]["name"].as_str().unwrap_or_default();
+    let args: Value = serde_json::from_str(
+        call["function"]["arguments"].as_str().unwrap_or_default(),
+    )?;
+}
+```
+
+`arguments` stays a JSON *string* in both cases rather than a decoded object, so the same code
+handles streaming and non-streaming. A stream that stopped on a `finish_reason` of `length` leaves
+a truncated `arguments` that will not parse — check the finish reason before decoding.
 
 **Dropping the stream cancels the request**, which the gateway passes to Prometheus, which stops
 generating and frees the backend slot. An abandoned stream stops costing money — but only if you
@@ -108,12 +130,10 @@ Correlating a request with the platform's traces needs the IDs, not the content 
 that can be configured to log prompts is how prompts reach a collector nobody audited. A test
 fails if the crate is changed to emit any.
 
-## What 0.2.0 does not have
+## What this release does not have
 
 Stated here rather than discovered, because a crates.io version can be yanked but never replaced.
 
-- **Streamed tool calls are not reassembled.** The fragments reach you as they arrive, keyed by
-  `index`, with the identity only in the first — joining them is yours to do for now.
 - **The surface is still `0.x`.** It is complete against the current gateway contract, but the
   tri-party coordination this SDK is built inside keeps surfacing things, and changing shape before
   `1.0` costs a consumer far less than after.

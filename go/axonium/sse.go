@@ -3,6 +3,7 @@ package axonium
 import (
 	"bufio"
 	"encoding/json"
+	"sort"
 	"strings"
 )
 
@@ -62,6 +63,7 @@ type accumulator struct {
 	reasoning strings.Builder
 	usage     *Usage
 	timings   map[string]any
+	toolCalls map[int]*partialToolCall
 	done      bool
 }
 
@@ -92,6 +94,11 @@ func (a *accumulator) feed(ev sseEvent, meta ResponseMeta) (*ChatCompletionChunk
 	}
 	if chunk.Timings != nil {
 		a.timings = chunk.Timings
+	}
+	for _, fragment := range chunk.ToolCallFragments() {
+		if m, ok := fragment.(map[string]any); ok {
+			a.absorbToolCall(m)
+		}
 	}
 	return chunk, nil
 }
@@ -158,4 +165,96 @@ func asInt(v any) int {
 // carrying several data: lines, which the SSE format permits.
 func scanSSE(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	return bufio.ScanLines(data, atEOF)
+}
+
+// Tool calls arrive in pieces that are not individually valid JSON. A call is split across as many
+// deltas as it takes -- "{", "\"", "city" -- and only the first carries the identity (id, type,
+// function.name). index is the correlation key, because id never repeats. They are reassembled
+// here so a caller never has to.
+
+// partialToolCall is one tool call being assembled from its fragments.
+type partialToolCall struct {
+	id        string
+	kind      string
+	name      string
+	arguments strings.Builder
+}
+
+// absorb folds one wire fragment in.
+//
+// Identity is recorded the first time it is seen rather than overwritten: id is documented never
+// to repeat, so a second, different one would be a correlation bug, and adopting it silently would
+// repoint a call that is already accumulating arguments.
+func (p *partialToolCall) absorb(fragment map[string]any) {
+	if p.id == "" {
+		p.id, _ = fragment["id"].(string)
+	}
+	if p.kind == "" {
+		p.kind, _ = fragment["type"].(string)
+	}
+
+	function, ok := fragment["function"].(map[string]any)
+	if !ok {
+		return
+	}
+	if p.name == "" {
+		p.name, _ = function["name"].(string)
+	}
+	if piece, ok := function["arguments"].(string); ok {
+		p.arguments.WriteString(piece)
+	}
+}
+
+// assemble renders the call in the shape a non-streaming completion returns.
+//
+// arguments stays a JSON string, exactly as non-streaming delivers it, rather than being decoded
+// here. That is what lets one piece of caller code handle both, and it means a stream cut short by
+// max_tokens still hands back the fragment that did arrive instead of failing or dropping the
+// call. An identity field the backend never sent comes back as the zero value.
+func (p *partialToolCall) assemble() map[string]any {
+	return map[string]any{
+		"id":       p.id,
+		"type":     p.kind,
+		"function": map[string]any{"name": p.name, "arguments": p.arguments.String()},
+	}
+}
+
+func (a *accumulator) absorbToolCall(fragment map[string]any) {
+	index, ok := numeric(fragment["index"])
+	if !ok {
+		// Every backend seen so far sends it, and it is the only way to tell two concurrent calls
+		// apart. Falling back to slot 0 keeps the single-call case working instead of dropping the
+		// call outright, which is the only case a stream without indices can represent
+		// unambiguously anyway.
+		index = 0
+	}
+	key := int(index)
+	if a.toolCalls == nil {
+		a.toolCalls = map[int]*partialToolCall{}
+	}
+	if a.toolCalls[key] == nil {
+		a.toolCalls[key] = &partialToolCall{}
+	}
+	a.toolCalls[key].absorb(fragment)
+}
+
+// finalToolCalls returns the calls assembled so far, in the non-streaming shape.
+//
+// Ordered by the wire index rather than by arrival, so a backend that interleaves two calls still
+// yields them in the order the model asked for.
+func (a *accumulator) finalToolCalls() []any {
+	if len(a.toolCalls) == 0 {
+		return nil
+	}
+	indices := make([]int, 0, len(a.toolCalls))
+	for index := range a.toolCalls {
+		indices = append(indices, index)
+	}
+	sort.Ints(indices)
+
+	calls := make([]any, 0, len(indices))
+	for _, index := range indices {
+		calls = append(calls, a.toolCalls[index].assemble())
+	}
+	return calls
 }

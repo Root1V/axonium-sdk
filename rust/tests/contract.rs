@@ -274,6 +274,18 @@ async fn contract_corpus() {
                     if let Some(want) = case["expect"]["content"].as_str() {
                         assert_eq!(stream.content(), want, "{id}: content");
                     }
+                    // Absent on every case but the two tool-call ones, where it is compared in
+                    // full. Asserting the empty case too is what stops a reassembler from
+                    // inventing calls out of a stream that carried none.
+                    let want_calls = case["expect"]
+                        .get("tool_calls")
+                        .cloned()
+                        .unwrap_or_else(|| Value::Array(Vec::new()));
+                    assert_eq!(
+                        Value::Array(stream.tool_calls()),
+                        want_calls,
+                        "{id}: tool calls"
+                    );
                     match (case["expect"].get("usage"), stream.usage()) {
                         (Some(Value::Null) | None, usage) => {
                             assert!(usage.is_none(), "{id}: expected no usage, got {usage:?}")

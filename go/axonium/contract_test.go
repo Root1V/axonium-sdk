@@ -45,6 +45,7 @@ type contractCase struct {
 		Content         *string        `json:"content"`
 		Chunks          *int           `json:"chunks"`
 		Usage           map[string]any `json:"usage"`
+		ToolCalls       []any          `json:"tool_calls"`
 		PartialContent  *string        `json:"partial_content"`
 		ErrorTypeSuffix string         `json:"error_type_suffix"`
 		Retryable       *bool          `json:"retryable"`
@@ -282,6 +283,13 @@ func runStreamCase(t *testing.T, client *Client, c contractCase) {
 	if c.Expect.Content != nil && stream.Content() != *c.Expect.Content {
 		t.Errorf("content: got %q, want %q", stream.Content(), *c.Expect.Content)
 	}
+	// Compared through JSON so the manifest's numbers and this SDK's map values are held to the
+	// same representation, and so the empty case is asserted too: absent on every case but the two
+	// tool-call ones, which is what stops a reassembler from inventing calls out of a stream that
+	// carried none.
+	if got, want := asJSON(t, stream.ToolCalls()), asJSON(t, c.Expect.ToolCalls); got != want {
+		t.Errorf("tool_calls:\n got %s\nwant %s", got, want)
+	}
 
 	usage := stream.Usage()
 	if c.Expect.Usage == nil {
@@ -458,4 +466,18 @@ func equalJSON(got, want any) bool {
 		return out
 	}
 	return reflect.DeepEqual(normalize(got), normalize(want))
+}
+
+// asJSON renders a value canonically for comparison. Go's map iteration order is randomised, so
+// encoding/json's sorted keys are what make two maps comparable as text at all.
+func asJSON(t *testing.T, v any) string {
+	t.Helper()
+	if v == nil {
+		v = []any{}
+	}
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("could not encode %v: %v", v, err)
+	}
+	return string(encoded)
 }

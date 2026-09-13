@@ -155,3 +155,116 @@ func TestEmptyTimingsProduceNoUsage(t *testing.T) {
 		t.Error("all-zero timings are a backend that reported nothing, not a free generation")
 	}
 }
+
+// Reassembly rules the recordings cannot exercise.
+//
+// The two recorded cases in the contract manifest cover what the gateway actually emits, and they
+// are what pins the behaviour. These use constructed input -- said plainly, because a hand-written
+// stream proves only that the code does what it was written to do -- to cover two defensive rules
+// the wire has never yet violated: fragments arriving out of index order, and a second,
+// contradictory identity for a call already in flight.
+
+func assembleToolCalls(groups [][]map[string]any) []any {
+	var acc accumulator
+	for _, group := range groups {
+		for _, fragment := range group {
+			acc.absorbToolCall(fragment)
+		}
+	}
+	return acc.finalToolCalls()
+}
+
+// toolCallHead builds a first fragment: the only one that carries identity.
+func toolCallHead(index int, id, name, arguments string) map[string]any {
+	return map[string]any{
+		"index":    float64(index), // JSON numbers decode as float64, so fragments arrive this way
+		"id":       id,
+		"type":     "function",
+		"function": map[string]any{"name": name, "arguments": arguments},
+	}
+}
+
+// toolCallMore builds a continuation fragment: index plus a slice of the arguments string.
+func toolCallMore(index int, arguments string) map[string]any {
+	return map[string]any{
+		"index":    float64(index),
+		"function": map[string]any{"arguments": arguments},
+	}
+}
+
+func toolCallField(t *testing.T, call any, path ...string) string {
+	t.Helper()
+	current := call
+	for _, key := range path {
+		m, ok := current.(map[string]any)
+		if !ok {
+			t.Fatalf("%v is not an object at %q", call, key)
+		}
+		current = m[key]
+	}
+	text, ok := current.(string)
+	if !ok {
+		t.Fatalf("%v at %v is %T, want string", call, path, current)
+	}
+	return text
+}
+
+func TestToolCallsComeBackInIndexOrderNotArrivalOrder(t *testing.T) {
+	// The gateway groups by index today, so this ordering has never been observed. Relying on
+	// arrival order would work right up until a backend interleaves, and then it would hand the
+	// caller two calls with their arguments swapped rather than failing loudly.
+	calls := assembleToolCalls([][]map[string]any{
+		{toolCallHead(1, "b", "second", "{}")},
+		{toolCallHead(0, "a", "first", "{}")},
+	})
+	if len(calls) != 2 {
+		t.Fatalf("got %d calls, want 2", len(calls))
+	}
+	if got := []string{toolCallField(t, calls[0], "id"), toolCallField(t, calls[1], "id")}; got[0] != "a" || got[1] != "b" {
+		t.Errorf("ids: got %v, want [a b]", got)
+	}
+}
+
+func TestInterleavedToolCallArgumentsStayWithTheirOwnCall(t *testing.T) {
+	calls := assembleToolCalls([][]map[string]any{
+		{toolCallHead(0, "a", "f", `{"x":`)},
+		{toolCallHead(1, "b", "f", `{"y":`)},
+		{toolCallMore(0, "1}")},
+		{toolCallMore(1, "2}")},
+	})
+	if len(calls) != 2 {
+		t.Fatalf("got %d calls, want 2", len(calls))
+	}
+	for i, want := range []string{`{"x":1}`, `{"y":2}`} {
+		if got := toolCallField(t, calls[i], "function", "arguments"); got != want {
+			t.Errorf("call %d arguments: got %q, want %q", i, got, want)
+		}
+	}
+}
+
+func TestAContradictoryToolCallIDDoesNotRepointTheCall(t *testing.T) {
+	// id is documented never to repeat, so a second one for the same index is a platform bug.
+	// Adopting it would move arguments already accumulated onto a different call, which is worse
+	// than ignoring it: the caller would execute the right arguments against the wrong id.
+	fragment := toolCallMore(0, "}")
+	fragment["id"] = "contradiction"
+	calls := assembleToolCalls([][]map[string]any{
+		{toolCallHead(0, "original", "f", "{")},
+		{fragment},
+	})
+	if len(calls) != 1 {
+		t.Fatalf("got %d calls, want 1", len(calls))
+	}
+	if got := toolCallField(t, calls[0], "id"); got != "original" {
+		t.Errorf("id: got %q, want %q", got, "original")
+	}
+	if got := toolCallField(t, calls[0], "function", "arguments"); got != "{}" {
+		t.Errorf("arguments: got %q, want %q", got, "{}")
+	}
+}
+
+func TestAStreamWithNoToolCallsReportsNone(t *testing.T) {
+	if calls := assembleToolCalls(nil); calls != nil {
+		t.Errorf("got %v, want no calls", calls)
+	}
+}

@@ -206,6 +206,9 @@ class TestStreamingCases:
             assert stream.content == expect["content"], case["id"]
             assert len(chunks) == expect["chunks"], case["id"]
             assert_usage(stream.usage(), expect["usage"], case["id"])
+            # Absent on every case but one; asserting the empty list elsewhere is what stops a
+            # reassembler from inventing calls out of a stream that carried none.
+            assert stream.tool_calls == expect.get("tool_calls", []), case["id"]
 
     @respx.mock
     @pytest.mark.parametrize("case", STREAMING, ids=[c["id"] for c in STREAMING])
@@ -227,6 +230,9 @@ class TestStreamingCases:
             assert stream.content == expect["content"], case["id"]
             assert len(chunks) == expect["chunks"], case["id"]
             assert_usage(stream.usage(), expect["usage"], case["id"])
+            # Absent on every case but one; asserting the empty list elsewhere is what stops a
+            # reassembler from inventing calls out of a stream that carried none.
+            assert stream.tool_calls == expect.get("tool_calls", []), case["id"]
 
 
 class TestErrorCases:
