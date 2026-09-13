@@ -208,9 +208,12 @@ Anything you need to log about the content, you already have at the call site.
 client = Axonium(otel_enabled=True)  # or AXONIUM_OTEL_ENABLED=true
 ```
 
-Spans only — exporters and providers are your application's to configure. Trace context is not
-propagated outbound, because the gateway never reads `traceparent` in any mode; correlation runs
-inbound instead, via the IDs above.
+**Trace context is not propagated outbound, and this is measured rather than assumed.** The
+platform runs in what its guide calls OTEL mode: it starts its own trace and returns that id,
+specifically so a client cannot forge trace context. Verified against the deployment — a valid
+UUID4 sent as `X-Trace-ID` is discarded, and `traceparent` is never read in either mode. So the SDK
+offers no way to supply one: a parameter that silently does nothing is worse than its absence.
+Correlation runs the other way, through the `X-Trace-ID` the gateway returns on every response.
 
 **Scope diagnostics.** A `403` is matched against the scopes your token was actually granted, so
 the error says what is missing rather than just that access was refused:

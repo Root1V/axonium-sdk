@@ -42,9 +42,9 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-74 | Rust: structured logging and a tracing hook | 📋 | Go has both; parity before calling Rust complete |
 | AXO-75 | Publish the Rust crate to crates.io | 📋 | Name verified free; needs the owner account and a trusted publisher |
 | AXO-73 | Ask for a per-request usage lookup without `admin:read` | 📋 | `termination_reason` is invisible to the caller; both usage endpoints need admin |
-| AXO-29 | Optional caller-supplied `X-Trace-ID` | 📋 | Only adopted in legacy-mode deployments, and only as UUID4 |
+| AXO-29 | Optional caller-supplied `X-Trace-ID` | 🚫 | Measured: the official platform is in OTEL mode and discards it. A parameter that does nothing is worse than none |
 | AXO-30 | Error-catalog cases in the contract manifest | ✅ | 4 recorded failures, asserting suffix, retryability and correlation IDs |
-| AXO-31 | Refresh GitHub Actions off deprecated Node 20 | 📋 | Confirmed live: the release run warns on checkout@v4, upload-artifact@v4, setup-uv@v5 |
+| AXO-31 | Refresh GitHub Actions off deprecated Node 20 | 🚧 | Bumped; verifying by running every workflow |
 | AXO-32 | Langfuse integration | 🚫 | Vendor observability belongs to the platform |
 | AXO-33 | `llm-guard` PII masking | 🚫 | Heavyweight, English-only, and was broken |
 | AXO-34 | LangChain / LangGraph bridges | 🚫 | Out of scope for an API client |
