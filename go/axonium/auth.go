@@ -165,7 +165,7 @@ func (m *tokenManager) scopes() []string {
 	return m.token.scope
 }
 
-// Claims returns the claims of the cached token, or the zero value if none has been obtained.
+// claims returns the claims of the cached token, or the zero value if none has been obtained.
 func (m *tokenManager) claims() TokenClaims {
 	m.mu.Lock()
 	defer m.mu.Unlock()

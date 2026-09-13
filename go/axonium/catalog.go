@@ -137,6 +137,10 @@ func (s *ModelsService) Mine(ctx context.Context) (*ModelList, error) {
 }
 
 // Modality sets accepted by each endpoint.
+// knownModalities is every modality this SDK can place. Anything outside it is newer than this
+// build and is not ours to reject.
+var knownModalities = map[string]bool{"text": true, "vision": true, "embedding": true, "image": true}
+
 var (
 	modalitiesChat       = []string{"text", "vision"}
 	modalitiesEmbeddings = []string{"embedding"}
@@ -168,7 +172,11 @@ func (c *Client) checkModality(ctx context.Context, model string, accepted []str
 		return fmt.Errorf("%w: model %q is not in the gateway's catalog; known models: %s",
 			ErrInvalidRequest, model, strings.Join(catalog.IDs(), ", "))
 	}
-	if found.Modality == "" {
+	// A modality this SDK does not recognise is left alone, and so is one the gateway did not
+	// report. The platform added two modalities in a single week; a guard rail that started
+	// rejecting valid requests each time they add another would be worse than no guard rail. Only
+	// a modality we KNOW belongs to a different endpoint is refused.
+	if found.Modality == "" || !knownModalities[found.Modality] {
 		return nil
 	}
 	for _, a := range accepted {

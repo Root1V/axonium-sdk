@@ -145,6 +145,24 @@ func (c *Client) Close() error {
 // which is the point: the SDK holds no secret there.
 func (c *Client) Config() Config { return *c.config }
 
+// TokenClaims reports what the token this client is using says about itself: its subject, the
+// scopes it was granted, and when it expires.
+//
+// Decoded without verifying the signature, which is fine because nothing here makes an
+// access-control decision from it -- the gateway is the sole authority on what a token may do.
+// Use it to answer "what am I allowed to call" before a 403 rather than after one.
+//
+// Returns the zero value in governed mode, and that is the point rather than a gap: there the SDK
+// holds no token, and reporting one it saw a moment ago would describe something the provider may
+// already have replaced. Read Models.Mine instead, which asks the gateway.
+func (c *Client) TokenClaims() TokenClaims {
+	manager, ok := c.auth.(*tokenManager)
+	if !ok {
+		return TokenClaims{}
+	}
+	return manager.claims()
+}
+
 // LastRateLimit returns the rate-limit budget from the most recent response that carried one, so a
 // caller can slow down before a 429 rather than only reacting to one.
 func (c *Client) LastRateLimit() *RateLimitSnapshot {

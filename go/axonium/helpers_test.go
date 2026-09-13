@@ -77,3 +77,8 @@ func problemJSON(w http.ResponseWriter, status int, suffix, detail string) {
 		"trace_id":   "trace-1",
 	})
 }
+
+// b64 is the URL-safe, unpadded encoding a JWT segment uses.
+func b64(s string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(s))
+}
