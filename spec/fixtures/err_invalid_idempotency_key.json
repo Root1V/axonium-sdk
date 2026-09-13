@@ -1,9 +1,1 @@
-{
-  "type": "https://prometheus.internal/errors/invalid-idempotency-key",
-  "title": "Invalid Idempotency Key",
-  "status": 400,
-  "detail": "The Idempotency-Key is malformed: it is 300 characters and the limit is 255.",
-  "instance": "/v1/chat/completions",
-  "request_id": "f8828324-1ede-44fc-938f-04c2d1b260d4",
-  "trace_id": "f516c6335ae0bff53b0ed04ca3a3f022"
-}
+{"type":"https://prometheus.internal/errors/invalid-idempotency-key","title":"Invalid Idempotency Key","status":400,"detail":"Idempotency-Key must be at most 255 characters.","instance":"/v1/chat/completions","request_id":"1de6b83a-902e-40f1-acbe-88a15048e120","trace_id":"cd6d6bf6d6134645715e4cbed490a9c2"}

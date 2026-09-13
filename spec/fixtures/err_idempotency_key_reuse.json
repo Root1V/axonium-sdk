@@ -1,9 +1,1 @@
-{
-  "type": "https://prometheus.internal/errors/idempotency-key-reuse",
-  "title": "Idempotency Key Reuse",
-  "status": 409,
-  "detail": "This Idempotency-Key was already used for a different request. Use a fresh key per logical request.",
-  "instance": "/v1/chat/completions",
-  "request_id": "f8828324-1ede-44fc-938f-04c2d1b260d4",
-  "trace_id": "f516c6335ae0bff53b0ed04ca3a3f022"
-}
+{"type":"https://prometheus.internal/errors/idempotency-key-reuse","title":"Idempotency Conflict","status":409,"detail":"Idempotency-Key '5d116f3f-b33f-4afe-82ca-cef63b53efc7' was already used for a different request. A key identifies one request; reuse it only to retry that same one.","instance":"/v1/chat/completions","request_id":"99a28256-4f54-4c2e-9244-1fb017eacd76","trace_id":"66a9cccb2845eb43e60962fdf8f43dd4"}

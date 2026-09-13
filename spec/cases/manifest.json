@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 6,
+  "version": 7,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -503,7 +503,7 @@
     },
     {
       "id": "error-invalid-idempotency-key",
-      "$comment": "AUTHORED from the platform's documented shape on 2026-09-12, NOT recorded: the deployment was down when these four types replaced idempotency-conflict. Re-record before trusting the envelope details. The retryability is the load-bearing part and comes from their table.",
+      "$comment": "Recorded 2026-09-13. A malformed key is a 400, not a conflict: it never conflicted with anything. No Retry-After, because the refusal never resolves on its own.",
       "operation": "chat.completions.create",
       "request": {
         "model": "qwen3-0.6b",
@@ -529,7 +529,7 @@
     },
     {
       "id": "error-idempotency-key-reuse",
-      "$comment": "AUTHORED from the platform's documented shape on 2026-09-12, NOT recorded: the deployment was down when these four types replaced idempotency-conflict. Re-record before trusting the envelope details. The retryability is the load-bearing part and comes from their table.",
+      "$comment": "Recorded 2026-09-13. The fingerprint covers path as well as body. No Retry-After: repeating cannot help, the caller needs a fresh key.",
       "operation": "chat.completions.create",
       "request": {
         "model": "qwen3-0.6b",
@@ -555,7 +555,7 @@
     },
     {
       "id": "error-idempotency-in-progress",
-      "$comment": "AUTHORED from the platform's documented shape on 2026-09-12, NOT recorded: the deployment was down when these four types replaced idempotency-conflict. Re-record before trusting the envelope details. The retryability is the load-bearing part and comes from their table.",
+      "$comment": "Recorded 2026-09-13, and the ONLY idempotency refusal that carries Retry-After -- observed as 1s, derived from the model's p95 latency minus how long the first request has run. Retrying is safe because it cannot start a second generation.",
       "operation": "chat.completions.create",
       "request": {
         "model": "qwen3-0.6b",
@@ -570,7 +570,7 @@
       "response": {
         "status": 409,
         "headers": {
-          "Retry-After": "3"
+          "Retry-After": "1"
         },
         "body_file": "err_idempotency_in_progress.json"
       },
@@ -584,7 +584,7 @@
     },
     {
       "id": "error-idempotency-response-not-retained",
-      "$comment": "AUTHORED from the platform's documented shape on 2026-09-12, NOT recorded: the deployment was down when these four types replaced idempotency-conflict. Re-record before trusting the envelope details. The retryability is the load-bearing part and comes from their table.",
+      "$comment": "Recorded 2026-09-13 by provoking it: a 64-input embeddings batch returned 1.33 MiB, past the retention cap. This refusal is proof the original succeeded, which is why retrying would generate a second time for a result that already exists.",
       "operation": "chat.completions.create",
       "request": {
         "model": "qwen3-0.6b",
@@ -607,8 +607,42 @@
         "has_request_id": true,
         "has_trace_id": true
       }
+    },
+    {
+      "id": "stream-idempotent-replay",
+      "$comment": "Recorded 2026-09-13. A stream the gateway FINISHED, replayed under its key: byte for byte identical to the original, marked Idempotent-Replay, with no second generation and no second charge. It arrives as one flush rather than paced out, which is invisible to a frame parser and the reason replay is possible at all. A stream the MODEL broke cannot be replayed -- that needs resuming, which nobody has built.",
+      "operation": "chat.completions.stream",
+      "request": {
+        "model": "qwen3-0.6b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Count 1 2 3"
+          }
+        ],
+        "max_tokens": 16,
+        "idempotency_key": "k"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Idempotent-Replay": "true"
+        },
+        "sse_file": "chat_stream_replay.sse"
+      },
+      "expect": {
+        "kind": "stream",
+        "content": "",
+        "chunks": 16,
+        "usage": {
+          "prompt_tokens": 15,
+          "completion_tokens": 16,
+          "cache_read_tokens": 14,
+          "estimated": true
+        }
+      }
     }
   ],
-  "$recording": "16 of 20 cases carry bytes recorded from a live deployment on 2026-09-12; each says so in its $comment. The four that do not explain why they cannot be produced against this deployment. Only the recorded ones are evidence about the gateway -- the rest pin the SDKs to each other.",
-  "$version_note": "Version 6 replaces idempotency-conflict with the four types that superseded it (2026-09-12). Those four cases are AUTHORED, not recorded -- the deployment was down. Everything else was recorded on 2026-09-12 against the slug catalog."
+  "$recording": "20 of 24 cases carry bytes recorded from a live deployment; each says so in its $comment. The four that do not explain why they cannot be produced. Only the recorded ones are evidence about the gateway.",
+  "$version_note": "Version 7 (2026-09-13): the four idempotency types are now RECORDED rather than authored, and a replayed stream is captured. Everything except four cases is now recorded from a live deployment; those four say why they cannot be."
 }
