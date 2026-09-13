@@ -1,0 +1,162 @@
+//! Configuration.
+//!
+//! No host, port or certificate is baked into this crate. Base URLs, credentials and TLS trust are
+//! deployment-specific and always supplied by the caller, either through [`Config`] or through
+//! `AXONIUM_*` environment variables. A missing required setting fails at construction, naming
+//! both the field and the variable that can supply it.
+
+use std::time::Duration;
+
+use crate::error::{Error, Result};
+
+pub(crate) const ENV_PREFIX: &str = "AXONIUM_";
+
+/// The gateway's own backend-forwarding timeout for non-streaming requests. A client-side timeout
+/// below this is a known failure mode: the backend keeps computing after the client gives up.
+const GATEWAY_NON_STREAMING_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// Per-phase timeouts.
+///
+/// Defaults follow the gateway's own limits. Image generation legitimately takes minutes, so the
+/// non-streaming timeout is deliberately long.
+#[derive(Debug, Clone, Copy)]
+pub struct Timeouts {
+    pub connect: Duration,
+    /// Bounds a whole non-streaming call.
+    pub request: Duration,
+    /// Bounds a streaming call, kept above the gateway's own 120s backend read timeout.
+    pub stream: Duration,
+    /// Bounds a token request. Deliberately short: the auth-service does no inference, so it must
+    /// not inherit the long timeout image generation needs.
+    pub auth: Duration,
+}
+
+impl Default for Timeouts {
+    fn default() -> Self {
+        Self {
+            connect: Duration::from_secs(10),
+            request: GATEWAY_NON_STREAMING_TIMEOUT,
+            stream: Duration::from_secs(180),
+            auth: Duration::from_secs(30),
+        }
+    }
+}
+
+/// Resolved client configuration. Unset fields fall back to `AXONIUM_*`.
+#[derive(Debug, Clone, Default)]
+pub struct Config {
+    /// Base URL of the auth-service that issues OAuth2 tokens.
+    pub auth_base_url: String,
+    /// Base URL of the gateway serving the `/v1/` inference API.
+    pub gateway_base_url: String,
+    /// Required in autonomous mode. Absent in governed mode, where a caller-supplied token
+    /// provider is the authority and this crate never sees a secret.
+    pub client_id: String,
+    pub client_secret: String,
+    /// Optional space-separated scope request. The effective scope is the intersection with what
+    /// the account is allowed, and asking for one it lacks is an error rather than a downgrade --
+    /// so always read the granted scope back from the token.
+    pub scope: String,
+    /// Path to a CA bundle, for deployments fronted by a self-signed certificate.
+    pub ca_bundle: String,
+    /// Check a model's modality against the endpoint before sending. Costs one catalog request per
+    /// client, which is why it is opt-in.
+    pub verify_modality: bool,
+    /// Refresh the token once this fraction of its lifetime has elapsed.
+    pub refresh_ahead_ratio: f64,
+    /// ...or once less than this remains, whichever comes first.
+    pub refresh_ahead_min: Duration,
+    pub timeouts: Timeouts,
+    pub retry: crate::retry::RetryPolicy,
+}
+
+fn env(name: &str) -> String {
+    std::env::var(format!("{ENV_PREFIX}{name}")).unwrap_or_default()
+}
+
+impl Config {
+    /// Fills unset fields from the environment and validates the result.
+    ///
+    /// Returns whether the credentials were named on the struct rather than read from the
+    /// environment. That is an observation about how this config was built, not a setting, so it
+    /// is returned rather than stored: a private field on a public struct would break
+    /// `..Default::default()` for every consumer.
+    pub(crate) fn resolve(mut self) -> Result<(Self, bool)> {
+        // Whether credentials were named explicitly, as opposed to merely being in the
+        // environment. Asking for both modes by name is a contradiction; credentials that happen
+        // to be in the environment are discarded instead, because refusing to start there would
+        // make the governed mode the hardest one to deploy.
+        let explicit = !self.client_id.is_empty() || !self.client_secret.is_empty();
+
+        for (field, var) in [
+            (&mut self.auth_base_url, "AUTH_BASE_URL"),
+            (&mut self.gateway_base_url, "GATEWAY_BASE_URL"),
+            (&mut self.client_id, "CLIENT_ID"),
+            (&mut self.client_secret, "CLIENT_SECRET"),
+            (&mut self.scope, "SCOPE"),
+            (&mut self.ca_bundle, "CA_BUNDLE"),
+        ] {
+            if field.is_empty() {
+                *field = env(var);
+            }
+        }
+        if !self.verify_modality {
+            self.verify_modality = matches!(env("VERIFY_MODALITY").as_str(), "true" | "1" | "yes");
+        }
+        if self.refresh_ahead_ratio == 0.0 {
+            self.refresh_ahead_ratio = 0.8;
+        }
+        if self.refresh_ahead_min.is_zero() {
+            self.refresh_ahead_min = Duration::from_secs(30);
+        }
+        if self.timeouts.request.is_zero() {
+            self.timeouts = Timeouts::default();
+        }
+        if self.retry.max_attempts == 0 {
+            self.retry = crate::retry::RetryPolicy::default();
+        }
+
+        let mut problems = Vec::new();
+        normalise(
+            &mut self.auth_base_url,
+            "auth_base_url",
+            "AUTH_BASE_URL",
+            &mut problems,
+        );
+        normalise(
+            &mut self.gateway_base_url,
+            "gateway_base_url",
+            "GATEWAY_BASE_URL",
+            &mut problems,
+        );
+        if self.refresh_ahead_ratio <= 0.0 || self.refresh_ahead_ratio > 1.0 {
+            problems.push("refresh_ahead_ratio must be within (0, 1]".to_string());
+        }
+        if !problems.is_empty() {
+            return Err(Error::Configuration(problems.join("; ")));
+        }
+
+        Ok((self, explicit))
+    }
+
+    /// The requested scope as a list, empty when none was requested.
+    pub fn scopes(&self) -> Vec<&str> {
+        self.scope.split_whitespace().collect()
+    }
+}
+
+fn normalise(value: &mut String, field: &str, var: &str, problems: &mut Vec<String>) {
+    if value.is_empty() {
+        problems.push(format!(
+            "{field} is required (set it or export {ENV_PREFIX}{var})"
+        ));
+        return;
+    }
+    if !value.starts_with("http://") && !value.starts_with("https://") {
+        problems.push(format!(
+            "{field} must start with http:// or https:// (from the field or {ENV_PREFIX}{var})"
+        ));
+        return;
+    }
+    *value = value.trim_end_matches('/').to_string();
+}

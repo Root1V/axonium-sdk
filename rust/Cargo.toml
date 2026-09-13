@@ -1,6 +1,6 @@
 [package]
 name = "axonium"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Rust SDK for the Prometheus Gateway inference API"
@@ -10,4 +10,19 @@ keywords = ["llm", "inference", "sdk", "openai"]
 categories = ["api-bindings"]
 publish = false
 
+# Unlike the Go SDK, which gets by on the standard library alone, Rust has neither HTTP nor JSON in
+# std. These four are the minimum, all of them ubiquitous in the ecosystem, and rustls is chosen
+# over native-tls so building this never depends on a system OpenSSL.
 [dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["time", "sync"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+base64 = "0.22"
+httpdate = "1"
+bytes = "1.12.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+wiremock = "0.6"

@@ -1,34 +1,58 @@
 //! Rust SDK for the Prometheus Gateway inference API.
 //!
-//! This crate is a placeholder. The Python SDK under `python/` is being built first as the
-//! reference implementation; this crate will be implemented against the same contract and
-//! validated with the shared fixtures in `spec/` so that both SDKs behave identically.
+//! The SDK is **pure transport**. It speaks the gateway's contract faithfully -- authentication,
+//! retries that cannot double-bill, typed errors, streaming with real cancellation -- and does not
+//! reshape responses into a vocabulary of its own. Normalisation belongs above it, so there is one
+//! implementation of that vocabulary rather than one per language SDK.
 //!
-//! Planned surface:
+//! No host, port or certificate is baked in: every deployment supplies its own, by field or by
+//! `AXONIUM_*` environment variable.
 //!
-//! ```ignore
-//! let client = Axonium::builder()
-//!     .auth_base_url(auth_url)
-//!     .gateway_base_url(gateway_url)
-//!     .credentials(client_id, client_secret)
-//!     .build()?;
+//! ```no_run
+//! # async fn demo() -> axonium::Result<()> {
+//! use axonium::{ChatRequest, Client, Config, Message};
 //!
-//! let models = client.models().list().await?;
-//! let resp = client.chat().completions().create(req).await?;
-//! let mut stream = client.chat().completions().stream(req).await?;
+//! let client = Client::new(Config {
+//!     auth_base_url: "https://auth.example".into(),
+//!     gateway_base_url: "https://gateway.example".into(),
+//!     client_id: "...".into(),
+//!     client_secret: "...".into(),
+//!     ..Default::default()
+//! })?;
+//!
+//! let completion = client
+//!     .chat(&ChatRequest {
+//!         model: "qwen3-0.6b".into(),
+//!         messages: vec![Message::text("user", "Hello")],
+//!         ..Default::default()
+//!     })
+//!     .await?;
+//! println!("{}", completion.content());
+//! # Ok(())
+//! # }
 //! ```
-//!
-//! Implementation notes carried over from the specification:
-//!
-//! - `reqwest` over `tokio`; reqwest does not parse SSE natively, so streaming needs a manual
-//!   byte-stream parser or a crate such as `eventsource-stream`.
-//! - Token cache behind a `tokio::sync::RwLock`, refreshed lazily on the read path with
-//!   double-checked locking to avoid a refresh stampede under concurrent requests. The TTL
-//!   always comes from the token response's `expires_in`, never a hardcoded constant.
-//! - Errors are a typed enum over the gateway's RFC 9457 problem-details envelope, distinct from
-//!   the RFC 6749 error shape returned by the OAuth2 token endpoint.
 
-#![forbid(unsafe_code)]
+mod auth;
+mod catalog;
+mod chat;
+mod client;
+mod config;
+mod error;
+mod inference;
+mod retry;
+mod stream;
+mod types;
 
-/// Crate version, mirroring `Cargo.toml`.
+pub use auth::{decode_claims, TokenClaims, TokenProvider};
+pub use catalog::{Model, ModelList};
+pub use chat::{ChatCompletion, ChatRequest, Choice, Message};
+pub use client::Client;
+pub use config::{Config, Timeouts};
+pub use error::{ApiError, Error, ErrorKind, Result};
+pub use inference::{Embedding, EmbeddingList, EmbeddingRequest, Image, ImageList, ImageRequest};
+pub use retry::RetryPolicy;
+pub use stream::{ChatStream, Chunk};
+pub use types::{RateLimit, ResponseMeta, Usage};
+
+/// This crate's version.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
