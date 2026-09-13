@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 5,
+  "version": 6,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -502,8 +502,8 @@
       }
     },
     {
-      "id": "error-idempotency-conflict",
-      "$comment": "Recorded. Four distinct causes share this type -- a different body, a different endpoint, a request still in flight, and a key over 255 characters -- and only the prose in `detail` tells them apart. None is retried because two must never be and one resolves only by waiting.",
+      "id": "error-invalid-idempotency-key",
+      "$comment": "AUTHORED from the platform's documented shape on 2026-09-12, NOT recorded: the deployment was down when these four types replaced idempotency-conflict. Re-record before trusting the envelope details. The retryability is the load-bearing part and comes from their table.",
       "operation": "chat.completions.create",
       "request": {
         "model": "qwen3-0.6b",
@@ -513,15 +513,96 @@
             "content": "hi"
           }
         ],
-        "idempotency_key": "reused"
+        "idempotency_key": "k"
       },
       "response": {
-        "status": 409,
-        "body_file": "err_idempotency_conflict.json"
+        "status": 400,
+        "body_file": "err_invalid_idempotency_key.json"
       },
       "expect": {
         "kind": "error",
-        "error_type_suffix": "idempotency-conflict",
+        "error_type_suffix": "invalid-idempotency-key",
+        "retryable": false,
+        "has_request_id": true,
+        "has_trace_id": true
+      }
+    },
+    {
+      "id": "error-idempotency-key-reuse",
+      "$comment": "AUTHORED from the platform's documented shape on 2026-09-12, NOT recorded: the deployment was down when these four types replaced idempotency-conflict. Re-record before trusting the envelope details. The retryability is the load-bearing part and comes from their table.",
+      "operation": "chat.completions.create",
+      "request": {
+        "model": "qwen3-0.6b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ],
+        "idempotency_key": "k"
+      },
+      "response": {
+        "status": 409,
+        "body_file": "err_idempotency_key_reuse.json"
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": "idempotency-key-reuse",
+        "retryable": false,
+        "has_request_id": true,
+        "has_trace_id": true
+      }
+    },
+    {
+      "id": "error-idempotency-in-progress",
+      "$comment": "AUTHORED from the platform's documented shape on 2026-09-12, NOT recorded: the deployment was down when these four types replaced idempotency-conflict. Re-record before trusting the envelope details. The retryability is the load-bearing part and comes from their table.",
+      "operation": "chat.completions.create",
+      "request": {
+        "model": "qwen3-0.6b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ],
+        "idempotency_key": "k"
+      },
+      "response": {
+        "status": 409,
+        "headers": {
+          "Retry-After": "3"
+        },
+        "body_file": "err_idempotency_in_progress.json"
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": "idempotency-in-progress",
+        "retryable": true,
+        "has_request_id": true,
+        "has_trace_id": true
+      }
+    },
+    {
+      "id": "error-idempotency-response-not-retained",
+      "$comment": "AUTHORED from the platform's documented shape on 2026-09-12, NOT recorded: the deployment was down when these four types replaced idempotency-conflict. Re-record before trusting the envelope details. The retryability is the load-bearing part and comes from their table.",
+      "operation": "chat.completions.create",
+      "request": {
+        "model": "qwen3-0.6b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ],
+        "idempotency_key": "k"
+      },
+      "response": {
+        "status": 409,
+        "body_file": "err_idempotency_response_not_retained.json"
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": "idempotency-response-not-retained",
         "retryable": false,
         "has_request_id": true,
         "has_trace_id": true
@@ -529,5 +610,5 @@
     }
   ],
   "$recording": "16 of 20 cases carry bytes recorded from a live deployment on 2026-09-12; each says so in its $comment. The four that do not explain why they cannot be produced against this deployment. Only the recorded ones are evidence about the gateway -- the rest pin the SDKs to each other.",
-  "$version_note": "Version 4 re-records everything against the slug catalog (2026-09-12): model names are slugs, the response body names the model rather than the replica, context_length is null for image models, and the catalog has one entry per model. Adds recorded unknown-instance and idempotency-conflict cases. Anything vendoring these files should compare this number against its own copy: a bump means bodies moved."
+  "$version_note": "Version 6 replaces idempotency-conflict with the four types that superseded it (2026-09-12). Those four cases are AUTHORED, not recorded -- the deployment was down. Everything else was recorded on 2026-09-12 against the slug catalog."
 }

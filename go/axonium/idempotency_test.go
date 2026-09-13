@@ -115,7 +115,7 @@ func TestTimeoutWithoutAKeyIsNeverRetried(t *testing.T) {
 	}
 }
 
-func TestIdempotencyConflictIsTypedAndNotRetried(t *testing.T) {
+func TestIdempotencyKeyReuseIsTypedAndNotRetried(t *testing.T) {
 	var attempts int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth2/token" {
@@ -123,7 +123,7 @@ func TestIdempotencyConflictIsTypedAndNotRetried(t *testing.T) {
 			return
 		}
 		atomic.AddInt64(&attempts, 1)
-		problemJSON(w, 409, "idempotency-conflict", "was already used for a different request")
+		problemJSON(w, 409, "idempotency-key-reuse", "was already used for a different request")
 	}))
 	defer srv.Close()
 
@@ -132,27 +132,49 @@ func TestIdempotencyConflictIsTypedAndNotRetried(t *testing.T) {
 	req.IdempotencyKey = "reused"
 	_, err := client.Chat.Create(context.Background(), req)
 
-	if !errors.Is(err, ErrIdempotencyConflict) {
-		t.Fatalf("expected a typed conflict, got %v", err)
+	if !errors.Is(err, ErrIdempotencyKeyReuse) {
+		t.Fatalf("expected a typed reuse, got %v", err)
 	}
-	// Three causes share this type and are told apart only by prose. Two must never be retried and
-	// one is resolved by waiting, so not retrying is the safe default for all three.
+	// Reuse can never be fixed by repeating: the caller needs a fresh key per logical request.
 	if n := atomic.LoadInt64(&attempts); n != 1 {
 		t.Errorf("a conflict must not be retried, saw %d attempts", n)
 	}
 }
 
-func TestStreamRefusesAnIdempotencyKey(t *testing.T) {
-	client := testClient(t, "http://unused.invalid")
+// Streaming now accepts a key. If the gateway's stream completed and the caller's connection
+// dropped, the key replays the stored frames; if the model's own stream broke there is nothing to
+// replay and the retry generates again. Either way the key must reach the wire.
+func TestStreamSendsAnIdempotencyKey(t *testing.T) {
+	got := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			writeToken(w, "tok", 300)
+			return
+		}
+		got <- r.Header.Get("Idempotency-Key")
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Idempotent-Replay", "true")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n\n"))
+	}))
+	defer srv.Close()
+
+	client := testClient(t, srv.URL)
 	req := simpleRequest()
 	req.IdempotencyKey = "key-1"
 
-	_, err := client.Chat.Stream(context.Background(), req)
-	if !errors.Is(err, ErrInvalidRequest) {
-		t.Fatalf("streaming must refuse a key rather than drop it, got %v", err)
+	stream, err := client.Chat.Stream(context.Background(), req)
+	if err != nil {
+		t.Fatalf("streaming must accept a key: %v", err)
 	}
-	if !strings.Contains(err.Error(), "ignores it") {
-		t.Errorf("the message should say why, got %q", err)
+	defer stream.Close()
+	for stream.Next() {
+	}
+
+	if sent := <-got; sent != "key-1" {
+		t.Errorf("the key did not reach the wire: got %q", sent)
+	}
+	if !stream.Meta().IdempotentReplay {
+		t.Error("a replayed stream must be flagged: it was not generated again and was not charged again")
 	}
 }
 
@@ -178,8 +200,8 @@ func TestOverlongIdempotencyKeyIsRefusedLocally(t *testing.T) {
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("expected a local rejection naming the real problem, got %v", err)
 	}
-	if errors.Is(err, ErrIdempotencyConflict) {
-		t.Error("a too-long key is not a conflict; saying so would send the caller hunting a reuse that never happened")
+	if errors.Is(err, ErrIdempotencyKeyReuse) {
+		t.Error("a too-long key is not a reuse; saying so would send the caller hunting a repeat that never happened")
 	}
 	if n := atomic.LoadInt64(&reached); n != 0 {
 		t.Errorf("the request should not have been sent, but the gateway saw %d", n)

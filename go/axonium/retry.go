@@ -26,6 +26,9 @@ var noGenerationOccurred = map[string]bool{
 	"backend-unavailable":          true,
 	"rate-limiting-unavailable":    true,
 	"usage-store-unavailable":      true,
+	// Retrying this cannot generate twice: the first request is still running, so the repeat
+	// waits, replays, or is refused again.
+	"idempotency-in-progress": true,
 }
 
 // RetryPolicy decides when to retry and how long to wait.

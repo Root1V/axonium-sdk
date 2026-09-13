@@ -15,7 +15,7 @@ import respx
 from axonium import AsyncAxonium, Axonium, RetryPolicy
 from axonium.client import IDEMPOTENCY_HEADER
 from axonium.errors import (
-    IdempotencyConflictError,
+    IdempotencyKeyReuseError,
     InvalidRequestError,
     TimeoutError,
     TransportError,
@@ -144,15 +144,16 @@ class TestTimeoutRetryIsConditionalOnTheKey:
 
 class TestConflictAndStreaming:
     @respx.mock
-    def test_a_conflict_is_typed_and_not_retried(self, config_kwargs: dict[str, str]) -> None:
-        # Three causes share this one type and are told apart only by prose, so none is retried:
-        # two must never be, and the third the caller can decide about from the message.
+    def test_key_reuse_is_typed_and_not_retried(self, config_kwargs: dict[str, str]) -> None:
+        # Reuse can never be fixed by repeating: the caller needs a fresh key per logical request.
+        # It is one of four types that replaced a single idempotency-conflict, precisely because
+        # they need opposite handling and only one of them is worth retrying.
         route = respx.post(CHAT).mock(
             return_value=httpx.Response(
                 409,
                 json={
-                    "type": "https://prometheus.internal/errors/idempotency-conflict",
-                    "title": "Idempotency Conflict",
+                    "type": "https://prometheus.internal/errors/idempotency-key-reuse",
+                    "title": "Idempotency Key Reuse",
                     "status": 409,
                     "detail": "was already used for a different request",
                     "request_id": "r1",
@@ -162,7 +163,7 @@ class TestConflictAndStreaming:
 
         with (
             Axonium(**config_kwargs) as client,
-            pytest.raises(IdempotencyConflictError) as caught,
+            pytest.raises(IdempotencyKeyReuseError) as caught,
         ):
             client.chat.completions.create(
                 model="qwen3-0.6b", messages=MESSAGES, idempotency_key="reused"
@@ -171,16 +172,32 @@ class TestConflictAndStreaming:
         assert caught.value.retryable is False
         assert route.call_count == 1
 
-    def test_streaming_refuses_a_key(self, config_kwargs: dict[str, str]) -> None:
-        # The gateway accepts a key on a stream, ignores it, and generates again, with nothing in
-        # the response to say so. Refusing is the only way to stop a caller believing otherwise.
+    @respx.mock
+    def test_streaming_sends_the_key(self, config_kwargs: dict[str, str]) -> None:
+        # Streaming is covered now, with a boundary: a key replays a stream the gateway finished
+        # and the caller's connection dropped. It cannot replay one the model itself broke, which
+        # needs resuming rather than replaying.
+        route = respx.post(CHAT).mock(
+            return_value=httpx.Response(
+                200,
+                headers={"Content-Type": "text/event-stream", "Idempotent-Replay": "true"},
+                content=(
+                    b'data: {"choices":[{"index":0,"delta":{"content":"hi"}}]}\n\ndata: [DONE]\n\n'
+                ),
+            )
+        )
+
         with (
             Axonium(**config_kwargs) as client,
-            pytest.raises(InvalidRequestError, match="cannot be made idempotent"),
-        ):
             client.chat.completions.stream(
                 model="qwen3-0.6b", messages=MESSAGES, idempotency_key="key-1"
-            )
+            ) as stream,
+        ):
+            list(stream)
+            replayed = stream.meta.idempotent_replay if stream.meta else False
+
+        assert route.calls.last.request.headers[IDEMPOTENCY_HEADER] == "key-1"
+        assert replayed, "a replayed stream was not generated again and was not charged again"
 
 
 class TestEdges:
@@ -215,39 +232,35 @@ class TestEdges:
 
         assert route.call_count == 2
 
-    async def test_the_async_stream_refuses_a_key_too(self, config_kwargs: dict[str, str]) -> None:
-        async with AsyncAxonium(**config_kwargs) as client:
-            with pytest.raises(InvalidRequestError, match="cannot be made idempotent"):
-                await client.chat.completions.stream(
-                    model="qwen3-0.6b", messages=MESSAGES, idempotency_key="key-1"
-                )
-
-
-def test_an_overlong_key_is_refused_before_the_wire(config_kwargs: dict[str, str]) -> None:
-    # The gateway reports an over-length key as 409 idempotency-conflict — the same type a genuine
-    # reuse produces — so a caller branching on that would go hunting a repeat that never happened.
-    # Checking here costs nothing and names the real problem.
-    with (
-        Axonium(**config_kwargs) as client,
-        pytest.raises(InvalidRequestError, match="at most 255"),
-    ):
-        client.chat.completions.create(
-            model="qwen3-0.6b", messages=MESSAGES, idempotency_key="x" * 256
-        )
-
-
-def test_a_key_at_the_limit_is_accepted(config_kwargs: dict[str, str]) -> None:
-    with respx.mock:
-        respx.post(AUTH_URL).mock(
+    @respx.mock
+    async def test_the_async_stream_sends_the_key_too(self, config_kwargs: dict[str, str]) -> None:
+        route = respx.post(CHAT).mock(
             return_value=httpx.Response(
-                200, json={"access_token": "t", "token_type": "bearer", "expires_in": 300}
+                200,
+                headers={"Content-Type": "text/event-stream"},
+                content=b"data: [DONE]\n\n",
             )
         )
-        route = respx.post(CHAT).mock(return_value=httpx.Response(200, json=COMPLETION))
 
-        with Axonium(**config_kwargs) as client:
-            client.chat.completions.create(
-                model="qwen3-0.6b", messages=MESSAGES, idempotency_key="x" * 255
+        async with (
+            AsyncAxonium(**config_kwargs) as client,
+            client.chat.completions.stream(
+                model="qwen3-0.6b", messages=MESSAGES, idempotency_key="key-1"
+            ) as stream,
+        ):
+            [chunk async for chunk in stream]
+
+        assert route.calls.last.request.headers[IDEMPOTENCY_HEADER] == "key-1"
+
+    @respx.mock
+    def test_an_overlong_key_is_refused_on_streaming_too(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        # The length check moved onto the streaming path with the key.
+        with (
+            Axonium(**config_kwargs) as client,
+            pytest.raises(InvalidRequestError, match="at most 255"),
+        ):
+            client.chat.completions.stream(
+                model="qwen3-0.6b", messages=MESSAGES, idempotency_key="x" * 256
             )
-
-    assert route.calls.last.request.headers[IDEMPOTENCY_HEADER] == "x" * 255

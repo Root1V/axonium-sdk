@@ -34,6 +34,9 @@ _NO_GENERATION_OCCURRED = frozenset(
         "backend-unavailable",
         "rate-limiting-unavailable",
         "usage-store-unavailable",
+        # Retrying this cannot generate twice: the first request is still running, so the repeat
+        # waits, replays, or is refused again. It is the only idempotency refusal worth retrying.
+        "idempotency-in-progress",
     }
 )
 

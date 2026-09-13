@@ -30,9 +30,11 @@ const instanceHeader = "X-Prometheus-Instance"
 // it, and generates again -- so the SDK refuses to send one there.
 const idempotencyHeader = "Idempotency-Key"
 
-// maxIdempotencyKeyLength is the gateway's limit. Checked client-side because exceeding it comes
-// back as 409 idempotency-conflict -- the same type a genuine reuse produces -- which would tell a
-// caller they repeated a request when their key is simply too long.
+// maxIdempotencyKeyLength is the gateway's limit. Checked client-side to save a round trip:
+// exceeding it is a real error either way, so the only question is whether the caller learns about
+// it before or after the request. Until 2026-09-12 this also papered over a misleading type -- an
+// over-length key came back as a *conflict* -- but the platform split that into its own
+// 400 invalid-idempotency-key, so the check is now an optimisation rather than a correction.
 const maxIdempotencyKeyLength = 255
 
 // retryAfterSeconds reads Retry-After, which may be either delta-seconds or an HTTP date.

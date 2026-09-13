@@ -1,0 +1,9 @@
+{
+  "type": "https://prometheus.internal/errors/idempotency-response-not-retained",
+  "title": "Idempotency Response Not Retained",
+  "status": 409,
+  "detail": "The original request succeeded but its response exceeded 1 MiB and was not retained.",
+  "instance": "/v1/chat/completions",
+  "request_id": "f8828324-1ede-44fc-938f-04c2d1b260d4",
+  "trace_id": "f516c6335ae0bff53b0ed04ca3a3f022"
+}

@@ -40,11 +40,22 @@ var (
 	// silently falls back: you get that instance or an error.
 	ErrUnknownInstance = errors.New("axonium: unknown-instance")
 
-	// ErrIdempotencyConflict means a key was reused for something other than an identical retry.
-	// Three causes share it -- a different body, a different endpoint, or a concurrent request
-	// with the same key still in flight -- and the gateway tells them apart only in Detail, which
-	// is prose. Read it; do not branch on it.
-	ErrIdempotencyConflict = errors.New("axonium: idempotency-conflict")
+	// The four idempotency refusals. They need opposite handling, which is why they are four
+	// types and not one: only ErrIdempotencyInProgress is ever worth retrying.
+
+	// ErrInvalidIdempotencyKey means the key is malformed -- today, over 255 characters. A 400
+	// rather than a conflict, because it never conflicted with anything. The SDK checks the length
+	// before sending, so this usually surfaces as ErrInvalidRequest instead.
+	ErrInvalidIdempotencyKey = errors.New("axonium: invalid-idempotency-key")
+	// ErrIdempotencyKeyReuse means the key was already used for a different request. The
+	// fingerprint covers path as well as body, so another endpoint counts. Use a fresh key.
+	ErrIdempotencyKeyReuse = errors.New("axonium: idempotency-key-reuse")
+	// ErrIdempotencyInProgress means the first request with this key is still running. The only
+	// one worth retrying, and the only one carrying Retry-After.
+	ErrIdempotencyInProgress = errors.New("axonium: idempotency-in-progress")
+	// ErrIdempotencyResponseNotRetained means the original succeeded but its response was too
+	// large to store. Not retryable, and it is proof the original worked.
+	ErrIdempotencyResponseNotRetained = errors.New("axonium: idempotency-response-not-retained")
 
 	// 401
 	ErrMissingCredentials = errors.New("axonium: missing-credentials")
@@ -98,24 +109,27 @@ var (
 
 // suffixSentinels maps a problem-details type suffix to its sentinel.
 var suffixSentinels = map[string]error{
-	"unknown-model":                ErrUnknownModel,
-	"modality-mismatch":            ErrModalityMismatch,
-	"context-exceeded":             ErrContextExceeded,
-	"validation-error":             ErrValidation,
-	"unknown-instance":             ErrUnknownInstance,
-	"idempotency-conflict":         ErrIdempotencyConflict,
-	"missing-credentials":          ErrMissingCredentials,
-	"invalid-token":                ErrInvalidToken,
-	"token-expired":                ErrTokenExpired,
-	"token-revoked":                ErrTokenRevoked,
-	"spend-cap-exceeded":           ErrSpendCapExceeded,
-	"forbidden":                    ErrForbidden,
-	"rate-limit-exceeded-requests": ErrRateLimit,
-	"upstream-error":               ErrUpstream,
-	"model-not-loaded":             ErrModelNotLoaded,
-	"backend-unavailable":          ErrBackendUnavailable,
-	"rate-limiting-unavailable":    ErrRateLimitingUnavailable,
-	"usage-store-unavailable":      ErrUsageStoreUnavailable,
+	"unknown-model":                     ErrUnknownModel,
+	"modality-mismatch":                 ErrModalityMismatch,
+	"context-exceeded":                  ErrContextExceeded,
+	"validation-error":                  ErrValidation,
+	"unknown-instance":                  ErrUnknownInstance,
+	"invalid-idempotency-key":           ErrInvalidIdempotencyKey,
+	"idempotency-key-reuse":             ErrIdempotencyKeyReuse,
+	"idempotency-in-progress":           ErrIdempotencyInProgress,
+	"idempotency-response-not-retained": ErrIdempotencyResponseNotRetained,
+	"missing-credentials":               ErrMissingCredentials,
+	"invalid-token":                     ErrInvalidToken,
+	"token-expired":                     ErrTokenExpired,
+	"token-revoked":                     ErrTokenRevoked,
+	"spend-cap-exceeded":                ErrSpendCapExceeded,
+	"forbidden":                         ErrForbidden,
+	"rate-limit-exceeded-requests":      ErrRateLimit,
+	"upstream-error":                    ErrUpstream,
+	"model-not-loaded":                  ErrModelNotLoaded,
+	"backend-unavailable":               ErrBackendUnavailable,
+	"rate-limiting-unavailable":         ErrRateLimitingUnavailable,
+	"usage-store-unavailable":           ErrUsageStoreUnavailable,
 }
 
 // retryableSuffixes are the errors where retrying can plausibly succeed. See spec/errors.json for
@@ -128,6 +142,7 @@ var retryableSuffixes = map[string]bool{
 	"backend-unavailable":          true,
 	"rate-limiting-unavailable":    true,
 	"usage-store-unavailable":      true,
+	"idempotency-in-progress":      true,
 	// model-not-loaded is a 5xx but is not retryable: it needs operator action, not patience.
 	"model-not-loaded": false,
 }

@@ -29,8 +29,11 @@ __all__ = [
     "ConfigurationError",
     "ContextExceededError",
     "ForbiddenError",
-    "IdempotencyConflictError",
+    "IdempotencyInProgressError",
+    "IdempotencyKeyReuseError",
+    "IdempotencyResponseNotRetainedError",
     "InvalidClientError",
+    "InvalidIdempotencyKeyError",
     "InvalidRequestError",
     "InvalidScopeError",
     "InvalidTokenError",
@@ -240,16 +243,47 @@ class UnknownInstanceError(BadRequestError):
     type_suffix = "unknown-instance"
 
 
-class IdempotencyConflictError(APIError):
-    """An ``Idempotency-Key`` was reused for something that is not an identical retry.
+class InvalidIdempotencyKeyError(BadRequestError):
+    """The ``Idempotency-Key`` is malformed — today, longer than 255 characters.
 
-    Three causes share this one type: a different request body, a different endpoint, or a
-    concurrent request with the same key still in flight. Only the last is resolved by waiting,
-    and the gateway distinguishes them only in ``detail`` — human-readable prose. Read it, but do
-    not branch on it.
+    A ``400`` rather than a conflict, because it never conflicted with anything. The SDK checks
+    the length before sending, so this normally surfaces as
+    :class:`~axonium.errors.InvalidRequestError` instead.
     """
 
-    type_suffix = "idempotency-conflict"
+    type_suffix = "invalid-idempotency-key"
+
+
+class IdempotencyKeyReuseError(APIError):
+    """The key was already used for a different request.
+
+    The fingerprint covers the path as well as the body, so the same key on another endpoint
+    counts as a different request. Never retryable: use a fresh key per logical request.
+    """
+
+    type_suffix = "idempotency-key-reuse"
+
+
+class IdempotencyInProgressError(APIError):
+    """The first request with this key is still running.
+
+    The only idempotency refusal worth retrying, and the only one carrying ``retry_after`` — the
+    model's observed p95 latency minus how long the first request has already run. Retrying cannot
+    start a second generation: it waits, replays, or refuses again.
+    """
+
+    type_suffix = "idempotency-in-progress"
+    retryable = True
+
+
+class IdempotencyResponseNotRetainedError(APIError):
+    """The original succeeded, but its response was too large to store.
+
+    Not retryable, and it carries good news: this refusal is proof the original worked. Retrying
+    would generate a second time for a result that already exists.
+    """
+
+    type_suffix = "idempotency-response-not-retained"
 
 
 class ValidationError(BadRequestError):
@@ -493,7 +527,10 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         ModalityMismatchError,
         ContextExceededError,
         ValidationError,
-        IdempotencyConflictError,
+        InvalidIdempotencyKeyError,
+        IdempotencyKeyReuseError,
+        IdempotencyInProgressError,
+        IdempotencyResponseNotRetainedError,
         UnknownInstanceError,
         MissingCredentialsError,
         InvalidTokenError,

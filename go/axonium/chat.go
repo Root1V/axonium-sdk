@@ -72,7 +72,11 @@ type ChatRequest struct {
 	// Reuse a key only to retry the identical request. Reusing it for a different one, on a
 	// different endpoint, or while the first is still in flight is ErrIdempotencyConflict.
 	//
-	// Ignored on Stream: the gateway accepts a key there, ignores it, and generates again.
+	// Works on Stream too, with a boundary worth knowing: if the gateway's stream from the model
+	// completed and it was the caller's connection that dropped, the key replays the stored frames
+	// byte for byte, as one flush rather than paced out. If the model's own stream broke
+	// mid-generation there is nothing complete to replay and the retry is a genuine new
+	// generation -- that case needs resuming, not replaying, and no key can cover it.
 	IdempotencyKey string `json:"-"`
 }
 
@@ -334,12 +338,6 @@ func (s *ChatService) Stream(ctx context.Context, req ChatRequest) (*ChatComplet
 	if err := s.client.checkModality(ctx, req.Model, modalitiesChat); err != nil {
 		return nil, err
 	}
-	if req.IdempotencyKey != "" {
-		// The gateway takes a key here, ignores it, and generates again, with nothing in the
-		// response to say so. Refusing is the only way to stop a caller believing a stream is
-		// protected when it is not.
-		return nil, fmt.Errorf("%w: streaming requests cannot be made idempotent; the gateway accepts an Idempotency-Key here and ignores it, so the call generates again with no replay marker", ErrInvalidRequest)
-	}
 
 	payload := map[string]any{}
 	encoded, err := json.Marshal(req)
@@ -358,7 +356,7 @@ func (s *ChatService) Stream(ctx context.Context, req ChatRequest) (*ChatComplet
 
 	// The stream owns this cancel for its whole life, so Close can tear the connection down.
 	streamCtx, cancel := context.WithCancel(ctx)
-	resp, meta, err := s.client.send(streamCtx, http.MethodPost, "/v1/chat/completions", body, true, req.Model, req.Instance, "")
+	resp, meta, err := s.client.send(streamCtx, http.MethodPost, "/v1/chat/completions", body, true, req.Model, req.Instance, req.IdempotencyKey)
 	if err != nil {
 		cancel()
 		return nil, err

@@ -51,12 +51,7 @@ logger = logging.getLogger("axonium.client")
 
 
 def _validate_idempotency_key(key: str | None) -> None:
-    """Reject a key the gateway would reject, but with the right error.
-
-    Over-length keys come back as ``409 idempotency-conflict``, which is the same type a genuine
-    reuse produces. A caller branching on that would conclude they had repeated a request. Checking
-    here costs nothing and names the actual problem.
-    """
+    """Reject a key the gateway would reject, without spending a round trip on it."""
     if key is not None and len(key) > MAX_IDEMPOTENCY_KEY_LENGTH:
         raise InvalidRequestError(
             f"idempotency_key is {len(key)} characters; the gateway accepts at most "
@@ -89,9 +84,11 @@ INSTANCE_HEADER = "X-Prometheus-Instance"
 #: a stream is protected.
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 
-#: The gateway's limit. Worth checking client-side because exceeding it is reported as
-#: ``409 idempotency-conflict`` — the same type as a genuine key reuse, which would tell a caller
-#: they repeated a request when in fact their key is simply too long.
+#: The gateway's limit. Checked client-side to save a round trip: exceeding it is a real error
+#: either way, so the only question is whether the caller learns about it before or after the
+#: request. Until 2026-09-12 this also papered over a misleading type — an over-length key came
+#: back as a *conflict* — but the platform split that into its own ``400
+#: invalid-idempotency-key``, so the check is now an optimisation rather than a correction.
 MAX_IDEMPOTENCY_KEY_LENGTH = 255
 
 
@@ -470,6 +467,7 @@ class Axonium(_BaseAxonium):
         json: dict[str, Any],
         model: str | None = None,
         instance: str | None = None,
+        idempotency_key: str | None = None,
         timeout: float | None = None,
     ) -> Any:
         """Open a streaming request.
@@ -477,12 +475,13 @@ class Axonium(_BaseAxonium):
         Not retried: the gateway never retries streams either, and a retry after partial output
         has been delivered is a fresh billable generation rather than a resumption.
         """
+        _validate_idempotency_key(idempotency_key)
         self._check_cooldown(self._cooldown_key(model))
         return self._http.stream(
             "POST",
             self._url(path),
             json=json,
-            headers=None if instance is None else {INSTANCE_HEADER: instance},
+            headers=_request_headers(instance, idempotency_key),
             timeout=self._config.timeouts.stream_read if timeout is None else timeout,
         )
 
@@ -610,15 +609,17 @@ class AsyncAxonium(_BaseAxonium):
         json: dict[str, Any],
         model: str | None = None,
         instance: str | None = None,
+        idempotency_key: str | None = None,
         timeout: float | None = None,
     ) -> Any:
         """Open a streaming request. See :meth:`Axonium._open_stream`."""
+        _validate_idempotency_key(idempotency_key)
         self._check_cooldown(self._cooldown_key(model))
         return self._http.stream(
             "POST",
             self._url(path),
             json=json,
-            headers=None if instance is None else {INSTANCE_HEADER: instance},
+            headers=_request_headers(instance, idempotency_key),
             timeout=self._config.timeouts.stream_read if timeout is None else timeout,
         )
 
