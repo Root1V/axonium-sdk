@@ -20,7 +20,10 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      # v7 rather than the newer v10.1.0: v7 is the last major with a floating tag, so it keeps
+      # picking up patches the way every other action here does. Pinning an exact v10.1.0 would be
+      # the only hand-maintained version in these workflows, and would quietly rot.
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - run: uv sync --all-extras
