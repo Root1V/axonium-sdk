@@ -10,7 +10,9 @@ Backlog catalog. One line per item — details live in the code, the commits and
 |---|---|---|---|
 | AXO-01 | Freeze the legacy SDK at `v0.6.0` | ✅ | Tag + GitHub release |
 | AXO-02 | Monorepo restructure (`spec/`, `python/`, `go/`, `rust/`, CI) | ✅ | Legacy removed from `main` |
-| AXO-03 | Configuration layer, zero hardcoded network defaults | ✅ | Resolves at construction, not import |
+| AXO-03 | Configuration layer, zero hardcoded network defaults | ✅ | Superseded by AXO-76: an official SDK should know where the official platform is |
+| AXO-76 | Default to the official platform URLs | ✅ | Credentials are the only required setting; provisional until the cloud migration |
+| AXO-77 | Change the defaults when Prometheus moves to its cloud host | 📋 | Three constants, one per SDK. The release must be loud: a pinned version keeps the old address |
 | AXO-04 | Typed error taxonomy + shared `spec/errors.json` | ✅ | OAuth errors kept a separate branch |
 | AXO-05 | OAuth2 `client_credentials` with refresh-ahead tokens | ✅ | Expiry anchored to the server `Date` header |
 | AXO-06 | HTTP transport, sync + async, TLS trust config | ✅ | Timeouts per §4 |

@@ -24,7 +24,8 @@ Requires Python 3.10+.
 ```python
 from axonium import Axonium
 
-with Axonium() as client:
+# Credentials are all you need: the SDK knows where the official platform is.
+with Axonium(client_id=..., client_secret=...) as client:
     print(client.models.mine().ids)  # what this token can actually call
 
     completion = client.chat.completions.create(
@@ -146,18 +147,31 @@ secret really does leave the process rather than sitting unused.
 
 ## Configuration
 
-The SDK never hardcodes a host, port, or certificate — every deployment supplies its own. Settings
+**You should only need your credentials.** The SDK points at the official Prometheus platform by
+default, so the common case is:
+
+```python
+client = Axonium(client_id=..., client_secret=...)   # or AXONIUM_CLIENT_ID / _SECRET
+```
+
+> **The default addresses are provisional.** The platform has not moved to its cloud host yet, so
+> they currently point at a local deployment. When it moves, upgrading picks up the new address
+> automatically — but **a pinned version will keep using the old one**, and the release that
+> changes them will say so prominently.
+
+Override them for a self-hosted deployment, one or both, by argument or environment. Settings
 resolve in this order, first match wins:
 
 1. Per-call argument
 2. Constructor argument
 3. Environment variable
-4. `ConfigurationError` naming the missing setting and its environment variable
+4. The official default (base URLs only) — everything else raises `ConfigurationError` naming the
+   setting and its variable
 
 | Environment variable | Purpose |
 |---|---|
-| `AXONIUM_AUTH_BASE_URL` | auth-service base URL (OAuth2 token endpoint) |
-| `AXONIUM_GATEWAY_BASE_URL` | gateway base URL (`/v1/` inference API) |
+| `AXONIUM_AUTH_BASE_URL` | auth-service base URL — overrides the official default |
+| `AXONIUM_GATEWAY_BASE_URL` | gateway base URL — overrides the official default |
 | `AXONIUM_CLIENT_ID` | OAuth2 client ID issued by the platform operator |
 | `AXONIUM_CLIENT_SECRET` | OAuth2 client secret |
 | `AXONIUM_SCOPE` | Optional space-separated scope request |

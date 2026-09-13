@@ -358,3 +358,20 @@ impl Default for ApiError {
 
 /// Unused today, kept so the timeout constant has one home.
 pub(crate) const _STREAM_IDLE: Duration = Duration::from_secs(180);
+
+/// Debug for a client shows how it is configured and which credential mode it is in, never a
+/// credential: `Config`'s own Debug redacts the secret, and the governed mode holds none at all.
+impl std::fmt::Debug for Client {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Client")
+            .field("config", &self.config)
+            .field(
+                "mode",
+                &match self.auth {
+                    Auth::Autonomous { .. } => "autonomous",
+                    Auth::Governed { .. } => "governed",
+                },
+            )
+            .finish()
+    }
+}

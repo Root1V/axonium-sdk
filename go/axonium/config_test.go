@@ -23,10 +23,6 @@ func TestConfigurationErrorsNameTheFieldAndTheVariable(t *testing.T) {
 		cfg     Config
 		mustSay []string
 	}{
-		{"no auth url", Config{GatewayBaseURL: "https://g.example", ClientID: "i", ClientSecret: "s"},
-			[]string{"AuthBaseURL", "AXONIUM_AUTH_BASE_URL"}},
-		{"no gateway url", Config{AuthBaseURL: "https://a.example", ClientID: "i", ClientSecret: "s"},
-			[]string{"GatewayBaseURL", "AXONIUM_GATEWAY_BASE_URL"}},
 		{"scheme-less url", Config{AuthBaseURL: "a.example", GatewayBaseURL: "https://g.example", ClientID: "i", ClientSecret: "s"},
 			[]string{"http://", "https://"}},
 		{"ratio out of range", Config{AuthBaseURL: "https://a.example", GatewayBaseURL: "https://g.example",
@@ -43,6 +39,45 @@ func TestConfigurationErrorsNameTheFieldAndTheVariable(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Credentials are the only thing most callers should have to supply: an official SDK points at the
+// official platform, and making everyone repeat the same two URLs is friction for nothing.
+func TestURLsDefaultToTheOfficialPlatform(t *testing.T) {
+	for _, v := range []string{"AXONIUM_AUTH_BASE_URL", "AXONIUM_GATEWAY_BASE_URL"} {
+		t.Setenv(v, "")
+		_ = os.Unsetenv(v)
+	}
+
+	client, err := New(Config{ClientID: "i", ClientSecret: "s"})
+	if err != nil {
+		t.Fatalf("credentials alone should be enough: %v", err)
+	}
+	defer client.Close()
+
+	cfg := client.Config()
+	if cfg.AuthBaseURL != DefaultAuthBaseURL || cfg.GatewayBaseURL != DefaultGatewayBaseURL {
+		t.Errorf("got %q and %q", cfg.AuthBaseURL, cfg.GatewayBaseURL)
+	}
+
+	// Overriding one must not force restating the other: a self-hosted gateway fronted by the
+	// official auth-service is a real shape.
+	partial, err := New(Config{ClientID: "i", ClientSecret: "s", GatewayBaseURL: "https://mine.example"})
+	if err != nil {
+		t.Fatalf("building: %v", err)
+	}
+	defer partial.Close()
+	if got := partial.Config(); got.GatewayBaseURL != "https://mine.example" || got.AuthBaseURL != DefaultAuthBaseURL {
+		t.Errorf("got %q and %q", got.GatewayBaseURL, got.AuthBaseURL)
+	}
+}
+
+// Defaulting removes the "you forgot one" error, not the "that is not a URL" one.
+func TestAMalformedURLStillFails(t *testing.T) {
+	_, err := New(Config{ClientID: "i", ClientSecret: "s", GatewayBaseURL: "gateway.example"})
+	if !errors.Is(err, ErrConfiguration) || !strings.Contains(err.Error(), "GatewayBaseURL") {
+		t.Fatalf("got %v", err)
 	}
 }
 

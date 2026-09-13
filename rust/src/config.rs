@@ -11,6 +11,28 @@ use crate::error::{Error, Result};
 
 pub(crate) const ENV_PREFIX: &str = "AXONIUM_";
 
+/// Where the official Prometheus platform lives, used when a caller supplies no URL of their own.
+///
+/// This is what makes credentials the only thing most callers need to configure: an official SDK
+/// should point at the official platform, and asking every consumer to repeat the same two URLs is
+/// friction for nothing.
+///
+/// **These are provisional.** The platform is not yet on its cloud host, so today they address a
+/// local deployment. When it moves, these two constants change and a consumer who upgrades follows
+/// automatically -- which is why they live here, in one place, rather than spread through examples
+/// and documentation.
+///
+/// Two consequences worth knowing. A consumer who *pins* an old version keeps pointing at the old
+/// address after the migration, so the release that changes them will say so loudly. And because
+/// the default is a loopback address, anyone running this without the platform on their own
+/// machine reaches their own localhost -- normally a refused connection, which is clear enough,
+/// but set `AXONIUM_AUTH_BASE_URL` and `AXONIUM_GATEWAY_BASE_URL` for any deployment that is not
+/// this one.
+pub const DEFAULT_AUTH_BASE_URL: &str = "http://127.0.0.1:9000";
+
+/// The official gateway. See [`DEFAULT_AUTH_BASE_URL`] for the caveats that apply to both.
+pub const DEFAULT_GATEWAY_BASE_URL: &str = "http://127.0.0.1:8020";
+
 /// The gateway's own backend-forwarding timeout for non-streaming requests. A client-side timeout
 /// below this is a known failure mode: the backend keeps computing after the client gives up.
 const GATEWAY_NON_STREAMING_TIMEOUT: Duration = Duration::from_secs(600);
@@ -43,11 +65,13 @@ impl Default for Timeouts {
 }
 
 /// Resolved client configuration. Unset fields fall back to `AXONIUM_*`.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct Config {
-    /// Base URL of the auth-service that issues OAuth2 tokens.
+    /// Base URL of the auth-service. Defaults to [`DEFAULT_AUTH_BASE_URL`]; override it for a
+    /// self-hosted deployment.
     pub auth_base_url: String,
-    /// Base URL of the gateway serving the `/v1/` inference API.
+    /// Base URL of the gateway serving the `/v1/` inference API. Defaults to
+    /// [`DEFAULT_GATEWAY_BASE_URL`].
     pub gateway_base_url: String,
     /// Required in autonomous mode. Absent in governed mode, where a caller-supplied token
     /// provider is the authority and this crate never sees a secret.
@@ -88,9 +112,30 @@ impl Config {
         // make the governed mode the hardest one to deploy.
         let explicit = !self.client_id.is_empty() || !self.client_secret.is_empty();
 
+        // Precedence: the field if set, then the environment, then the official default.
+        for (field, var, fallback) in [
+            (
+                &mut self.auth_base_url,
+                "AUTH_BASE_URL",
+                DEFAULT_AUTH_BASE_URL,
+            ),
+            (
+                &mut self.gateway_base_url,
+                "GATEWAY_BASE_URL",
+                DEFAULT_GATEWAY_BASE_URL,
+            ),
+        ] {
+            if field.is_empty() {
+                let from_env = env(var);
+                *field = if from_env.is_empty() {
+                    fallback.to_string()
+                } else {
+                    from_env
+                };
+            }
+        }
+
         for (field, var) in [
-            (&mut self.auth_base_url, "AUTH_BASE_URL"),
-            (&mut self.gateway_base_url, "GATEWAY_BASE_URL"),
             (&mut self.client_id, "CLIENT_ID"),
             (&mut self.client_secret, "CLIENT_SECRET"),
             (&mut self.scope, "SCOPE"),
@@ -159,4 +204,33 @@ fn normalise(value: &mut String, field: &str, var: &str, problems: &mut Vec<Stri
         return;
     }
     *value = value.trim_end_matches('/').to_string();
+}
+
+/// Written by hand rather than derived, because a derived one prints `client_secret` in full --
+/// which is what a panic message, a tracing span, or a stray `dbg!` would then carry into
+/// whatever collects them. Redacting it here means the secret cannot leak through the one trait
+/// everybody reaches for while debugging.
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("auth_base_url", &self.auth_base_url)
+            .field("gateway_base_url", &self.gateway_base_url)
+            .field("client_id", &self.client_id)
+            .field(
+                "client_secret",
+                &if self.client_secret.is_empty() {
+                    "(unset)"
+                } else {
+                    "(redacted)"
+                },
+            )
+            .field("scope", &self.scope)
+            .field("ca_bundle", &self.ca_bundle)
+            .field("verify_modality", &self.verify_modality)
+            .field("refresh_ahead_ratio", &self.refresh_ahead_ratio)
+            .field("refresh_ahead_min", &self.refresh_ahead_min)
+            .field("timeouts", &self.timeouts)
+            .field("retry", &self.retry)
+            .finish()
+    }
 }

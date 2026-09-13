@@ -81,6 +81,9 @@ empty for the whole response. Both are exposed and neither is inferred from the 
 
 ## Configuration
 
+**You should only need your credentials**: the base URLs default to the official Prometheus
+platform, and those defaults are provisional until it moves to its cloud host.
+
 Unset fields fall back to `AXONIUM_AUTH_BASE_URL`, `AXONIUM_GATEWAY_BASE_URL`,
 `AXONIUM_CLIENT_ID`, `AXONIUM_CLIENT_SECRET`, `AXONIUM_SCOPE`, `AXONIUM_CA_BUNDLE` and
 `AXONIUM_VERIFY_MODALITY`. A missing required setting fails at construction, naming both the field

@@ -15,6 +15,27 @@ import (
 
 const envPrefix = "AXONIUM_"
 
+// Where the official Prometheus platform lives, used when a caller supplies no URL of their own.
+//
+// This is what makes credentials the only thing most callers need to configure: an official SDK
+// should point at the official platform, and asking every consumer to repeat the same two URLs is
+// friction for nothing.
+//
+// THESE ARE PROVISIONAL. The platform is not yet on its cloud host, so today they address a local
+// deployment. When it moves, these two constants change and a consumer who upgrades follows
+// automatically -- which is exactly why they live here, in one place, rather than spread through
+// examples and documentation.
+//
+// Two consequences worth knowing. A consumer who PINS an old version keeps pointing at the old
+// address after the migration, so the release that changes them will say so loudly. And because
+// the default is a loopback address, anyone running this without the platform on their own machine
+// reaches their own localhost -- normally a refused connection, which is clear enough, but set
+// AXONIUM_AUTH_BASE_URL and AXONIUM_GATEWAY_BASE_URL for any deployment that is not this one.
+const (
+	DefaultAuthBaseURL    = "http://127.0.0.1:9000"
+	DefaultGatewayBaseURL = "http://127.0.0.1:8020"
+)
+
 const (
 	// gatewayNonStreamingTimeout is the gateway's own backend-forwarding timeout for
 	// non-streaming requests. A client-side read timeout below this is a known failure mode: the
@@ -62,9 +83,11 @@ func DefaultTimeouts() Timeouts {
 // required setting is reported as ErrConfiguration naming both the field and the variable that can
 // supply it.
 type Config struct {
-	// AuthBaseURL is the base URL of the auth-service that issues OAuth2 tokens.
+	// AuthBaseURL is the base URL of the auth-service that issues OAuth2 tokens. Defaults to
+	// DefaultAuthBaseURL; override it for a self-hosted deployment.
 	AuthBaseURL string
-	// GatewayBaseURL is the base URL of the gateway serving the /v1/ inference API.
+	// GatewayBaseURL is the base URL of the gateway serving the /v1/ inference API. Defaults to
+	// DefaultGatewayBaseURL.
 	GatewayBaseURL string
 
 	// ClientID and ClientSecret are required in autonomous mode, where the SDK mints its own
@@ -122,16 +145,26 @@ type Config struct {
 
 func env(name string) string { return os.Getenv(envPrefix + name) }
 
+// envOr resolves a setting the caller left unset: the environment first, then the official
+// default. Explicit fields are handled before this is reached, so precedence stays
+// argument, then environment, then official default.
+func envOr(name, fallback string) string {
+	if value := env(name); value != "" {
+		return value
+	}
+	return fallback
+}
+
 // resolve fills unset fields from the environment and validates the result.
 func (c Config) resolve() (*Config, error) {
 	out := c
 	out.credentialsWereExplicit = c.ClientID != "" || c.ClientSecret != ""
 
 	if out.AuthBaseURL == "" {
-		out.AuthBaseURL = env("AUTH_BASE_URL")
+		out.AuthBaseURL = envOr("AUTH_BASE_URL", DefaultAuthBaseURL)
 	}
 	if out.GatewayBaseURL == "" {
-		out.GatewayBaseURL = env("GATEWAY_BASE_URL")
+		out.GatewayBaseURL = envOr("GATEWAY_BASE_URL", DefaultGatewayBaseURL)
 	}
 	if out.ClientID == "" {
 		out.ClientID = env("CLIENT_ID")

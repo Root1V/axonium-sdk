@@ -17,9 +17,34 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from axonium.errors import ConfigurationError
 
-__all__ = ["AxoniumConfig", "Timeouts"]
+__all__ = [
+    "DEFAULT_AUTH_BASE_URL",
+    "DEFAULT_GATEWAY_BASE_URL",
+    "AxoniumConfig",
+    "Timeouts",
+]
 
 ENV_PREFIX = "AXONIUM_"
+
+#: Where the official Prometheus platform lives, used when a caller supplies no URL of their own.
+#:
+#: This is what makes credentials the only thing most callers need to configure: an official SDK
+#: should point at the official platform, and asking every consumer to repeat the same two URLs is
+#: friction for nothing.
+#:
+#: **These are provisional.** The platform is not yet on its cloud host, so today they address a
+#: local deployment. When it moves, these two constants change and a consumer who upgrades follows
+#: automatically — which is exactly why they live here, in one place, rather than being spread
+#: through examples and documentation.
+#:
+#: Two consequences worth knowing. A consumer who *pins* an old version keeps pointing at the old
+#: address after the migration, so the release that changes them will say so loudly. And because
+#: the default is a loopback address, anyone running this without the platform on their own machine
+#: reaches their own localhost — normally a refused connection, which is clear enough, but set
+#: ``AXONIUM_AUTH_BASE_URL`` and ``AXONIUM_GATEWAY_BASE_URL`` for any deployment that is not this
+#: one.
+DEFAULT_AUTH_BASE_URL = "http://127.0.0.1:9000"
+DEFAULT_GATEWAY_BASE_URL = "http://127.0.0.1:8020"
 
 #: The gateway's own backend-forwarding timeout for non-streaming requests. A client-side read
 #: timeout below this is a known failure mode: the backend keeps computing after the client gives
@@ -67,10 +92,12 @@ class AxoniumConfig(BaseSettings):
         hide_input_in_errors=True,
     )
 
-    #: Base URL of the auth-service that issues OAuth2 tokens.
-    auth_base_url: str
-    #: Base URL of the gateway serving the ``/v1/`` inference API.
-    gateway_base_url: str
+    #: Base URL of the auth-service that issues OAuth2 tokens. Defaults to the official platform;
+    #: override it for a self-hosted deployment. See :data:`DEFAULT_AUTH_BASE_URL`.
+    auth_base_url: str = DEFAULT_AUTH_BASE_URL
+    #: Base URL of the gateway serving the ``/v1/`` inference API. Defaults to the official
+    #: platform. See :data:`DEFAULT_GATEWAY_BASE_URL`.
+    gateway_base_url: str = DEFAULT_GATEWAY_BASE_URL
 
     #: Required in autonomous mode, where the SDK mints its own tokens. Absent in governed mode,
     #: where a caller-supplied token provider is the authority and the SDK never sees a secret.

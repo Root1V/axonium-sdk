@@ -202,8 +202,15 @@ the hardest one to deploy, which is backwards: a host process almost always has 
 
 ## Configuration
 
-The SDK never hardcodes a host, port, or certificate — every deployment supplies its own. Unset
-fields fall back to the environment:
+**You should only need your credentials.** The SDK points at the official Prometheus platform by
+default, so `axonium.New(axonium.Config{ClientID: ..., ClientSecret: ...})` is the common case.
+
+> **The default addresses are provisional.** The platform has not moved to its cloud host yet, so
+> they currently point at a local deployment. Upgrading picks up the new address automatically; a
+> pinned version will not, and the release that changes them will say so.
+
+Override them for a self-hosted deployment, one or both. Unset fields fall back to the
+environment, then to the official default:
 
 | Environment variable | Purpose |
 |---|---|

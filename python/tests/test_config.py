@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from axonium.config import GATEWAY_STREAMING_TIMEOUT, AxoniumConfig
+from axonium.config import (
+    DEFAULT_AUTH_BASE_URL,
+    DEFAULT_GATEWAY_BASE_URL,
+    GATEWAY_STREAMING_TIMEOUT,
+    AxoniumConfig,
+)
 from axonium.errors import ConfigurationError
 
 
@@ -14,14 +19,24 @@ class TestRequiredSettings:
         assert config.gateway_base_url == "https://gateway.test.invalid"
         assert config.client_id == "test-client"
 
-    def test_missing_urls_name_themselves_and_their_env_vars(self) -> None:
+    def test_urls_default_to_the_official_platform(self) -> None:
+        # Credentials are the only thing most callers should have to supply: an official SDK
+        # points at the official platform, and making everyone repeat the same two URLs is
+        # friction for nothing.
+        config = AxoniumConfig()
+
+        assert config.auth_base_url == DEFAULT_AUTH_BASE_URL
+        assert config.gateway_base_url == DEFAULT_GATEWAY_BASE_URL
+
+    def test_a_malformed_url_still_names_itself_and_its_env_var(self) -> None:
+        # Defaulting removes the "you forgot one" error, not the "that is not a URL" one.
         with pytest.raises(ConfigurationError) as caught:
-            AxoniumConfig()
+            AxoniumConfig(gateway_base_url="gateway.example")
 
         message = str(caught.value)
-        for field in ("auth_base_url", "gateway_base_url"):
-            assert field in message
-            assert f"AXONIUM_{field.upper()}" in message
+        assert "gateway_base_url" in message
+        assert "AXONIUM_GATEWAY_BASE_URL" in message
+        assert "auth_base_url" not in message
 
     def test_credentials_are_optional_at_this_level(self, config_kwargs: dict[str, str]) -> None:
         # Governed callers supply a token provider instead, which is not a settings value, so
@@ -35,15 +50,17 @@ class TestRequiredSettings:
         assert config.client_id is None
         assert config.client_secret is None
 
-    def test_partial_urls_report_only_what_is_missing(self, config_kwargs: dict[str, str]) -> None:
+    def test_one_url_can_be_overridden_without_supplying_the_other(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        # A self-hosted gateway fronted by the official auth-service, or the reverse, should not
+        # force a caller to restate the half they are happy with.
         del config_kwargs["gateway_base_url"]
 
-        with pytest.raises(ConfigurationError) as caught:
-            AxoniumConfig(**config_kwargs)
+        config = AxoniumConfig(**config_kwargs)
 
-        message = str(caught.value)
-        assert "gateway_base_url" in message
-        assert "auth_base_url" not in message
+        assert config.auth_base_url == config_kwargs["auth_base_url"]
+        assert config.gateway_base_url == DEFAULT_GATEWAY_BASE_URL
 
 
 class TestResolutionOrder:
