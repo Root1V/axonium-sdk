@@ -380,7 +380,17 @@ func imageRequestFrom(raw map[string]any) ImageRequest {
 }
 
 func metaAsMap(m ResponseMeta) map[string]any {
-	out := map[string]any{"request_id": m.RequestID, "trace_id": m.TraceID}
+	// Every field a caller can read, not just the three the first cases happened to assert:
+	// anything missing here is unassertable by the manifest, which is how the cached-token lift
+	// went unverified in all three languages (AXO-81).
+	out := map[string]any{
+		"request_id":           m.RequestID,
+		"trace_id":             m.TraceID,
+		"instance":             m.Instance,
+		"instance_id":          m.InstanceID,
+		"idempotent_replay":    m.IdempotentReplay,
+		"idempotent_replay_of": m.IdempotentReplayOf,
+	}
 	if m.RateLimit != nil {
 		out["rate_limit"] = map[string]any{
 			"limit_requests":     derefInt(m.RateLimit.LimitRequests),

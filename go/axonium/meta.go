@@ -84,16 +84,25 @@ type ResponseMeta struct {
 	// generated. A replay reached no model, recorded no usage and counted against no spend cap, so
 	// its Usage describes the original generation rather than a second one.
 	IdempotentReplay bool
+
+	// IdempotentReplayOf is, on a replay, the request id of the generation that was actually billed.
+	//
+	// A replay carries its own request id, and that id has no usage row of its own -- looking it up
+	// returns 404, correctly, because replaying does not reach a model and is not billed. This is
+	// the id that does resolve, so it is the only way from the response a caller received to the
+	// charge it corresponds to. Empty on anything that is not a replay.
+	IdempotentReplayOf string
 }
 
 func metaFromHeaders(h http.Header) ResponseMeta {
 	return ResponseMeta{
-		RequestID:        h.Get("X-Request-ID"),
-		TraceID:          h.Get("X-Trace-ID"),
-		Instance:         h.Get("X-Prometheus-Instance"),
-		InstanceID:       h.Get("X-Prometheus-Instance-Id"),
-		IdempotentReplay: strings.EqualFold(h.Get("Idempotent-Replay"), "true"),
-		RateLimit:        rateLimitFromHeaders(h),
+		RequestID:          h.Get("X-Request-ID"),
+		TraceID:            h.Get("X-Trace-ID"),
+		Instance:           h.Get("X-Prometheus-Instance"),
+		InstanceID:         h.Get("X-Prometheus-Instance-Id"),
+		IdempotentReplay:   strings.EqualFold(h.Get("Idempotent-Replay"), "true"),
+		IdempotentReplayOf: h.Get("X-Idempotent-Replay-Of"),
+		RateLimit:          rateLimitFromHeaders(h),
 	}
 }
 
