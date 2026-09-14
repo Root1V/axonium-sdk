@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 10,
+  "version": 11,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -27,10 +27,11 @@
           "usage.prompt_tokens": 13,
           "usage.completion_tokens": 137,
           "usage.prompt_tokens_details.cached_tokens": 3,
-          "choices.0.finish_reason": "stop"
+          "choices.0.finish_reason": "stop",
+          "usage.cache_read_tokens": 3
         }
       },
-      "$comment": "Recorded 2026-09-12 against the slug catalog. `model` names the MODEL, not the replica that served it -- the replica is in the X-Prometheus-Instance headers. An alias request is answered with the canonical slug too."
+      "$comment": "Recorded 2026-09-12 against the slug catalog. `model` names the MODEL, not the replica that served it -- the replica is in the X-Prometheus-Instance headers. An alias request is answered with the canonical slug too. usage.cache_read_tokens is asserted next to the raw prompt_tokens_details.cached_tokens on purpose: the gateway reports cached tokens under the OpenAI-shaped nested name, and every SDK lifts it to the flat one. Only the raw path was pinned before, so the lift itself was unverified in all three languages."
     },
     {
       "id": "chat-completion-tool-calls",
@@ -62,7 +63,7 @@
     },
     {
       "id": "chat-completion-backend-timings",
-      "$comment": "Recorded. A reasoning model with a small max_tokens never leaves the reasoning phase: content is empty, finish_reason is length, and there is usage to pay for. Also pins that cache_read is read from the reported prompt_tokens_details rather than derived from timings on this path.",
+      "$comment": "Recorded. A reasoning model with a small max_tokens never leaves the reasoning phase: content is empty, finish_reason is length, and there is usage to pay for. Also pins that cache_read is read from the reported prompt_tokens_details rather than derived from timings on this path. usage.cache_read_tokens is asserted next to the raw prompt_tokens_details.cached_tokens on purpose: the gateway reports cached tokens under the OpenAI-shaped nested name, and every SDK lifts it to the flat one. Only the raw path was pinned before, so the lift itself was unverified in all three languages.",
       "operation": "chat.completions.create",
       "request": {
         "model": "qwen3-0.6b",
@@ -86,7 +87,8 @@
           "timings.predicted_n": 24,
           "timings.cache_n": 9,
           "usage.total_tokens": 34,
-          "usage.prompt_tokens_details.cached_tokens": 9
+          "usage.prompt_tokens_details.cached_tokens": 9,
+          "usage.cache_read_tokens": 9
         }
       }
     },

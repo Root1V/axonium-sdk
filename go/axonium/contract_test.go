@@ -196,6 +196,11 @@ func invokeUnary(t *testing.T, client *Client, c contractCase) map[string]any {
 	if completion, ok := value.(*ChatCompletion); ok {
 		generic["content"] = completion.Content()
 		generic["reasoning"] = completion.Reasoning()
+		// Overlaid rather than replaced. The view is otherwise the raw payload, so any value the
+		// SDK *derives* -- cache_read_tokens is lifted out of the nested prompt_tokens_details --
+		// is invisible to a manifest path and therefore unassertable. Merging keeps both the raw
+		// keys the corpus already pins and the derived ones a caller actually reads.
+		generic["usage"] = overlay(t, generic["usage"], completion.Usage)
 		if calls := completion.ToolCalls(); calls != nil {
 			// Through JSON rather than grafted on directly: the manifest resolves paths like
 			// tool_calls.0.function.name by walking maps, and a typed struct is not one.
@@ -498,4 +503,21 @@ func decodeAny(t *testing.T, v any) any {
 		t.Fatalf("could not re-read %s: %v", encoded, err)
 	}
 	return generic
+}
+
+// overlay merges the SDK's decoded view of a value over the raw payload's, so a derived field and
+// the raw field it came from are both reachable by a manifest path.
+func overlay(t *testing.T, raw any, decoded any) any {
+	t.Helper()
+	base, _ := raw.(map[string]any)
+	merged := map[string]any{}
+	for k, v := range base {
+		merged[k] = v
+	}
+	if typed, ok := decodeAny(t, decoded).(map[string]any); ok {
+		for k, v := range typed {
+			merged[k] = v
+		}
+	}
+	return merged
 }
