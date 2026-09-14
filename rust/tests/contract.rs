@@ -197,6 +197,29 @@ async fn contract_corpus() {
                 // like tool_calls.0.function.name by walking JSON, and a typed struct is not.
                 view["tool_calls"] = serde_json::to_value(completion.tool_calls())
                     .expect("tool calls are serialisable");
+                // Overlaid rather than replaced. The view is otherwise the raw payload, so any
+                // value the SDK *derives* -- cache_read_tokens is lifted out of the nested
+                // prompt_tokens_details -- is invisible to a manifest path and therefore
+                // unassertable. Merging keeps both the raw keys the corpus already pins and the
+                // derived ones a caller actually reads.
+                if let Some(usage) = completion.usage.as_ref() {
+                    let derived = serde_json::json!({
+                        "prompt_tokens": usage.prompt_tokens,
+                        "completion_tokens": usage.completion_tokens,
+                        "total_tokens": usage.total_tokens,
+                        "cache_read_tokens": usage.cache_read_tokens,
+                    });
+                    match (view.get_mut("usage"), derived) {
+                        (Some(Value::Object(raw)), Value::Object(extra)) => {
+                            for (key, value) in extra {
+                                if !value.is_null() {
+                                    raw.insert(key, value);
+                                }
+                            }
+                        }
+                        (_, derived) => view["usage"] = derived,
+                    }
+                }
                 view["meta"] = serde_json::json!({
                     "request_id": completion.meta.request_id,
                     "trace_id": completion.meta.trace_id,
