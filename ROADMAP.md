@@ -12,6 +12,8 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-02 | Monorepo restructure (`spec/`, `python/`, `go/`, `rust/`, CI) | ✅ | Legacy removed from `main` |
 | AXO-03 | Configuration layer, zero hardcoded network defaults | ✅ | Superseded by AXO-76: an official SDK should know where the official platform is |
 | AXO-76 | Default to the official platform URLs | ✅ | Credentials are the only required setting; provisional until the cloud migration |
+| AXO-78 | Re-vendor the integration guide once the platform sends the revision | 📋 | They fixed the examples; our `spec/prometheus-gateway.md` still carries the old slug in eight places. Replace wholesale with `errors.json` and the affected cases in one commit |
+| AXO-79 | Consume `GET /v1/usage/{request_id}` when the platform ships it | 📋 | Accepted by the platform as RM-100, no date. Blocked on them storing `request_id` in the usage row. Asked for the token breakdown and for a replay id to resolve to the original's row |
 | AXO-77 | Change the defaults when Prometheus moves to its cloud host | 📋 | Three constants, one per SDK. The release must be loud: a pinned version keeps the old address |
 | AXO-04 | Typed error taxonomy + shared `spec/errors.json` | ✅ | OAuth errors kept a separate branch |
 | AXO-05 | OAuth2 `client_credentials` with refresh-ahead tokens | ✅ | Expiry anchored to the server `Date` header |
