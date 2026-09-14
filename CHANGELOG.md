@@ -7,6 +7,12 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+The quickstart in the README used a model name that is not registered, so copying it produced
+`400 unknown-model` rather than a completion. Examples and doc comments now use a real slug, and
+each README says what a slug is: it never changes and is never reused, so pinning one is safe, but
+which ones exist depends on the deployment and on what the token is granted — the catalog endpoint
+is the source of truth, not the README.
+
 Tool calls are now typed like everything around them.
 
 They used to arrive as raw dicts while the message carrying them was a model. The asymmetry cost a
@@ -172,6 +178,12 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+The quickstart in the README used a model name that is not registered, so copying it produced
+`400 unknown-model` rather than a completion. Examples and doc comments now use a real slug, and
+each README says what a slug is: it never changes and is never reused, so pinning one is safe, but
+which ones exist depends on the deployment and on what the token is granted — the catalog endpoint
+is the source of truth, not the README.
+
 Tool calls are now typed like everything around them.
 
 They used to arrive as raw dicts while the message carrying them was a model. The asymmetry cost a
@@ -237,6 +249,12 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+The quickstart in the README used a model name that is not registered, so copying it produced
+`400 unknown-model` rather than a completion. Examples and doc comments now use a real slug, and
+each README says what a slug is: it never changes and is never reused, so pinning one is safe, but
+which ones exist depends on the deployment and on what the token is granted — the catalog endpoint
+is the source of truth, not the README.
 
 Tool calls are now typed like everything around them.
 

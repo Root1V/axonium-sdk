@@ -29,17 +29,21 @@ with Axonium(client_id=..., client_secret=...) as client:
     print(client.models.mine().ids)  # what this token can actually call
 
     completion = client.chat.completions.create(
-        model="llama3-8b-q4",
+        model="qwen3-0.6b",
         messages=[{"role": "user", "content": "Hello"}],
     )
     print(completion.content)
 ```
 
+The model name is a **slug**. A slug never changes and is never reused, so pinning one in code
+is safe — but which slugs exist depends on the deployment and on what your token is granted, so
+`client.models.list()` is the source of truth rather than anything written here.
+
 Streaming is a separate method, because it needs a different scope and is never retried
 automatically:
 
 ```python
-with client.chat.completions.stream(model="llama3-8b-q4", messages=messages) as stream:
+with client.chat.completions.stream(model="qwen3-0.6b", messages=messages) as stream:
     for chunk in stream:
         print(chunk.content or "", end="", flush=True)
     print(stream.usage())
@@ -53,7 +57,7 @@ arrives only in the first fragment, and `id` never repeats), and hands back **ex
 non-streaming completion returns**:
 
 ```python
-with client.chat.completions.stream(model="llama3-8b-q4", messages=messages, tools=tools) as stream:
+with client.chat.completions.stream(model="qwen3-0.6b", messages=messages, tools=tools) as stream:
     for chunk in stream:
         ...
     for call in stream.tool_calls:
