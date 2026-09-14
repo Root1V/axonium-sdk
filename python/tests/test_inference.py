@@ -18,7 +18,7 @@ from axonium.errors import (
     UpstreamError,
 )
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
 EMBED_URL = "https://gateway.test.invalid/v1/embeddings"
 IMAGE_URL = "https://gateway.test.invalid/v1/images/generations"

@@ -22,7 +22,7 @@ from axonium.errors import (
     UnusedCredentialWarning,
 )
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 MINE_URL = "https://gateway.test.invalid/v1/models/mine"
 CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
 
@@ -32,7 +32,6 @@ EMPTY_LIST = {"object": "list", "data": []}
 @pytest.fixture
 def urls() -> dict[str, str]:
     return {
-        "auth_base_url": "https://auth.test.invalid",
         "gateway_base_url": "https://gateway.test.invalid",
     }
 

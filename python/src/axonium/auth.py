@@ -261,7 +261,7 @@ class TokenManager(httpx.Auth):
         }
         if self._config.scope:
             form["scope"] = self._config.scope
-        return {"url": f"{self._config.resolved_auth_base_url}{TOKEN_ENDPOINT}", "data": form}
+        return {"url": f"{self._config.gateway_base_url}{TOKEN_ENDPOINT}", "data": form}
 
     def _fetch_sync(self) -> TokenSet:
         client = self._sync_client
@@ -366,14 +366,14 @@ def _token_from_response(response: httpx.Response, *, issued_at: float) -> Token
 
     if body is None:
         raise AuthTransportError(
-            f"The auth-service returned a non-JSON {response.status_code} response."
+            f"The token endpoint returned a non-JSON {response.status_code} response."
         )
 
     access_token = body.get("access_token")
     expires_in = body.get("expires_in")
 
     if not isinstance(access_token, str) or not access_token:
-        raise AuthTransportError("The auth-service response contained no access_token.")
+        raise AuthTransportError("The token response contained no access_token.")
     if not isinstance(expires_in, (int, float)) or expires_in <= 0:
         raise AuthTransportError(
             f"The auth-service returned an unusable expires_in: {expires_in!r}."

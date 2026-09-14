@@ -64,8 +64,7 @@ func slowThenFast(t *testing.T, attempts *int64, rec *keyRecorder) *httptest.Ser
 func keyedClient(t *testing.T, url string) *Client {
 	t.Helper()
 	policy := fastRetry()
-	client, err := New(Config{
-		AuthBaseURL: url, GatewayBaseURL: url, ClientID: "id", ClientSecret: "secret",
+	client, err := New(Config{GatewayBaseURL: url, ClientID: "id", ClientSecret: "secret",
 		Retry: policy, Timeouts: Timeouts{Request: 150 * time.Millisecond},
 	})
 	if err != nil {

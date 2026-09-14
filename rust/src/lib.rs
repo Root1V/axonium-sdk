@@ -13,8 +13,6 @@
 //! use axonium::{ChatRequest, Client, Config, Message};
 //!
 //! let client = Client::new(Config {
-//!     auth_base_url: "https://auth.example".into(),
-//!     gateway_base_url: "https://gateway.example".into(),
 //!     client_id: "...".into(),
 //!     client_secret: "...".into(),
 //!     ..Default::default()
@@ -49,7 +47,7 @@ pub use auth::{decode_claims, TokenClaims, TokenProvider};
 pub use catalog::{Model, ModelList};
 pub use chat::{ChatCompletion, ChatRequest, Choice, FunctionCall, Message, ToolCall};
 pub use client::Client;
-pub use config::{Config, Timeouts, DEFAULT_AUTH_BASE_URL, DEFAULT_GATEWAY_BASE_URL};
+pub use config::{Config, Timeouts, DEFAULT_GATEWAY_BASE_URL};
 pub use error::{ApiError, Error, ErrorKind, Result};
 pub use inference::{Embedding, EmbeddingList, EmbeddingRequest, Image, ImageList, ImageRequest};
 pub use retry::RetryPolicy;

@@ -19,7 +19,7 @@ from axonium import AsyncAxonium, Axonium, AxoniumConfig
 from axonium.errors import ConfigurationError
 
 SECRET = "pmt_live_do_not_leak_me"
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
 CATALOG_URL = "https://gateway.test.invalid/v1/models"
 
@@ -29,7 +29,6 @@ TOKEN = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJjIn0.super-secret-signature"
 @pytest.fixture
 def secret_config() -> dict[str, str]:
     return {
-        "auth_base_url": "https://auth.test.invalid",
         "gateway_base_url": "https://gateway.test.invalid",
         "client_id": "client-id-is-not-secret",
         "client_secret": SECRET,

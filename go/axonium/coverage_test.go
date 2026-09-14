@@ -80,8 +80,7 @@ func TestGovernedModeStillDiagnosesScopes(t *testing.T) {
 	defer srv.Close()
 
 	token := makeJWT(map[string]any{"scope": "inference:read model:qwen3-0.6b"}) + ".sig"
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		TokenProvider: func(context.Context, string) (string, error) { return token, nil },
 	})
 	if err != nil {
@@ -107,8 +106,7 @@ func TestProviderErrorsSurfaceWhereTheyHappen(t *testing.T) {
 	defer srv.Close()
 
 	boom := errors.New("the host's vault is unreachable")
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		TokenProvider: func(context.Context, string) (string, error) { return "", boom },
 	})
 	if err != nil {
@@ -144,8 +142,7 @@ func TestModalityCheckIsSilentOnAnUnknownModality(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "i", ClientSecret: "s", VerifyModality: true,
 	})
 	if err != nil {

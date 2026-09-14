@@ -18,7 +18,7 @@ import respx
 from axonium import AsyncAxonium, Axonium, RetryPolicy
 from axonium.errors import APIError, AxoniumError, StreamInterruptedError
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
 CATALOG_URL = "https://gateway.test.invalid/v1/models"
 

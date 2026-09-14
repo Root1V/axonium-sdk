@@ -30,15 +30,6 @@ pub(crate) const ENV_PREFIX: &str = "AXONIUM_";
 /// this one.
 pub const DEFAULT_GATEWAY_BASE_URL: &str = "http://127.0.0.1:8020";
 
-/// Where tokens come from, which is now **the same host as the gateway**.
-///
-/// The platform used to run a separate auth-service on its own address, so every consumer
-/// configured two hosts. The gateway issues tokens itself now, at the same `/oauth2/token` path,
-/// so there is one address to know instead of two -- and a deployment can stop exposing the
-/// service that holds the credentials, which was a second public surface offering nothing the
-/// gateway cannot.
-pub const DEFAULT_AUTH_BASE_URL: &str = DEFAULT_GATEWAY_BASE_URL;
-
 /// The gateway's own backend-forwarding timeout for non-streaming requests. A client-side timeout
 /// below this is a known failure mode: the backend keeps computing after the client gives up.
 const GATEWAY_NON_STREAMING_TIMEOUT: Duration = Duration::from_secs(600);
@@ -73,9 +64,6 @@ impl Default for Timeouts {
 /// Resolved client configuration. Unset fields fall back to `AXONIUM_*`.
 #[derive(Clone, Default)]
 pub struct Config {
-    /// Base URL of the auth-service. Defaults to [`DEFAULT_AUTH_BASE_URL`]; override it for a
-    /// self-hosted deployment.
-    pub auth_base_url: String,
     /// Base URL of the gateway serving the `/v1/` inference API. Defaults to
     /// [`DEFAULT_GATEWAY_BASE_URL`].
     pub gateway_base_url: String,
@@ -140,10 +128,6 @@ impl Config {
             "GATEWAY_BASE_URL",
             DEFAULT_GATEWAY_BASE_URL,
         );
-        // The token host is deliberately left alone here. It is resolved after the gateway has
-        // been validated, below, so that one malformed gateway URL produces one complaint rather
-        // than two -- the second of which would name a variable the caller never set.
-        resolve_url(&mut self.auth_base_url, "AUTH_BASE_URL", "");
 
         for (field, var) in [
             (&mut self.client_id, "CLIENT_ID"),
@@ -178,19 +162,6 @@ impl Config {
             "GATEWAY_BASE_URL",
             &mut problems,
         );
-        if self.auth_base_url.is_empty() {
-            // Follows the *normalised* gateway, so it inherits a value already known to be a URL
-            // and needs no second check. A self-hosted deployment that sets one address therefore
-            // does not silently ask the official platform for its tokens.
-            self.auth_base_url = self.gateway_base_url.clone();
-        } else {
-            normalise(
-                &mut self.auth_base_url,
-                "auth_base_url",
-                "AUTH_BASE_URL",
-                &mut problems,
-            );
-        }
         if self.refresh_ahead_ratio <= 0.0 || self.refresh_ahead_ratio > 1.0 {
             problems.push("refresh_ahead_ratio must be within (0, 1]".to_string());
         }
@@ -230,7 +201,6 @@ fn normalise(value: &mut String, field: &str, var: &str, problems: &mut Vec<Stri
 impl std::fmt::Debug for Config {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Config")
-            .field("auth_base_url", &self.auth_base_url)
             .field("gateway_base_url", &self.gateway_base_url)
             .field("client_id", &self.client_id)
             .field(

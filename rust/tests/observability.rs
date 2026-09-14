@@ -73,7 +73,6 @@ async fn call_with_subscriber(collected: &Collected) {
         .finish();
 
     let client = Client::new(Config {
-        auth_base_url: server.uri(),
         gateway_base_url: server.uri(),
         client_id: "id-should-not-appear".into(),
         client_secret: "secret-should-not-appear".into(),

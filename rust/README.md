@@ -28,9 +28,9 @@ let completion = client.chat(&ChatRequest {
 println!("{}", completion.content());
 ```
 
-Only the credentials are required. The gateway address defaults to the official platform and the
-token host follows it — the gateway issues tokens itself, so there is one address to know rather
-than two. Set `auth_base_url` only for a deployment that still runs a separate auth-service.
+Only the credentials are required. The gateway address defaults to the official platform and
+serves **both** the inference API and the token endpoint, so there is a single address to know
+— usually none to supply.
 
 The model name is a **slug**. A slug never changes and is never reused, so pinning one in code
 is safe — but which slugs exist depends on the deployment and on what your token is granted, so
@@ -114,7 +114,7 @@ empty for the whole response. Both are exposed and neither is inferred from the 
 **You should only need your credentials**: the base URLs default to the official Prometheus
 platform, and those defaults are provisional until it moves to its cloud host.
 
-Unset fields fall back to `AXONIUM_AUTH_BASE_URL`, `AXONIUM_GATEWAY_BASE_URL`,
+Unset fields fall back to `AXONIUM_GATEWAY_BASE_URL`,
 `AXONIUM_CLIENT_ID`, `AXONIUM_CLIENT_SECRET`, `AXONIUM_SCOPE`, `AXONIUM_CA_BUNDLE` and
 `AXONIUM_VERIFY_MODALITY`. A missing required setting fails at construction, naming both the field
 and the variable that can supply it.

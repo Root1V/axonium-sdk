@@ -12,7 +12,7 @@ from axonium.errors import ForbiddenError, StreamInterruptedError
 from axonium.models.chat import ToolCall
 from axonium.transport.sse import DONE, SSEEvent, StreamAccumulator, decode_line
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
 
 

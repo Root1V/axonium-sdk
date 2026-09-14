@@ -43,8 +43,16 @@ def test_the_version_is_a_single_source_of_truth() -> None:
     assert axonium.__version__ == _version.__version__
 
 
-def test_the_official_defaults_are_exported() -> None:
+def test_the_official_default_is_exported() -> None:
     # Callers pointing at a self-hosted deployment need to be able to compare against, or fall back
     # to, what the SDK would otherwise use.
-    assert axonium.DEFAULT_AUTH_BASE_URL.startswith("http")
     assert axonium.DEFAULT_GATEWAY_BASE_URL.startswith("http")
+
+
+def test_there_is_exactly_one_address_to_configure() -> None:
+    # The platform used to run a separate auth-service that every consumer also had to configure.
+    # The gateway issues tokens itself now, and this pins that the second address is gone from the
+    # public surface rather than merely defaulted -- a caller should never learn it existed.
+    urls = [name for name in axonium.__all__ if name.endswith("_BASE_URL")]
+    assert urls == ["DEFAULT_GATEWAY_BASE_URL"], f"more than one address is exported: {urls}"
+    assert "auth_base_url" not in axonium.AxoniumConfig.model_fields

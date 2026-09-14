@@ -21,7 +21,7 @@ from axonium.errors import (
     TransportError,
 )
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 CHAT = "https://gateway.test.invalid/v1/chat/completions"
 MESSAGES = [{"role": "user", "content": "hi"}]
 COMPLETION = {

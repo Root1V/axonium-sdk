@@ -196,7 +196,7 @@ func (m *tokenManager) fetchLocked(ctx context.Context) (*tokenSet, error) {
 	// instead of being granted as extra margin.
 	issuedAt := time.Now()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.config.AuthBaseURL+tokenEndpoint, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.config.GatewayBaseURL+tokenEndpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrAuthTransport, err)
 	}

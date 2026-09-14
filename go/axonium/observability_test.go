@@ -87,8 +87,7 @@ func TestLogsCarryMetadataAndNeverContent(t *testing.T) {
 	var buf bytes.Buffer
 	srv := observedServer(t, false)
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "id-should-not-appear", ClientSecret: "secret-should-not-appear",
 		Logger: slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
 	})
@@ -132,8 +131,7 @@ func TestSpansCarryTheCorrelationIDs(t *testing.T) {
 	tracer := &recordingTracer{}
 	srv := observedServer(t, false)
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "i", ClientSecret: "s", Tracer: tracer,
 	})
 	if err != nil {
@@ -177,8 +175,7 @@ func TestAFailedCallIsRecordedOnTheSpanAndLogged(t *testing.T) {
 	tracer := &recordingTracer{}
 	srv := observedServer(t, true)
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s",
+	client, err := New(Config{GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s",
 		Tracer: tracer, Retry: fastRetry(),
 		Logger: slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
 	})

@@ -89,8 +89,7 @@ func TestModalityCheckCatchesTheGatewaysOneDirectionalGap(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "id", ClientSecret: "secret", VerifyModality: true,
 	})
 	if err != nil {
@@ -138,8 +137,7 @@ func TestModalityCheckSkipsWhenTheCatalogIsUnavailable(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "id", ClientSecret: "secret", VerifyModality: true, Retry: fastRetry(),
 	})
 	if err != nil {

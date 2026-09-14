@@ -15,7 +15,7 @@ from axonium import AsyncAxonium, Axonium
 from axonium.models.chat import ChatCompletion
 from axonium.transport.sse import StreamAccumulator, decode_line
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
 
 THINKING_ONLY = {

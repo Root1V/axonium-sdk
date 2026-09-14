@@ -78,7 +78,6 @@ async fn serve(case: &Value) -> MockServer {
 
 fn client(url: &str) -> Client {
     Client::new(Config {
-        auth_base_url: url.into(),
         gateway_base_url: url.into(),
         client_id: "test".into(),
         client_secret: "test".into(),

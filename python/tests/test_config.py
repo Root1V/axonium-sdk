@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from axonium.config import (
-    DEFAULT_AUTH_BASE_URL,
     DEFAULT_GATEWAY_BASE_URL,
     GATEWAY_STREAMING_TIMEOUT,
     AxoniumConfig,
@@ -15,7 +14,6 @@ class TestRequiredSettings:
     def test_constructs_from_explicit_arguments(self, config_kwargs: dict[str, str]) -> None:
         config = AxoniumConfig(**config_kwargs)
 
-        assert config.auth_base_url == "https://auth.test.invalid"
         assert config.gateway_base_url == "https://gateway.test.invalid"
         assert config.client_id == "test-client"
 
@@ -26,24 +24,13 @@ class TestRequiredSettings:
         config = AxoniumConfig()
 
         assert config.gateway_base_url == DEFAULT_GATEWAY_BASE_URL
-        assert config.resolved_auth_base_url == DEFAULT_AUTH_BASE_URL
 
-    def test_the_token_host_follows_the_gateway_when_it_is_not_set(self) -> None:
-        # The failure this prevents: pointing the SDK at a self-hosted deployment, forgetting the
-        # second URL, and asking the official platform for a token to use somewhere else. Nothing
-        # errors -- the token is simply issued by the wrong party.
-        config = AxoniumConfig(gateway_base_url="https://gateway.self-hosted.invalid")
-
-        assert config.resolved_auth_base_url == "https://gateway.self-hosted.invalid"
-
-    def test_a_separate_auth_service_is_still_addressable(self) -> None:
-        # A deployment that still runs one says so, and is not overridden by the gateway.
-        config = AxoniumConfig(
-            gateway_base_url="https://gateway.self-hosted.invalid",
-            auth_base_url="https://auth.self-hosted.invalid",
-        )
-
-        assert config.resolved_auth_base_url == "https://auth.self-hosted.invalid"
+    def test_there_is_no_second_url_to_configure(self) -> None:
+        # The platform used to run a separate auth-service that every consumer also had to
+        # configure, and forgetting it left a client asking the official platform for a token to
+        # use somewhere else -- silently, since nothing errored. The field is gone rather than
+        # defaulted, so a caller cannot get that wrong and never has to know it existed.
+        assert not hasattr(AxoniumConfig(), "auth_base_url")
 
     def test_a_malformed_url_still_names_itself_and_its_env_var(self) -> None:
         # Defaulting removes the "you forgot one" error, not the "that is not a URL" one.
@@ -76,7 +63,6 @@ class TestRequiredSettings:
 
         config = AxoniumConfig(**config_kwargs)
 
-        assert config.auth_base_url == config_kwargs["auth_base_url"]
         assert config.gateway_base_url == DEFAULT_GATEWAY_BASE_URL
 
 
