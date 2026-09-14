@@ -6,7 +6,7 @@ rather than reimplemented three times from prose.
 
 | Path | What it is |
 |---|---|
-| `prometheus-gateway.md` | Vendored copy of the platform team's integration guide — the API contract |
+| `prometheus-gateway.md` | Vendored copy of the platform team's integration guide — the API contract. **Revision 2026-09-14 · `55c2174`** |
 | `errors.json` | The error catalog: HTTP status × `type` suffix × retryability |
 | `cases/manifest.json` | Contract-test case index, replayed by each SDK's test suite |
 | `fixtures/` | Golden response bodies (`*.json`) and literal SSE wire captures (`*.sse`) |
@@ -78,3 +78,7 @@ against the gateway source. Every SDK should follow these.
 `prometheus-gateway.md` is a copy, not the original. When the platform team revises the guide,
 replace the file wholesale, then update `errors.json` and the affected cases in the same commit so
 the fixtures never describe a contract that no longer exists.
+
+The guide carries a revision line (`**Revision**: <date> · <commit>`) in its header, added at our
+request after a fix reached their document and never reached this copy. Quote it to ask whether a
+copy is current instead of diffing the whole file, and update the table above when re-vendoring.
