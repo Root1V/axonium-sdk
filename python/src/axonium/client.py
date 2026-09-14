@@ -346,7 +346,7 @@ class Axonium(_BaseAxonium):
 
         with Axonium() as client:
             completion = client.chat.completions.create(
-                model="llama3-8b-q4",
+                model="qwen3-0.6b",
                 messages=[{"role": "user", "content": "Hello"}],
             )
             print(completion.content)

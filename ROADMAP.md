@@ -85,4 +85,4 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-71 | Streamed replay is not reproducible | ✅ | Fixed upstream: 6/6 now, with no wait. It was the visible end of unbilled streaming |
 | AXO-67 | Validate idempotency key length client-side | ✅ | 255 max; the gateway reports over-length as a *conflict*, which misdirects |
 | AXO-60 | Re-record fixtures against the slug catalog | ✅ | 16 of 20 recorded; the other 4 say why they cannot be produced here |
-| AXO-61 | Migrate examples and docs to model slugs | 📋 | Aliases still resolve, so this is tidiness, not breakage |
+| AXO-61 | Migrate examples and docs to model slugs | ✅ | Not tidiness after all: the documented name was not registered, so every README quickstart failed with `400 unknown-model` on copy-paste. Verified against the deployment before and after |

@@ -39,11 +39,15 @@ if err != nil {
 defer client.Close()
 
 completion, err := client.Chat.Create(ctx, axonium.ChatRequest{
-	Model:    "llama3-8b-q4",
+	Model:    "qwen3-0.6b",
 	Messages: []axonium.Message{axonium.TextMessage("user", "Hello")},
 })
 fmt.Println(completion.Content())
 ```
+
+The model name is a **slug**. A slug never changes and is never reused, so pinning one in code
+is safe — but which slugs exist depends on the deployment and on what your token is granted, so
+`client.Models(ctx)` is the source of truth rather than anything written here.
 
 Streaming is a separate method, because it needs a different scope, is never retried automatically,
 and returns a different type:

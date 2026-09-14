@@ -19,7 +19,7 @@
 //	defer client.Close()
 //
 //	completion, err := client.Chat.Create(ctx, axonium.ChatRequest{
-//		Model:    "llama3-8b-q4",
+//		Model:    "qwen3-0.6b",
 //		Messages: []axonium.Message{axonium.TextMessage("user", "Hello")},
 //	})
 package axonium

@@ -30,6 +30,10 @@ let completion = client.chat(&ChatRequest {
 println!("{}", completion.content());
 ```
 
+The model name is a **slug**. A slug never changes and is never reused, so pinning one in code
+is safe — but which slugs exist depends on the deployment and on what your token is granted, so
+`client.models().await` is the source of truth rather than anything written here.
+
 Streaming is a separate method, because it needs a different scope, is never retried
 automatically, and returns a different type:
 
