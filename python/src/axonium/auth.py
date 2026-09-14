@@ -256,7 +256,7 @@ class TokenManager(httpx.Auth):
         }
         if self._config.scope:
             form["scope"] = self._config.scope
-        return {"url": f"{self._config.auth_base_url}{TOKEN_ENDPOINT}", "data": form}
+        return {"url": f"{self._config.resolved_auth_base_url}{TOKEN_ENDPOINT}", "data": form}
 
     def _fetch_sync(self) -> TokenSet:
         client = self._sync_client

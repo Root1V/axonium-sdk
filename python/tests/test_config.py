@@ -21,12 +21,29 @@ class TestRequiredSettings:
 
     def test_urls_default_to_the_official_platform(self) -> None:
         # Credentials are the only thing most callers should have to supply: an official SDK
-        # points at the official platform, and making everyone repeat the same two URLs is
-        # friction for nothing.
+        # points at the official platform, and making everyone repeat a URL is friction for
+        # nothing. There is one address now rather than two -- the gateway issues tokens itself.
         config = AxoniumConfig()
 
-        assert config.auth_base_url == DEFAULT_AUTH_BASE_URL
         assert config.gateway_base_url == DEFAULT_GATEWAY_BASE_URL
+        assert config.resolved_auth_base_url == DEFAULT_AUTH_BASE_URL
+
+    def test_the_token_host_follows_the_gateway_when_it_is_not_set(self) -> None:
+        # The failure this prevents: pointing the SDK at a self-hosted deployment, forgetting the
+        # second URL, and asking the official platform for a token to use somewhere else. Nothing
+        # errors -- the token is simply issued by the wrong party.
+        config = AxoniumConfig(gateway_base_url="https://gateway.self-hosted.invalid")
+
+        assert config.resolved_auth_base_url == "https://gateway.self-hosted.invalid"
+
+    def test_a_separate_auth_service_is_still_addressable(self) -> None:
+        # A deployment that still runs one says so, and is not overridden by the gateway.
+        config = AxoniumConfig(
+            gateway_base_url="https://gateway.self-hosted.invalid",
+            auth_base_url="https://auth.self-hosted.invalid",
+        )
+
+        assert config.resolved_auth_base_url == "https://auth.self-hosted.invalid"
 
     def test_a_malformed_url_still_names_itself_and_its_env_var(self) -> None:
         # Defaulting removes the "you forgot one" error, not the "that is not a URL" one.

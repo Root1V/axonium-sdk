@@ -28,10 +28,8 @@ correspondingly prefixed: `go/v0.1.0` publishes version `v0.1.0` of this module.
 
 ```go
 client, err := axonium.New(axonium.Config{
-	AuthBaseURL:    "https://auth.example",
-	GatewayBaseURL: "https://gateway.example",
-	ClientID:       "...",
-	ClientSecret:   "...",
+	ClientID:     "...",
+	ClientSecret: "...",
 })
 if err != nil {
 	return err
@@ -44,6 +42,10 @@ completion, err := client.Chat.Create(ctx, axonium.ChatRequest{
 })
 fmt.Println(completion.Content())
 ```
+
+Only the credentials are required. The gateway address defaults to the official platform and the
+token host follows it — the gateway issues tokens itself, so there is one address to know rather
+than two. Set `AuthBaseURL` only for a deployment that still runs a separate auth-service.
 
 The model name is a **slug**. A slug never changes and is never reused, so pinning one in code
 is safe — but which slugs exist depends on the deployment and on what your token is granted, so
@@ -253,7 +255,7 @@ environment, then to the official default:
 
 | Environment variable | Purpose |
 |---|---|
-| `AXONIUM_AUTH_BASE_URL` | auth-service base URL (OAuth2 token endpoint) |
+| `AXONIUM_AUTH_BASE_URL` | token endpoint host — defaults to the gateway, set only for a separate auth-service |
 | `AXONIUM_GATEWAY_BASE_URL` | gateway base URL (`/v1/` inference API) |
 | `AXONIUM_CLIENT_ID` | OAuth2 client ID issued by the platform operator |
 | `AXONIUM_CLIENT_SECRET` | OAuth2 client secret |

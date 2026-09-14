@@ -15,8 +15,6 @@ Requires Rust 1.75+. Async, on any runtime — `tokio` is used for timers only.
 use axonium::{ChatRequest, Client, Config, Message};
 
 let client = Client::new(Config {
-    auth_base_url: "https://auth.example".into(),
-    gateway_base_url: "https://gateway.example".into(),
     client_id: "...".into(),
     client_secret: "...".into(),
     ..Default::default()
@@ -29,6 +27,10 @@ let completion = client.chat(&ChatRequest {
 }).await?;
 println!("{}", completion.content());
 ```
+
+Only the credentials are required. The gateway address defaults to the official platform and the
+token host follows it — the gateway issues tokens itself, so there is one address to know rather
+than two. Set `auth_base_url` only for a deployment that still runs a separate auth-service.
 
 The model name is a **slug**. A slug never changes and is never reused, so pinning one in code
 is safe — but which slugs exist depends on the deployment and on what your token is granted, so

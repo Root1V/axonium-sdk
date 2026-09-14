@@ -61,15 +61,28 @@ func TestURLsDefaultToTheOfficialPlatform(t *testing.T) {
 		t.Errorf("got %q and %q", cfg.AuthBaseURL, cfg.GatewayBaseURL)
 	}
 
-	// Overriding one must not force restating the other: a self-hosted gateway fronted by the
-	// official auth-service is a real shape.
+	// Pointing at a self-hosted gateway must take the token host with it. The gateway issues
+	// tokens itself now, so the old behaviour -- keeping the official auth address when only the
+	// gateway was overridden -- would silently ask the official platform for a token to use
+	// somewhere else. Nothing errors in that shape, which is what makes it worth a test.
 	partial, err := New(Config{ClientID: "i", ClientSecret: "s", GatewayBaseURL: "https://mine.example"})
 	if err != nil {
 		t.Fatalf("building: %v", err)
 	}
 	defer partial.Close()
-	if got := partial.Config(); got.GatewayBaseURL != "https://mine.example" || got.AuthBaseURL != DefaultAuthBaseURL {
+	if got := partial.Config(); got.GatewayBaseURL != "https://mine.example" || got.AuthBaseURL != "https://mine.example" {
 		t.Errorf("got %q and %q", got.GatewayBaseURL, got.AuthBaseURL)
+	}
+
+	// A deployment that still runs a separate auth-service says so, and is not overridden.
+	split, err := New(Config{ClientID: "i", ClientSecret: "s",
+		GatewayBaseURL: "https://mine.example", AuthBaseURL: "https://auth.mine.example"})
+	if err != nil {
+		t.Fatalf("building: %v", err)
+	}
+	defer split.Close()
+	if got := split.Config(); got.AuthBaseURL != "https://auth.mine.example" {
+		t.Errorf("an explicit auth host was overridden: %q", got.AuthBaseURL)
 	}
 }
 

@@ -28,10 +28,16 @@ pub(crate) const ENV_PREFIX: &str = "AXONIUM_";
 /// machine reaches their own localhost -- normally a refused connection, which is clear enough,
 /// but set `AXONIUM_AUTH_BASE_URL` and `AXONIUM_GATEWAY_BASE_URL` for any deployment that is not
 /// this one.
-pub const DEFAULT_AUTH_BASE_URL: &str = "http://127.0.0.1:9000";
-
-/// The official gateway. See [`DEFAULT_AUTH_BASE_URL`] for the caveats that apply to both.
 pub const DEFAULT_GATEWAY_BASE_URL: &str = "http://127.0.0.1:8020";
+
+/// Where tokens come from, which is now **the same host as the gateway**.
+///
+/// The platform used to run a separate auth-service on its own address, so every consumer
+/// configured two hosts. The gateway issues tokens itself now, at the same `/oauth2/token` path,
+/// so there is one address to know instead of two -- and a deployment can stop exposing the
+/// service that holds the credentials, which was a second public surface offering nothing the
+/// gateway cannot.
+pub const DEFAULT_AUTH_BASE_URL: &str = DEFAULT_GATEWAY_BASE_URL;
 
 /// The gateway's own backend-forwarding timeout for non-streaming requests. A client-side timeout
 /// below this is a known failure mode: the backend keeps computing after the client gives up.
@@ -112,19 +118,13 @@ impl Config {
         // make the governed mode the hardest one to deploy.
         let explicit = !self.client_id.is_empty() || !self.client_secret.is_empty();
 
-        // Precedence: the field if set, then the environment, then the official default.
-        for (field, var, fallback) in [
-            (
-                &mut self.auth_base_url,
-                "AUTH_BASE_URL",
-                DEFAULT_AUTH_BASE_URL,
-            ),
-            (
-                &mut self.gateway_base_url,
-                "GATEWAY_BASE_URL",
-                DEFAULT_GATEWAY_BASE_URL,
-            ),
-        ] {
+        // Precedence: the field if set, then the environment, then the fallback.
+        //
+        // Sequential rather than a loop, because the second depends on the first: the token host
+        // falls back to the *resolved* gateway rather than to a constant, so a self-hosted
+        // deployment that sets one address does not silently ask the official platform for its
+        // tokens. Nothing errors in that shape, which is what makes the order load-bearing.
+        fn resolve_url(field: &mut String, var: &str, fallback: &str) {
             if field.is_empty() {
                 let from_env = env(var);
                 *field = if from_env.is_empty() {
@@ -134,6 +134,16 @@ impl Config {
                 };
             }
         }
+
+        resolve_url(
+            &mut self.gateway_base_url,
+            "GATEWAY_BASE_URL",
+            DEFAULT_GATEWAY_BASE_URL,
+        );
+        // The token host is deliberately left alone here. It is resolved after the gateway has
+        // been validated, below, so that one malformed gateway URL produces one complaint rather
+        // than two -- the second of which would name a variable the caller never set.
+        resolve_url(&mut self.auth_base_url, "AUTH_BASE_URL", "");
 
         for (field, var) in [
             (&mut self.client_id, "CLIENT_ID"),
@@ -163,17 +173,24 @@ impl Config {
 
         let mut problems = Vec::new();
         normalise(
-            &mut self.auth_base_url,
-            "auth_base_url",
-            "AUTH_BASE_URL",
-            &mut problems,
-        );
-        normalise(
             &mut self.gateway_base_url,
             "gateway_base_url",
             "GATEWAY_BASE_URL",
             &mut problems,
         );
+        if self.auth_base_url.is_empty() {
+            // Follows the *normalised* gateway, so it inherits a value already known to be a URL
+            // and needs no second check. A self-hosted deployment that sets one address therefore
+            // does not silently ask the official platform for its tokens.
+            self.auth_base_url = self.gateway_base_url.clone();
+        } else {
+            normalise(
+                &mut self.auth_base_url,
+                "auth_base_url",
+                "AUTH_BASE_URL",
+                &mut problems,
+            );
+        }
         if self.refresh_ahead_ratio <= 0.0 || self.refresh_ahead_ratio > 1.0 {
             problems.push("refresh_ahead_ratio must be within (0, 1]".to_string());
         }
