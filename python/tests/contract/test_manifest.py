@@ -32,6 +32,7 @@ ENDPOINTS = {
     "images.generate": f"{GATEWAY}/v1/images/generations",
     "models.list": f"{GATEWAY}/v1/models",
     "models.mine": f"{GATEWAY}/v1/models/mine",
+    "usage.retrieve": f"{GATEWAY}/v1/usage/{{request_id}}",
 }
 
 CASES = MANIFEST["cases"]
@@ -90,8 +91,12 @@ def _token() -> None:
 
 
 def route_for(case: dict[str, Any]) -> Any:
-    url = ENDPOINTS[case["operation"]]
-    method = respx.get if case["operation"].startswith("models.") else respx.post
+    operation = case["operation"]
+    url = ENDPOINTS[operation]
+    if operation == "usage.retrieve":
+        # The id is part of the path here, not the body, so the route has to be built per case.
+        url = url.format(request_id=case["request"]["request_id"])
+    method = respx.get if operation.startswith(("models.", "usage.")) else respx.post
     return method(url).mock(return_value=mock_response(case))
 
 
@@ -109,6 +114,8 @@ def call_sync(client: Axonium, case: dict[str, Any]) -> Any:
         return client.models.list()
     if operation == "models.mine":
         return client.models.mine()
+    if operation == "usage.retrieve":
+        return client.usage.retrieve(request["request_id"])
     raise AssertionError(f"unhandled operation {operation}")
 
 
@@ -126,6 +133,8 @@ async def call_async(client: AsyncAxonium, case: dict[str, Any]) -> Any:
         return await client.models.list()
     if operation == "models.mine":
         return await client.models.mine()
+    if operation == "usage.retrieve":
+        return await client.usage.retrieve(request["request_id"])
     raise AssertionError(f"unhandled operation {operation}")
 
 

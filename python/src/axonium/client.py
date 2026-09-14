@@ -41,6 +41,7 @@ from axonium.resources.chat import AsyncChat, Chat
 from axonium.resources.embeddings import AsyncEmbeddings, Embeddings
 from axonium.resources.images import AsyncImages, Images
 from axonium.resources.models import AsyncModels, Models
+from axonium.resources.usage import AsyncUsage, Usage
 from axonium.transport import dispatch
 from axonium.transport.http import build_async_client, build_sync_client
 from axonium.transport.retry import CooldownRegistry, RetryPolicy
@@ -384,6 +385,7 @@ class Axonium(_BaseAxonium):
         self.models = Models(self)
         self.chat = Chat(self)
         self.embeddings = Embeddings(self)
+        self.usage = Usage(self)
         self.images = Images(self)
 
     def _preflight(self, model: str, endpoint: str) -> None:
@@ -531,6 +533,7 @@ class AsyncAxonium(_BaseAxonium):
         self.models = AsyncModels(self)
         self.chat = AsyncChat(self)
         self.embeddings = AsyncEmbeddings(self)
+        self.usage = AsyncUsage(self)
         self.images = AsyncImages(self)
 
     async def _preflight(self, model: str, endpoint: str) -> None:

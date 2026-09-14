@@ -32,6 +32,7 @@ from axonium.errors import (
     MissingCredentialsError,
     ModalityMismatchError,
     ModelNotLoadedError,
+    NotFoundError,
     OAuthError,
     RateLimitError,
     RateLimitingUnavailableError,
@@ -80,6 +81,7 @@ from axonium.models.requests import (
     ImageGenerationRequest,
     Message,
 )
+from axonium.models.usage import RequestUsage
 from axonium.providers import AsyncTokenProvider, TokenProvider
 from axonium.streaming import AsyncChatCompletionStream, ChatCompletionStream
 from axonium.transport.retry import CooldownRegistry, RetryPolicy
@@ -131,10 +133,12 @@ __all__ = [
     "Model",
     "ModelList",
     "ModelNotLoadedError",
+    "NotFoundError",
     "OAuthError",
     "RateLimitError",
     "RateLimitSnapshot",
     "RateLimitingUnavailableError",
+    "RequestUsage",
     "ResponseMeta",
     "RetryPolicy",
     "ServerError",

@@ -172,6 +172,13 @@
       "meaning": "The original request succeeded but its response exceeded the 1 MiB retention cap, so it was not stored.",
       "retryable": false,
       "$comment": "Never retried, and it carries good news: this refusal is proof the original worked. Retrying would generate a second time for a result that already exists. Documented in the platform's answers of 2026-09-12; NOT yet verified against a deployment, which was down when this landed."
+    },
+    {
+      "status": 404,
+      "suffix": "not-found",
+      "meaning": "The addressed resource does not exist, or does not belong to this client. The two are deliberately indistinguishable: a 403 would confirm an id exists, which is what a probe wants to learn. On GET /v1/usage/{request_id} there is a third case behind the same status and it is the common one -- the id belongs to a replay, which reaches no model and is therefore not billed and has no row.",
+      "retryable": false,
+      "$comment": "Verified live 2026-09-14, the day the endpoint shipped. NOT in the platform's own error table: their guide documents the 404 in the endpoint's prose but the taxonomy table has no 404 row and the `not-found` suffix appears nowhere. Reported to them; recorded here because our mapping is keyed on the suffix."
     }
   ],
   "oauth_errors": [

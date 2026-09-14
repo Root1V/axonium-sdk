@@ -43,6 +43,7 @@ mod observability;
 mod retry;
 mod stream;
 mod types;
+mod usage;
 
 pub use auth::{decode_claims, TokenClaims, TokenProvider};
 pub use catalog::{Model, ModelList};
@@ -54,6 +55,7 @@ pub use inference::{Embedding, EmbeddingList, EmbeddingRequest, Image, ImageList
 pub use retry::RetryPolicy;
 pub use stream::{ChatStream, Chunk};
 pub use types::{RateLimit, ResponseMeta, Usage};
+pub use usage::RequestUsage;
 
 /// This crate's version.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -156,6 +156,7 @@ fn kind_for(suffix: &str) -> ErrorKind {
         "idempotency-key-reuse" => ErrorKind::IdempotencyKeyReuse,
         "idempotency-in-progress" => ErrorKind::IdempotencyInProgress,
         "idempotency-response-not-retained" => ErrorKind::IdempotencyResponseNotRetained,
+        "not-found" => ErrorKind::NotFound,
         other => panic!("the manifest names an error this SDK does not map: {other}"),
     }
 }
@@ -240,6 +241,24 @@ async fn contract_corpus() {
             }
             ("ok", "models.list") => expect_fields(&client.models().await.unwrap().raw, case),
             ("ok", "models.mine") => expect_fields(&client.models_mine().await.unwrap().raw, case),
+            ("ok", "usage.retrieve") => {
+                let request_id = case["request"]["request_id"].as_str().unwrap_or_default();
+                let row = client
+                    .usage(request_id)
+                    .await
+                    .unwrap_or_else(|e| panic!("{id}: {e}"));
+                let mut view = row.raw.clone();
+                // Same overlay as the completion view: cache_read_tokens is lifted out of the
+                // nested prompt_tokens_details, so the raw payload alone cannot assert it.
+                if let (Some(Value::Object(raw)), Some(usage)) =
+                    (view.get_mut("usage"), row.usage.as_ref())
+                {
+                    if let Some(cached) = usage.cache_read_tokens {
+                        raw.insert("cache_read_tokens".into(), cached.into());
+                    }
+                }
+                expect_fields(&view, case);
+            }
             ("ok", "embeddings.create") => {
                 let request = &case["request"];
                 let list = client
@@ -344,7 +363,10 @@ async fn contract_corpus() {
             }
             ("error", _) => {
                 let suffix = case["expect"]["error_type_suffix"].as_str().unwrap();
-                let outcome = if operation == "embeddings.create" {
+                let outcome = if operation == "usage.retrieve" {
+                    let request_id = case["request"]["request_id"].as_str().unwrap_or_default();
+                    client.usage(request_id).await.err()
+                } else if operation == "embeddings.create" {
                     let request = &case["request"];
                     client
                         .embeddings(&axonium::EmbeddingRequest {

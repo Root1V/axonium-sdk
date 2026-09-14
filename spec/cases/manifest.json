@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 12,
+  "version": 13,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -738,6 +738,50 @@
           "cache_read_tokens": 14,
           "estimated": true
         }
+      }
+    },
+    {
+      "id": "usage-retrieve",
+      "$comment": "Recorded live 2026-09-14. The row mirrors an inference response field for field, including prompt_tokens_details.cached_tokens as a subset of prompt_tokens -- asserted through the lifted name too, since that is what a caller reads.",
+      "operation": "usage.retrieve",
+      "request": {
+        "request_id": "a0f3ec1b-25e5-4025-abba-73bec9c8b390"
+      },
+      "response": {
+        "status": 200,
+        "body_file": "usage_row.json"
+      },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "request_id": "a0f3ec1b-25e5-4025-abba-73bec9c8b390",
+          "model": "qwen3-0.6b",
+          "request_kind": "chat",
+          "usage.prompt_tokens": 10,
+          "usage.cache_read_tokens": 9,
+          "interrupted": false,
+          "termination_reason": "complete",
+          "instance_id": "qwen3-0-6b-iq4-nl-local-1"
+        }
+      }
+    },
+    {
+      "id": "usage-retrieve-not-found",
+      "$comment": "Recorded live 2026-09-14. The same 404 covers an id that is not yours, an id that never existed, and -- the common case -- a replay's own id, which has no row because a replay is not billed. Nothing in the body distinguishes them, by design.",
+      "operation": "usage.retrieve",
+      "request": {
+        "request_id": "692789f8-25be-495f-a681-fcc1fd55432b"
+      },
+      "response": {
+        "status": 404,
+        "body_file": "usage_not_found.json"
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": "not-found",
+        "retryable": false,
+        "has_request_id": true,
+        "has_trace_id": true
       }
     }
   ],
