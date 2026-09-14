@@ -48,6 +48,8 @@ __all__ = [
     "SpendCapExceededError",
     "StreamInterruptedError",
     "TimeoutError",
+    "TokenEndpointNotConfiguredError",
+    "TokenEndpointUnavailableError",
     "TokenExpiredError",
     "TokenRevokedError",
     "ToolCallArgumentsError",
@@ -235,6 +237,30 @@ class ServerError(APIError):
     """5xx error that is not covered by a more specific subclass."""
 
     retryable = True
+
+
+class TokenEndpointUnavailableError(ServerError):
+    """The gateway could not reach the auth-service to issue a token.
+
+    The **only** problem+json a token request can produce — every other token outcome uses the
+    RFC 6749 OAuth2 shape. That distinction is what makes it safe to retry: an OAuth2 failure means
+    the credentials or the grant are wrong and retrying cannot help, while this means the gateway
+    momentarily could not do its job.
+    """
+
+    type_suffix = "upstream-unavailable"
+    retryable = True
+
+
+class TokenEndpointNotConfiguredError(ServerError):
+    """This deployment has no token endpoint wired up.
+
+    Shares a status with :class:`TokenEndpointUnavailableError` but not its retryability, which is
+    why the suffix has to drive the decision rather than the status.
+    """
+
+    type_suffix = "not-configured"
+    retryable = False
 
 
 # --------------------------------------------------------------------------------------
@@ -576,6 +602,8 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         UpstreamError,
         ModelNotLoadedError,
         NotFoundError,
+        TokenEndpointUnavailableError,
+        TokenEndpointNotConfiguredError,
         BackendUnavailableError,
         RateLimitingUnavailableError,
         UsageStoreUnavailableError,

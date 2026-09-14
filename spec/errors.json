@@ -179,6 +179,22 @@
       "meaning": "The addressed resource does not exist, or does not belong to this client. The two are deliberately indistinguishable: a 403 would confirm an id exists, which is what a probe wants to learn. On GET /v1/usage/{request_id} there is a third case behind the same status and it is the common one -- the id belongs to a replay, which reaches no model and is therefore not billed and has no row.",
       "retryable": false,
       "$comment": "Verified live 2026-09-14, the day the endpoint shipped. NOT in the platform's own error table: their guide documents the 404 in the endpoint's prose but the taxonomy table has no 404 row and the `not-found` suffix appears nowhere. Reported to them; recorded here because our mapping is keyed on the suffix."
+    },
+    {
+      "status": 503,
+      "suffix": "upstream-unavailable",
+      "meaning": "Only on POST /oauth2/token -- the gateway could not reach the auth-service. The ONLY problem+json a token request can produce; every other token outcome uses the RFC 6749 OAuth2 error shape.",
+      "retryable": true,
+      "retry_policy": "backoff",
+      "$comment": "Added with revision 2026-09-14e, when the gateway began issuing tokens itself. This is why a token response cannot be parsed as OAuth2 unconditionally: a 4xx is an OAuth2 outcome and is never retryable, a 503 here is the gateway failing and is."
+    },
+    {
+      "status": 503,
+      "suffix": "not-configured",
+      "meaning": "Only on POST /oauth2/token -- this deployment has no token endpoint wired up.",
+      "retryable": false,
+      "remedy": "Requires operator action; retrying cannot help.",
+      "$comment": "Added with revision 2026-09-14e. Shares a status with upstream-unavailable but not its retryability, which is why the suffix has to drive the decision rather than the status."
     }
   ],
   "oauth_errors": [

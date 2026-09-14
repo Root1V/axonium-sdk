@@ -42,6 +42,16 @@ var (
 	// it is the common one -- the id belongs to a replay, which is not billed and has no row.
 	ErrNotFound = errors.New("axonium: not-found")
 
+	// ErrTokenEndpointUnavailable reports that the gateway could not reach the auth-service to
+	// issue a token. The only problem+json a token request can produce -- every other token
+	// outcome uses the RFC 6749 OAuth2 shape -- and the distinction is what makes it safe to
+	// retry, where an OAuth2 failure never is.
+	ErrTokenEndpointUnavailable = errors.New("axonium: upstream-unavailable")
+
+	// ErrTokenEndpointNotConfigured reports a deployment with no token endpoint wired up. Shares
+	// a status with ErrTokenEndpointUnavailable but not its retryability.
+	ErrTokenEndpointNotConfigured = errors.New("axonium: not-configured")
+
 	// ErrToolCallArguments reports a tool call whose arguments string could not be decoded.
 	// Almost always a generation stopped by max_tokens partway through writing the call. Raised
 	// rather than returning an empty map so a truncated call cannot be mistaken for one that
@@ -126,6 +136,8 @@ var suffixSentinels = map[string]error{
 	"context-exceeded":                  ErrContextExceeded,
 	"validation-error":                  ErrValidation,
 	"not-found":                         ErrNotFound,
+	"upstream-unavailable":              ErrTokenEndpointUnavailable,
+	"not-configured":                    ErrTokenEndpointNotConfigured,
 	"unknown-instance":                  ErrUnknownInstance,
 	"invalid-idempotency-key":           ErrInvalidIdempotencyKey,
 	"idempotency-key-reuse":             ErrIdempotencyKeyReuse,
@@ -149,6 +161,10 @@ var suffixSentinels = map[string]error{
 // the per-error policy; whether the SDK actually retries is decided by RetryPolicy, which is
 // stricter still because a retried generation is billable rather than a replay.
 var retryableSuffixes = map[string]bool{
+	// A token 503 is the gateway failing to reach the auth-service, not an OAuth2 outcome, so
+	// unlike every 4xx from that endpoint it is worth retrying. not-configured is not: it shares
+	// the status but needs operator action.
+	"upstream-unavailable":         true,
 	"token-expired":                true,
 	"rate-limit-exceeded-requests": true,
 	"upstream-error":               true,
