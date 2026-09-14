@@ -37,8 +37,8 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-25 | Publish `python/v1.0.0rc1` | ✅ | Live on PyPI; verified by `pip install axonium` against the running gateway |
 | AXO-78 | Publish `python/v1.0.0rc3` and `go/v0.2.0` | ✅ | Both live and verified from their public indexes with no URLs configured |
 | AXO-26 | Integration tests against a real deployment | ✅ | Validated by hand against a local gateway; not yet automated |
-| AXO-27 | Go SDK | ✅ | v0.1.0 published; 24/24 contract cases, 94% coverage, zero dependencies |
-| AXO-28 | Rust SDK | 🚧 | Core done: 24/24 contract cases. Logging, tracing and publication remain |
+| AXO-27 | Go SDK | ✅ | v0.2.0 published; 25/25 contract cases, 94% coverage, zero dependencies |
+| AXO-28 | Rust SDK | ✅ | 0.2.0 published to crates.io via Trusted Publishing; 25/25 contract cases, structured logging and a tracing hook |
 | AXO-74 | Rust: structured logging and a tracing hook | ✅ | Behind a `tracing` feature, the Cargo equivalent of Python's `[otel]` extra |
 | AXO-75 | Publish the Rust crate to crates.io | ✅ | `0.1.0` published with a one-shot token; Trusted Publishing configured after |
 | AXO-73 | Ask for a per-request usage lookup without `admin:read` | 📋 | `termination_reason` is invisible to the caller; both usage endpoints need admin |
@@ -70,7 +70,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-72 | Go: expose `TokenClaims()` | ✅ | Was dead code; Python exposed it and Go did not |
 | AXO-54 | `response.model` is not `request.model` | ✅ | Was a platform bug; fixed. An alias request now answers with the canonical slug |
 | AXO-55 | Type tool calls like the rest of the message | 📋 | They arrive as raw dicts while the message is a model; the asymmetry cost a consumer real work |
-| AXO-56 | Reassemble streamed tool calls | 📋 | Neither SDK does; fragments arrive keyed by index, identity only in the first |
+| AXO-56 | Reassemble streamed tool calls | ✅ | All three, keyed by `index`, into the exact non-streaming shape. Recorded a live two-call stream because the single-call recording could not tell the correlation key apart from anything else |
 | AXO-57 | Expose `X-Prometheus-Instance*` on `ResponseMeta` | ✅ | Both SDKs; key on the id, the `#N` label can be reused |
 | AXO-58 | Catalogue and map `400 unknown-instance` | ✅ | In `spec/errors.json`, mapped in both SDKs |
 | AXO-59 | Per-call instance pinning | ✅ | Header-based, kept across retries as the platform confirmed |

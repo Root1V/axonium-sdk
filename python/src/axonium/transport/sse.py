@@ -12,6 +12,12 @@ that only checks the status code sees a truncated response as a successful one.
 all; the counts have to be recovered from the final chunk's ``timings``. Other backends do send
 ``usage``, so both are handled, and a derived figure is marked as estimated so a caller can tell
 the difference.
+
+**Tool calls arrive in pieces that are not individually valid JSON.** A call is split across as
+many deltas as it takes -- ``{``, ``"``, ``city`` -- and only the first carries the identity
+(``id``, ``type``, ``function.name``). ``index`` is the correlation key, because ``id`` never
+repeats. They are reassembled here so a caller never has to, and the result is the same shape a
+non-streaming completion returns.
 """
 
 from __future__ import annotations
@@ -71,6 +77,52 @@ def decode_line(line: str) -> SSEEvent | None:
 
 
 @dataclass
+class _PartialToolCall:
+    """One tool call being assembled from its fragments."""
+
+    id: str | None = None
+    type: str | None = None
+    name: str | None = None
+    _arguments: list[str] = field(default_factory=list)
+
+    def absorb(self, fragment: dict[str, Any]) -> None:
+        """Fold one wire fragment in.
+
+        Identity is recorded the first time it is seen rather than overwritten: ``id`` is
+        documented never to repeat, so a second, different one would be a correlation bug, and
+        adopting it silently would repoint a call that is already accumulating arguments.
+        """
+        if self.id is None and isinstance(fragment.get("id"), str):
+            self.id = fragment["id"]
+        if self.type is None and isinstance(fragment.get("type"), str):
+            self.type = fragment["type"]
+
+        function = fragment.get("function")
+        if not isinstance(function, dict):
+            return
+        if self.name is None and isinstance(function.get("name"), str):
+            self.name = function["name"]
+        piece = function.get("arguments")
+        if isinstance(piece, str):
+            self._arguments.append(piece)
+
+    def assemble(self) -> dict[str, Any]:
+        """The call in the shape a non-streaming completion returns.
+
+        ``arguments`` stays a JSON *string*, exactly as non-streaming delivers it, rather than
+        being parsed here. That is what lets one piece of caller code handle both, and it means a
+        stream cut short by ``max_tokens`` still hands back the fragment that did arrive instead of
+        raising or dropping the call. Decode it with ``json.loads`` when the stream finished
+        cleanly.
+        """
+        return {
+            "id": self.id,
+            "type": self.type,
+            "function": {"name": self.name, "arguments": "".join(self._arguments)},
+        }
+
+
+@dataclass
 class StreamAccumulator:
     """Assembles chunks into a final result and decides when a stream has failed."""
 
@@ -81,6 +133,7 @@ class StreamAccumulator:
     _reasoning: list[str] = field(default_factory=list)
     _usage: Usage | None = None
     _timings: dict[str, Any] | None = None
+    _tool_calls: dict[int, _PartialToolCall] = field(default_factory=dict)
     _done: bool = False
 
     @property
@@ -130,8 +183,29 @@ class StreamAccumulator:
             self._usage = chunk.usage
         if chunk.timings is not None:
             self._timings = chunk.timings.model_dump()
+        for fragment in chunk.tool_call_fragments:
+            self._absorb_tool_call(fragment)
 
         return chunk
+
+    def _absorb_tool_call(self, fragment: dict[str, Any]) -> None:
+        index = fragment.get("index")
+        if not isinstance(index, int):
+            # Every backend seen so far sends it, and it is the only way to tell two concurrent
+            # calls apart. Falling back to slot 0 keeps the single-call case working instead of
+            # dropping the call outright, which is the only case a stream without indices can
+            # represent unambiguously anyway.
+            index = 0
+        self._tool_calls.setdefault(index, _PartialToolCall()).absorb(fragment)
+
+    @property
+    def tool_calls(self) -> list[dict[str, Any]]:
+        """The tool calls assembled so far, in the non-streaming shape.
+
+        Ordered by the wire ``index`` rather than by arrival, so a backend that interleaves two
+        calls still yields them in the order the model asked for.
+        """
+        return [self._tool_calls[index].assemble() for index in sorted(self._tool_calls)]
 
     def usage(self) -> Usage | None:
         """Token accounting for the completed stream, if it can be determined.

@@ -45,6 +45,26 @@ with client.chat.completions.stream(model="llama3-8b-q4", messages=messages) as 
     print(stream.usage())
 ```
 
+### Streamed tool calls
+
+Tool calls arrive split across as many deltas as it takes — `{`, `"`, `city` — and the fragments
+are individually invalid JSON. The SDK reassembles them, keyed by the wire `index` (the identity
+arrives only in the first fragment, and `id` never repeats), and hands back **exactly the shape a
+non-streaming completion returns**:
+
+```python
+with client.chat.completions.stream(model="llama3-8b-q4", messages=messages, tools=tools) as stream:
+    for chunk in stream:
+        ...
+    for call in stream.tool_calls:
+        name = call["function"]["name"]
+        args = json.loads(call["function"]["arguments"])
+```
+
+`arguments` stays a JSON *string* in both cases rather than a decoded object, so the same code
+handles streaming and non-streaming. A stream that stopped on a `finish_reason` of `length` leaves
+a truncated `arguments` that will not parse — check the finish reason before decoding.
+
 `AsyncAxonium` mirrors the whole surface — same names, same behavior, with `await`, `async with`
 and `async for`.
 

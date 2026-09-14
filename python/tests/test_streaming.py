@@ -9,7 +9,7 @@ import respx
 
 from axonium import AsyncAxonium, Axonium
 from axonium.errors import ForbiddenError, StreamInterruptedError
-from axonium.transport.sse import DONE, StreamAccumulator, decode_line
+from axonium.transport.sse import DONE, SSEEvent, StreamAccumulator, decode_line
 
 AUTH_URL = "https://auth.test.invalid/oauth2/token"
 CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
@@ -521,3 +521,76 @@ class TestAsyncStreaming:
 
             with pytest.raises(RuntimeError, match="`async with` block"):
                 [chunk async for chunk in stream]
+
+
+class TestToolCallReassembly:
+    """Reassembly rules the recordings cannot exercise.
+
+    The two recorded cases in the contract manifest cover what the gateway actually emits, and they
+    are what pins the behaviour. These use constructed input — said plainly, because a hand-written
+    stream proves only that the code does what it was written to do — to cover two defensive rules
+    the wire has never yet violated: fragments arriving out of index order, and a second,
+    contradictory identity for a call already in flight.
+    """
+
+    @staticmethod
+    def _head(index: int, call_id: str, name: str, arguments: str) -> dict[str, object]:
+        """A first fragment: the only one that carries identity."""
+        return {
+            "index": index,
+            "id": call_id,
+            "type": "function",
+            "function": {"name": name, "arguments": arguments},
+        }
+
+    @staticmethod
+    def _more(index: int, arguments: str, **extra: object) -> dict[str, object]:
+        """A continuation fragment: index plus a slice of the arguments string."""
+        return {"index": index, "function": {"arguments": arguments}, **extra}
+
+    @staticmethod
+    def _feed(fragments: list[list[dict[str, object]]]) -> list[dict[str, object]]:
+        state = StreamAccumulator()
+        for group in fragments:
+            state.feed(SSEEvent(payload={"choices": [{"delta": {"tool_calls": group}}]}))
+        return state.tool_calls
+
+    def test_calls_come_back_in_index_order_not_arrival_order(self) -> None:
+        # The gateway groups by index today, so this ordering has never been observed. Relying on
+        # arrival order would work right up until a backend interleaves, and then it would hand
+        # the caller two calls with their arguments swapped rather than failing loudly.
+        calls = self._feed(
+            [
+                [self._head(1, "b", "second", "{}")],
+                [self._head(0, "a", "first", "{}")],
+            ]
+        )
+        assert [call["id"] for call in calls] == ["a", "b"]
+
+    def test_interleaved_arguments_stay_with_their_own_call(self) -> None:
+        calls = self._feed(
+            [
+                [self._head(0, "a", "f", '{"x":')],
+                [self._head(1, "b", "f", '{"y":')],
+                [self._more(0, "1}")],
+                [self._more(1, "2}")],
+            ]
+        )
+        assert [call["function"]["arguments"] for call in calls] == ['{"x":1}', '{"y":2}']  # type: ignore[index]
+
+    def test_a_contradictory_second_id_does_not_repoint_the_call(self) -> None:
+        # id is documented never to repeat, so a second one for the same index is a platform bug.
+        # Adopting it would move arguments already accumulated onto a different call, which is
+        # worse than ignoring it: the caller would execute the right arguments against the wrong id.
+        calls = self._feed(
+            [
+                [self._head(0, "original", "f", "{")],
+                [self._more(0, "}", id="contradiction")],
+            ]
+        )
+        assert calls == [
+            {"id": "original", "type": "function", "function": {"name": "f", "arguments": "{}"}}
+        ]
+
+    def test_a_stream_with_no_tool_calls_reports_none(self) -> None:
+        assert self._feed([[]]) == []

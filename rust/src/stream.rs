@@ -11,6 +11,14 @@
 //! **Token counts may never arrive as `usage`.** llama.cpp-family backends send none at all; the
 //! counts have to be recovered from the final chunk's `timings`, and a derived figure is flagged
 //! so a caller never mistakes it for a reported one.
+//!
+//! **Tool calls arrive in pieces that are not individually valid JSON.** A call is split across as
+//! many deltas as it takes -- `{`, `"`, `city` -- and only the first carries the identity (`id`,
+//! `type`, `function.name`). `index` is the correlation key, because `id` never repeats. They are
+//! reassembled here so a caller never has to, and the result is the same shape a non-streaming
+//! completion returns.
+
+use std::collections::BTreeMap;
 
 use bytes::Bytes;
 use futures_util::StreamExt;
@@ -56,11 +64,12 @@ impl Chunk {
             .to_string()
     }
 
-    /// Tool call fragments, if any. The first carries `index`, `id`, `type` and `function.name`;
-    /// later ones carry only `index` and an `arguments` fragment. **`index` is the correlation
-    /// key**, since `id` never repeats -- and the fragments are individually invalid JSON, so they
-    /// are concatenated and parsed once at the end.
-    pub fn tool_calls(&self) -> Vec<Value> {
+    /// This chunk's raw tool-call fragments, which are *not* usable on their own.
+    ///
+    /// A fragment carries a slice of an `arguments` string that is invalid JSON by itself, and
+    /// only the first one for a given `index` carries the identity. Use [`ChatStream::tool_calls`]
+    /// for the assembled calls; this is here for a caller who wants to watch them arrive.
+    pub fn tool_call_fragments(&self) -> Vec<Value> {
         self.delta()
             .and_then(|d| d.get("tool_calls"))
             .and_then(Value::as_array)
@@ -79,6 +88,67 @@ impl Chunk {
     }
 }
 
+/// One tool call being assembled from its fragments.
+#[derive(Debug, Default)]
+struct PartialToolCall {
+    id: Option<String>,
+    kind: Option<String>,
+    name: Option<String>,
+    arguments: String,
+}
+
+impl PartialToolCall {
+    /// Folds one wire fragment in.
+    ///
+    /// Identity is recorded the first time it is seen rather than overwritten: `id` is documented
+    /// never to repeat, so a second, different one would be a correlation bug, and adopting it
+    /// silently would repoint a call that is already accumulating arguments.
+    fn absorb(&mut self, fragment: &Value) {
+        let text = |value: Option<&Value>| value.and_then(Value::as_str).map(str::to_string);
+
+        self.id = self.id.take().or_else(|| text(fragment.get("id")));
+        self.kind = self.kind.take().or_else(|| text(fragment.get("type")));
+
+        let Some(function) = fragment.get("function") else {
+            return;
+        };
+        self.name = self.name.take().or_else(|| text(function.get("name")));
+        if let Some(piece) = function.get("arguments").and_then(Value::as_str) {
+            self.arguments.push_str(piece);
+        }
+    }
+
+    /// Renders the call in the shape a non-streaming completion returns.
+    ///
+    /// `arguments` stays a JSON *string*, exactly as non-streaming delivers it, rather than being
+    /// decoded here. That is what lets one piece of caller code handle both, and it means a stream
+    /// cut short by `max_tokens` still hands back the fragment that did arrive instead of failing
+    /// or dropping the call.
+    fn assemble(&self) -> Value {
+        serde_json::json!({
+            "id": self.id,
+            "type": self.kind,
+            "function": {"name": self.name, "arguments": self.arguments},
+        })
+    }
+}
+
+/// Folds a chunk's fragments into the calls under construction, keyed by their wire `index`.
+///
+/// Split out from the stream so the correlation rules can be exercised directly: the recorded
+/// contract cases pin what the gateway actually emits, and these are the rules that only show up
+/// when it emits something it never has yet.
+fn absorb_tool_calls(into: &mut BTreeMap<i64, PartialToolCall>, fragments: &[Value]) {
+    for fragment in fragments {
+        // Every backend seen so far sends `index`, and it is the only way to tell two concurrent
+        // calls apart. Falling back to slot 0 keeps the single-call case working instead of
+        // dropping the call outright, which is the only case a stream without indices can
+        // represent unambiguously anyway.
+        let index = fragment.get("index").and_then(Value::as_i64).unwrap_or(0);
+        into.entry(index).or_default().absorb(fragment);
+    }
+}
+
 /// An open streaming completion.
 ///
 /// Dropping it cancels the request, which the gateway observes as a disconnect and passes to
@@ -92,6 +162,10 @@ pub struct ChatStream {
     reasoning: String,
     usage: Option<Usage>,
     timings: Option<Value>,
+    // Ordered by the wire `index` rather than by arrival, so a backend that interleaves two
+    // calls still yields them in the order the model asked for. A BTreeMap gives that for
+    // free; a HashMap would hand back whichever order it felt like.
+    tool_calls: BTreeMap<i64, PartialToolCall>,
     done: bool,
 }
 
@@ -105,6 +179,7 @@ impl ChatStream {
             reasoning: String::new(),
             usage: None,
             timings: None,
+            tool_calls: BTreeMap::new(),
             done: false,
         }
     }
@@ -185,6 +260,7 @@ impl ChatStream {
         if let Some(timings) = chunk.raw.get("timings") {
             self.timings = Some(timings.clone());
         }
+        absorb_tool_calls(&mut self.tool_calls, &chunk.tool_call_fragments());
         Ok(chunk)
     }
 
@@ -214,6 +290,23 @@ impl ChatStream {
     /// -- and with a small `max_tokens` it can stay empty for the whole stream.
     pub fn reasoning(&self) -> &str {
         &self.reasoning
+    }
+
+    /// The tool calls the model asked for, in the same shape non-streaming returns.
+    ///
+    /// Reassembled from fragments that are individually invalid JSON, so this is what a caller
+    /// should read rather than the per-chunk [`Chunk::tool_call_fragments`]. `arguments` is a JSON
+    /// string here exactly as it is non-streaming, so the same `serde_json::from_str` works for
+    /// both.
+    ///
+    /// Populated as the stream runs, and complete once it ends. A stream that stopped on a
+    /// `finish_reason` of `length` leaves a truncated `arguments` that will not parse -- check the
+    /// finish reason before decoding.
+    pub fn tool_calls(&self) -> Vec<Value> {
+        self.tool_calls
+            .values()
+            .map(PartialToolCall::assemble)
+            .collect()
     }
 
     pub fn meta(&self) -> &ResponseMeta {
@@ -277,5 +370,91 @@ impl ChatStream {
             raw: Value::Null,
             meta: self.meta,
         }
+    }
+}
+
+#[cfg(test)]
+mod tool_call_tests {
+    //! Reassembly rules the recordings cannot exercise.
+    //!
+    //! The two recorded cases in the contract manifest cover what the gateway actually emits, and
+    //! they are what pins the behaviour. These use constructed input -- said plainly, because a
+    //! hand-written stream proves only that the code does what it was written to do -- to cover
+    //! two defensive rules the wire has never yet violated: fragments arriving out of index order,
+    //! and a second, contradictory identity for a call already in flight.
+
+    use super::*;
+
+    fn assemble(groups: &[Vec<Value>]) -> Vec<Value> {
+        let mut calls = BTreeMap::new();
+        for group in groups {
+            absorb_tool_calls(&mut calls, group);
+        }
+        calls.values().map(PartialToolCall::assemble).collect()
+    }
+
+    fn head(index: i64, id: &str, name: &str, arguments: &str) -> Value {
+        serde_json::json!({
+            "index": index, "id": id, "type": "function",
+            "function": {"name": name, "arguments": arguments},
+        })
+    }
+
+    fn more(index: i64, arguments: &str) -> Value {
+        serde_json::json!({"index": index, "function": {"arguments": arguments}})
+    }
+
+    #[test]
+    fn calls_come_back_in_index_order_not_arrival_order() {
+        // The gateway groups by index today, so this ordering has never been observed. Relying on
+        // arrival order would work right up until a backend interleaves, and then it would hand
+        // the caller two calls with their arguments swapped rather than failing loudly.
+        let calls = assemble(&[
+            vec![head(1, "b", "second", "{}")],
+            vec![head(0, "a", "first", "{}")],
+        ]);
+        let ids: Vec<_> = calls.iter().map(|c| c["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["a", "b"]);
+    }
+
+    #[test]
+    fn interleaved_arguments_stay_with_their_own_call() {
+        let calls = assemble(&[
+            vec![head(0, "a", "f", "{\"x\":")],
+            vec![head(1, "b", "f", "{\"y\":")],
+            vec![more(0, "1}")],
+            vec![more(1, "2}")],
+        ]);
+        let args: Vec<_> = calls
+            .iter()
+            .map(|c| c["function"]["arguments"].as_str().unwrap())
+            .collect();
+        assert_eq!(args, ["{\"x\":1}", "{\"y\":2}"]);
+    }
+
+    #[test]
+    fn a_contradictory_second_id_does_not_repoint_the_call() {
+        // id is documented never to repeat, so a second one for the same index is a platform bug.
+        // Adopting it would move arguments already accumulated onto a different call, which is
+        // worse than ignoring it: the caller would execute the right arguments against the wrong
+        // id.
+        let calls = assemble(&[
+            vec![head(0, "original", "f", "{")],
+            vec![serde_json::json!({
+                "index": 0, "id": "contradiction", "function": {"arguments": "}"}
+            })],
+        ]);
+        assert_eq!(
+            calls,
+            vec![serde_json::json!({
+                "id": "original", "type": "function",
+                "function": {"name": "f", "arguments": "{}"},
+            })]
+        );
+    }
+
+    #[test]
+    fn a_stream_with_no_tool_calls_reports_none() {
+        assert!(assemble(&[vec![]]).is_empty());
     }
 }

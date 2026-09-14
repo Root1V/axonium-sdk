@@ -64,6 +64,20 @@ class _StreamBase:
         return self._state.reasoning
 
     @property
+    def tool_calls(self) -> list[dict[str, Any]]:
+        """The tool calls the model asked for, in the same shape non-streaming returns.
+
+        Reassembled from fragments that are individually invalid JSON, so this is what a caller
+        should read rather than the per-chunk ``tool_call_fragments``. ``arguments`` is a JSON
+        string here exactly as it is non-streaming, so the same ``json.loads`` works for both.
+
+        Populated as the stream runs, and complete once it ends. A stream that stopped on
+        ``finish_reason == "length"`` leaves a truncated ``arguments`` that will not parse -- check
+        the finish reason before decoding.
+        """
+        return self._state.tool_calls
+
+    @property
     def meta(self) -> ResponseMeta | None:
         """Correlation IDs and rate-limit budget from the response headers."""
         return self._meta

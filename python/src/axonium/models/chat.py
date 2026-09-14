@@ -162,5 +162,19 @@ class ChatCompletionChunk(_Passthrough):
         return delta.reasoning_content if delta else None
 
     @property
+    def tool_call_fragments(self) -> list[dict[str, Any]]:
+        """This chunk's raw tool-call fragments, which are *not* usable on their own.
+
+        A fragment carries a slice of an ``arguments`` string that is invalid JSON by itself, and
+        only the first one for a given ``index`` carries the identity. Use the stream's
+        ``tool_calls`` for the assembled calls; this is here for a caller who wants to watch them
+        arrive.
+        """
+        if not self.choices:
+            return []
+        delta = self.choices[0].delta
+        return delta.tool_calls or [] if delta else []
+
+    @property
     def finish_reason(self) -> str | None:
         return self.choices[0].finish_reason if self.choices else None

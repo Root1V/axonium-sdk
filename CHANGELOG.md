@@ -5,6 +5,28 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ## Python
 
+### Unreleased
+
+Streamed tool calls are now reassembled for you.
+
+A tool call arrives split across as many deltas as it takes — `{`, `"`, `city` — and the fragments
+are individually invalid JSON. Only the first carries the identity, and **`index` is the
+correlation key**, because `id` never repeats. Every consumer was writing that join by hand.
+
+The assembled call is **byte-for-byte the shape a non-streaming completion returns**, `arguments`
+included: still a JSON *string*, not a decoded object. That is deliberate — the same caller code
+handles both, and a stream cut short by `max_tokens` hands back the fragment that did arrive
+instead of raising or dropping the call. Check `finish_reason` before decoding.
+
+A second contract case was recorded live for this: a single-call recording cannot tell `index`
+correlation apart from any other strategy, so a stream with two concurrent calls was recorded to
+give the case teeth. The manifest is now 25 cases, and all three SDKs replay both.
+
+- `stream.tool_calls` on `ChatCompletionStream` and `AsyncChatCompletionStream`, populated as the
+  stream runs and complete once it ends.
+- `chunk.tool_call_fragments` exposes the raw fragments for a caller who wants to watch them
+  arrive. They remain unusable on their own; this is not the accessor to reach for.
+
 ### 1.0.0rc3
 
 `rc2` reached TestPyPI missing six error exports and was replaced rather than patched, since a
@@ -124,6 +146,27 @@ which spoke to a platform generation that no longer exists.
 
 ## Go
 
+### Unreleased
+
+Streamed tool calls are now reassembled for you.
+
+A tool call arrives split across as many deltas as it takes — `{`, `"`, `city` — and the fragments
+are individually invalid JSON. Only the first carries the identity, and **`index` is the
+correlation key**, because `id` never repeats. Every consumer was writing that join by hand.
+
+The assembled call is **byte-for-byte the shape a non-streaming completion returns**, `arguments`
+included: still a JSON *string*, not a decoded object. That is deliberate — the same caller code
+handles both, and a stream cut short by `max_tokens` hands back the fragment that did arrive
+instead of raising or dropping the call. Check `finish_reason` before decoding.
+
+A second contract case was recorded live for this: a single-call recording cannot tell `index`
+correlation apart from any other strategy, so a stream with two concurrent calls was recorded to
+give the case teeth. The manifest is now 25 cases, and all three SDKs replay both.
+
+- `(*ChatCompletionStream).ToolCalls()`, alongside `Content()` and `Usage()`.
+- `(*ChatCompletionChunk).ToolCallFragments()` exposes the raw fragments for a caller who wants to
+  watch them arrive. They remain unusable on their own.
+
 ### 0.2.0
 
 - **Credentials are the only required setting.** `AuthBaseURL` and `GatewayBaseURL` default to the
@@ -144,6 +187,29 @@ dependency. All 24 shared contract cases replay the same recorded wire bytes as 
 No third-party dependencies: standard library only.
 
 ## Rust
+
+### Unreleased
+
+Streamed tool calls are now reassembled for you.
+
+A tool call arrives split across as many deltas as it takes — `{`, `"`, `city` — and the fragments
+are individually invalid JSON. Only the first carries the identity, and **`index` is the
+correlation key**, because `id` never repeats. Every consumer was writing that join by hand.
+
+The assembled call is **byte-for-byte the shape a non-streaming completion returns**, `arguments`
+included: still a JSON *string*, not a decoded object. That is deliberate — the same caller code
+handles both, and a stream cut short by `max_tokens` hands back the fragment that did arrive
+instead of raising or dropping the call. Check `finish_reason` before decoding.
+
+A second contract case was recorded live for this: a single-call recording cannot tell `index`
+correlation apart from any other strategy, so a stream with two concurrent calls was recorded to
+give the case teeth. The manifest is now 25 cases, and all three SDKs replay both.
+
+- `ChatStream::tool_calls()`, alongside `content()` and `usage()`.
+- **Breaking:** `Chunk::tool_calls()` is renamed `Chunk::tool_call_fragments()`. It always returned
+  fragments rather than calls, and the name said otherwise at exactly the moment a real
+  `tool_calls()` appeared one level up. Renamed now, while the crate is `0.x` and a consumer pays
+  a compile error rather than a silent wrong result.
 
 ### 0.2.0
 

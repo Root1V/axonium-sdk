@@ -219,6 +219,17 @@ func (c *ChatCompletion) ToolCalls() []any {
 	return c.Choices[0].Message.ToolCalls
 }
 
+// ToolCallFragments returns this chunk's raw tool-call fragments, which are *not* usable on their
+// own: a fragment carries a slice of an arguments string that is invalid JSON by itself, and only
+// the first one for a given index carries the identity. Use the stream's ToolCalls for the
+// assembled calls; this is here for a caller who wants to watch them arrive.
+func (c *ChatCompletionChunk) ToolCallFragments() []any {
+	if len(c.Choices) == 0 || c.Choices[0].Delta == nil {
+		return nil
+	}
+	return c.Choices[0].Delta.ToolCalls
+}
+
 // ChatCompletionChunk is one streamed delta.
 type ChatCompletionChunk struct {
 	ID      string   `json:"id"`
