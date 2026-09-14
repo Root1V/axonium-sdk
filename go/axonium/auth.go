@@ -213,7 +213,7 @@ func (m *tokenManager) fetchLocked(ctx context.Context) (*tokenSet, error) {
 	body, _ := decodeJSONObject(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, oauthErrorFromBody(resp.StatusCode, body)
+		return nil, tokenError(resp.StatusCode, body)
 	}
 	if body == nil {
 		return nil, fmt.Errorf("%w: the auth-service returned a non-JSON %d response", ErrAuthTransport, resp.StatusCode)
@@ -287,4 +287,23 @@ func effectiveLifetime(headers http.Header, accessToken string, expiresIn time.D
 // parameter outright, specifically to keep credentials out of server, proxy and browser logs.
 func setBearer(req *http.Request, token string) {
 	req.Header.Set("Authorization", "Bearer "+token)
+}
+
+// tokenError types a failed token response, which can arrive in either of two envelopes.
+//
+// A 4xx is an OAuth2 outcome in the RFC 6749 shape -- wrong credentials, a scope the client does
+// not hold -- and is never worth retrying. A 5xx is the gateway failing to do its job, arrives as
+// problem+json, and is worth retrying when it is upstream-unavailable.
+//
+// Reading every failure as OAuth2 would collapse that distinction: the 5xx would come back with no
+// type and no retryability, so a momentary blip would look exactly like bad credentials and the
+// request would be abandoned rather than retried.
+//
+// Keyed on the envelope rather than only the status, because the envelope is what a caller has to
+// parse. A 5xx that somehow arrives in the OAuth2 shape is still an OAuth2 answer.
+func tokenError(status int, body map[string]any) error {
+	if _, ok := body["type"].(string); ok {
+		return errorFromBody(status, body, nil, nil)
+	}
+	return oauthErrorFromBody(status, body)
 }

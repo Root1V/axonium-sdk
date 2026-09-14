@@ -31,7 +31,12 @@ from typing import Any
 import httpx
 
 from axonium.config import AxoniumConfig
-from axonium.errors import AuthTransportError, oauth_error_from_response
+from axonium.errors import (
+    AuthTransportError,
+    AxoniumError,
+    error_from_response,
+    oauth_error_from_response,
+)
 from axonium.transport.http import build_async_client, build_sync_client
 
 __all__ = ["TokenClaims", "TokenManager", "TokenSet"]
@@ -328,6 +333,24 @@ def _effective_lifetime(response: httpx.Response, access_token: str, expires_in:
     return min(expires_in, server_remaining)
 
 
+def _token_error(*, status: int, body: dict[str, Any] | None) -> AxoniumError:
+    """Type a failed token response, which can arrive in either of two envelopes.
+
+    A ``4xx`` is an OAuth2 outcome in the RFC 6749 shape — wrong credentials, a scope the client
+    does not hold — and is never worth retrying. A ``5xx`` is the gateway failing to do its job,
+    arrives as problem+json, and **is** worth retrying when it is ``upstream-unavailable``.
+
+    Reading every failure as OAuth2 would collapse that distinction: the 5xx would come back with
+    no type and no retryability, so a momentary blip would look exactly like bad credentials and
+    the request would be abandoned rather than retried.
+    """
+    # Keyed on the envelope rather than only the status, because the envelope is what the caller
+    # has to parse. A 5xx that somehow arrives in the OAuth2 shape is still an OAuth2 answer.
+    if isinstance(body, dict) and isinstance(body.get("type"), str):
+        return error_from_response(status=status, body=body)
+    return oauth_error_from_response(status=status, body=body)
+
+
 def _token_from_response(response: httpx.Response, *, issued_at: float) -> TokenSet:
     """Turn a token-endpoint response into a :class:`TokenSet`.
 
@@ -339,7 +362,7 @@ def _token_from_response(response: httpx.Response, *, issued_at: float) -> Token
     body = _json_or_none(response)
 
     if response.status_code != httpx.codes.OK:
-        raise oauth_error_from_response(status=response.status_code, body=body)
+        raise _token_error(status=response.status_code, body=body)
 
     if body is None:
         raise AuthTransportError(
