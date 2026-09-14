@@ -1,6 +1,6 @@
 # Prometheus Gateway — SDK Integration Guide
 
-**Revision**: 2026-09-14 · `55c2174`
+**Revision**: 2026-09-14c · `cef5ab3`
 <!-- Consumers vendor this file and diff it. The date and commit above are what to quote
      when asking whether a copy is current; they change whenever this document does. -->
 
@@ -466,6 +466,82 @@ X-RateLimit-Reset-Tokens
   send on the request.
 
 **No API-version header exists.** `/v1/` in the path is the only version signal.
+
+---
+
+### 3.6 `GET /v1/usage/{request_id}` — what one of your own requests was charged
+
+Requires any authenticated token; **no admin scope**. Reads exactly one row, the caller's own.
+
+Every inference response carries `x-request-id`. That id is what this takes:
+
+```json
+{
+  "request_id": "a0f3ec1b-25e5-4025-abba-73bec9c8b390",
+  "model": "qwen3-0.6b",
+  "request_kind": "chat",
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 8,
+    "total_tokens": 18,
+    "prompt_tokens_details": { "cached_tokens": 9 }
+  },
+  "image_count": 0,
+  "interrupted": false,
+  "termination_reason": "complete",
+  "cost_usd": null,
+  "instance_id": "qwen3-0-6b-iq4-nl-local-1",
+  "created_at": "2026-09-14T19:33:54.580624"
+}
+```
+
+The `usage` object mirrors the inference response field for field, including
+`prompt_tokens_details.cached_tokens` — a **subset** of `prompt_tokens`, not a separate bucket.
+That is deliberate: an aggregate could not be reconciled against what you received once caching
+is involved, and reconciling is what this endpoint is for.
+
+`termination_reason` is one of `complete`, `upstream_error` or `client_disconnected`, and
+`interrupted` is derived from it — true for anything that is not `complete`. A request that was
+billed for a half-delivered answer says so here.
+
+**404 covers both "no such request" and "not yours."** They are deliberately indistinguishable: a
+`403` would confirm that an id exists, which is what a probe wants to learn.
+
+**A replay has its own id and no row of its own**, because replaying does not use the model and is
+not billed. Looking up a replay's `x-request-id` therefore returns `404`, correctly. The replay
+response carries `X-Idempotent-Replay-Of` naming the generation that *was* billed — use that id
+here.
+
+---
+
+### 3.7 `GET /v1/usage/export` — the CSV, and how its columns change
+
+Requires `admin:read`. Not something an SDK calls; documented because consumers parse the file
+and had no written contract for its shape.
+
+Columns, in order:
+
+```
+generated_at, period_start, period_end, client_id, recorded_at, model_id, request_kind,
+prompt_tokens, completion_tokens, image_count, prompt_price_per_1m, completion_price_per_1m,
+image_price_each, cost_usd, interrupted, termination_reason, request_id, cached_prompt_tokens
+```
+
+**New columns are appended at the end. Existing columns never move and never change meaning.**
+That is a commitment, not a description of the current file: a consumer reading by position keeps
+working when the file grows, and one reading by name gains whatever was added. It is the rule we
+have followed each time — `interrupted`, then `termination_reason`, then `request_id` and
+`cached_prompt_tokens` — and it lived only in correspondence until it was written here.
+
+One row per `usage_events` row, not pre-aggregated, so a rate change mid-period is visible per
+request. The last row is a `TOTAL` reconciliation line: columns that genuinely sum do
+(`prompt_tokens`, `completion_tokens`, `image_count`, `cached_prompt_tokens`, `cost_usd`), and
+columns that describe a single request are left blank rather than given an invented total
+(`interrupted`, `termination_reason`, `request_id`).
+
+`cached_prompt_tokens` is a **subset** of `prompt_tokens`, matching
+`prompt_tokens_details.cached_tokens` in the inference response — adding the two would double
+count.
 
 ---
 

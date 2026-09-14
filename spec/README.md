@@ -6,7 +6,7 @@ rather than reimplemented three times from prose.
 
 | Path | What it is |
 |---|---|
-| `prometheus-gateway.md` | Vendored copy of the platform team's integration guide — the API contract. **Revision 2026-09-14 · `55c2174`** |
+| `prometheus-gateway.md` | Vendored copy of the platform team's integration guide — the API contract. **Revision 2026-09-14c · `cef5ab3`** |
 | `errors.json` | The error catalog: HTTP status × `type` suffix × retryability |
 | `cases/manifest.json` | Contract-test case index, replayed by each SDK's test suite |
 | `fixtures/` | Golden response bodies (`*.json`) and literal SSE wire captures (`*.sse`) |
