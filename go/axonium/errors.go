@@ -36,6 +36,12 @@ var (
 	// 422 -- the body carries an `errors` array naming the offending fields.
 	ErrValidation = errors.New("axonium: validation-error")
 
+	// ErrNotFound reports a resource that does not exist or does not belong to this client. The
+	// two are deliberately indistinguishable: a 403 would confirm an id exists, which is what a
+	// probe wants to learn. On a usage lookup there is a third case behind the same status and
+	// it is the common one -- the id belongs to a replay, which is not billed and has no row.
+	ErrNotFound = errors.New("axonium: not-found")
+
 	// ErrToolCallArguments reports a tool call whose arguments string could not be decoded.
 	// Almost always a generation stopped by max_tokens partway through writing the call. Raised
 	// rather than returning an empty map so a truncated call cannot be mistaken for one that
@@ -119,6 +125,7 @@ var suffixSentinels = map[string]error{
 	"modality-mismatch":                 ErrModalityMismatch,
 	"context-exceeded":                  ErrContextExceeded,
 	"validation-error":                  ErrValidation,
+	"not-found":                         ErrNotFound,
 	"unknown-instance":                  ErrUnknownInstance,
 	"invalid-idempotency-key":           ErrInvalidIdempotencyKey,
 	"idempotency-key-reuse":             ErrIdempotencyKeyReuse,

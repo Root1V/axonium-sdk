@@ -1,0 +1,17 @@
+{
+  "request_id": "a0f3ec1b-25e5-4025-abba-73bec9c8b390",
+  "model": "qwen3-0.6b",
+  "request_kind": "chat",
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 8,
+    "total_tokens": 18,
+    "prompt_tokens_details": { "cached_tokens": 9 }
+  },
+  "image_count": 0,
+  "interrupted": false,
+  "termination_reason": "complete",
+  "cost_usd": null,
+  "instance_id": "qwen3-0-6b-iq4-nl-local-1",
+  "created_at": "2026-09-14T19:33:54.580624"
+}

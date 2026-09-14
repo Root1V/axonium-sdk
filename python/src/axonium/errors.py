@@ -40,6 +40,7 @@ __all__ = [
     "MissingCredentialsError",
     "ModalityMismatchError",
     "ModelNotLoadedError",
+    "NotFoundError",
     "OAuthError",
     "RateLimitError",
     "RateLimitingUnavailableError",
@@ -213,6 +214,21 @@ class BadRequestError(APIError):
 
 class UnauthorizedError(APIError):
     """401 that is not one of the specific token errors."""
+
+
+class NotFoundError(APIError):
+    """The addressed resource does not exist, or does not belong to this client.
+
+    The gateway returns the same ``404`` for both on purpose: a ``403`` would confirm that an id
+    exists, which is exactly what a probe wants to learn.
+
+    On ``usage.retrieve`` there is a third case behind the same status, and it is the common one —
+    **the id belongs to a replay**. A replay reaches no model and is not billed, so it has no row.
+    Use ``meta.idempotent_replay_of`` to get the id of the generation that was charged.
+    """
+
+    type_suffix = "not-found"
+    retryable = False
 
 
 class ServerError(APIError):
@@ -559,6 +575,7 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         RateLimitError,
         UpstreamError,
         ModelNotLoadedError,
+        NotFoundError,
         BackendUnavailableError,
         RateLimitingUnavailableError,
         UsageStoreUnavailableError,

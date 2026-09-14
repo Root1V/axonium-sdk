@@ -164,6 +164,12 @@ func invokeUnary(t *testing.T, client *Client, c contractCase) map[string]any {
 		if out != nil {
 			value, meta = out, out.Meta
 		}
+	case "usage.retrieve":
+		var out *RequestUsage
+		out, err = client.Usage.Retrieve(ctx, stringField(c.Request, "request_id"))
+		if out != nil {
+			value, meta = out, out.Meta
+		}
 	case "embeddings.create":
 		var out *EmbeddingList
 		out, err = client.Embeddings.Create(ctx, embeddingRequestFrom(c.Request))
@@ -249,6 +255,9 @@ func invokeExpectingError(t *testing.T, client *Client, c contractCase) error {
 		return err
 	case "embeddings.create":
 		_, err := client.Embeddings.Create(ctx, embeddingRequestFrom(c.Request))
+		return err
+	case "usage.retrieve":
+		_, err := client.Usage.Retrieve(ctx, stringField(c.Request, "request_id"))
 		return err
 	default:
 		t.Fatalf("unsupported operation %q for an error case", c.Operation)
@@ -530,4 +539,10 @@ func overlay(t *testing.T, raw any, decoded any) any {
 		}
 	}
 	return merged
+}
+
+// stringField reads one string out of a case's request object.
+func stringField(request map[string]any, key string) string {
+	v, _ := request[key].(string)
+	return v
 }

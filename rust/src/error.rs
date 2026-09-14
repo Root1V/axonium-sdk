@@ -39,6 +39,11 @@ pub enum ErrorKind {
     IdempotencyKeyReuse,
     IdempotencyInProgress,
     IdempotencyResponseNotRetained,
+    /// The resource does not exist, or does not belong to this client -- deliberately the same
+    /// answer for both, since a 403 would confirm an id exists. On a usage lookup there is a
+    /// third case behind it and it is the common one: the id belongs to a replay, which is
+    /// not billed and has no row.
+    NotFound,
     // 429
     RateLimitExceeded,
     // 5xx
@@ -80,6 +85,7 @@ impl ErrorKind {
             "backend-unavailable" => Self::BackendUnavailable,
             "rate-limiting-unavailable" => Self::RateLimitingUnavailable,
             "usage-store-unavailable" => Self::UsageStoreUnavailable,
+            "not-found" => Self::NotFound,
             _ if status == 401 => Self::Unauthorized,
             _ if status >= 500 => Self::OtherServerError,
             _ => Self::OtherClientError,

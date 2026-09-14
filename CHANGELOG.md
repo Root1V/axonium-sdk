@@ -7,6 +7,22 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+Per-request usage lookup: what one of your own requests was charged, and why it stopped.
+
+Both aggregate usage endpoints require `admin:read`, which a normal client neither has nor should
+have — so `termination_reason` existed for callers who could not read it. The platform shipped this
+after we made that case; this is the client half.
+
+A replay has its own request id and no row of its own, so looking that id up is a `not-found` —
+correctly, since a replay is not billed. `meta.idempotent_replay_of` names the generation that was
+charged; look *that* up. The round trip is verified live in all three languages.
+
+`termination_reason` is a plain string, not an enum. The platform proposed a fourth value this week
+and withdrew it; the next one may not be withdrawn, and a closed set would turn a new value into a
+parse failure for a caller who only wanted the token counts.
+
+- `client.usage.retrieve(request_id)` (and the async mirror), returning `RequestUsage`. `NotFoundError` is new.
+
 `meta.idempotent_replay_of` carries, on a replay, the request id of the generation that was
 actually billed.
 
@@ -186,6 +202,22 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+Per-request usage lookup: what one of your own requests was charged, and why it stopped.
+
+Both aggregate usage endpoints require `admin:read`, which a normal client neither has nor should
+have — so `termination_reason` existed for callers who could not read it. The platform shipped this
+after we made that case; this is the client half.
+
+A replay has its own request id and no row of its own, so looking that id up is a `not-found` —
+correctly, since a replay is not billed. `meta.idempotent_replay_of` names the generation that was
+charged; look *that* up. The round trip is verified live in all three languages.
+
+`termination_reason` is a plain string, not an enum. The platform proposed a fourth value this week
+and withdrew it; the next one may not be withdrawn, and a closed set would turn a new value into a
+parse failure for a caller who only wanted the token counts.
+
+- `client.Usage.Retrieve(ctx, requestID)`, returning `*RequestUsage`. `ErrNotFound` is new.
+
 `ResponseMeta.IdempotentReplayOf` carries, on a replay, the request id of the generation that was
 actually billed.
 
@@ -265,6 +297,22 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+Per-request usage lookup: what one of your own requests was charged, and why it stopped.
+
+Both aggregate usage endpoints require `admin:read`, which a normal client neither has nor should
+have — so `termination_reason` existed for callers who could not read it. The platform shipped this
+after we made that case; this is the client half.
+
+A replay has its own request id and no row of its own, so looking that id up is a `not-found` —
+correctly, since a replay is not billed. `meta.idempotent_replay_of` names the generation that was
+charged; look *that* up. The round trip is verified live in all three languages.
+
+`termination_reason` is a plain string, not an enum. The platform proposed a fourth value this week
+and withdrew it; the next one may not be withdrawn, and a closed set would turn a new value into a
+parse failure for a caller who only wanted the token counts.
+
+- `client.usage(request_id).await`, returning `RequestUsage`. `ErrorKind::NotFound` is new.
 
 `ResponseMeta::idempotent_replay_of` carries, on a replay, the request id of the generation that was
 actually billed.

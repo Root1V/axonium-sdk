@@ -1,0 +1,9 @@
+{
+  "type": "https://prometheus.internal/errors/not-found",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "No usage record for request '692789f8-25be-495f-a681-fcc1fd55432b'.",
+  "instance": "/v1/usage/692789f8-25be-495f-a681-fcc1fd55432b",
+  "request_id": "0ddf7336-4733-4420-8ee0-a481603d9336",
+  "trace_id": "d2dec655b87ab49fe5e86059106f3e87"
+}
