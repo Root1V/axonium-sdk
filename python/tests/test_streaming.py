@@ -9,6 +9,7 @@ import respx
 
 from axonium import AsyncAxonium, Axonium
 from axonium.errors import ForbiddenError, StreamInterruptedError
+from axonium.models.chat import ToolCall
 from axonium.transport.sse import DONE, SSEEvent, StreamAccumulator, decode_line
 
 AUTH_URL = "https://auth.test.invalid/oauth2/token"
@@ -549,7 +550,7 @@ class TestToolCallReassembly:
         return {"index": index, "function": {"arguments": arguments}, **extra}
 
     @staticmethod
-    def _feed(fragments: list[list[dict[str, object]]]) -> list[dict[str, object]]:
+    def _feed(fragments: list[list[dict[str, object]]]) -> list[ToolCall]:
         state = StreamAccumulator()
         for group in fragments:
             state.feed(SSEEvent(payload={"choices": [{"delta": {"tool_calls": group}}]}))
@@ -565,7 +566,7 @@ class TestToolCallReassembly:
                 [self._head(0, "a", "first", "{}")],
             ]
         )
-        assert [call["id"] for call in calls] == ["a", "b"]
+        assert [call.id for call in calls] == ["a", "b"]
 
     def test_interleaved_arguments_stay_with_their_own_call(self) -> None:
         calls = self._feed(
@@ -576,7 +577,7 @@ class TestToolCallReassembly:
                 [self._more(1, "2}")],
             ]
         )
-        assert [call["function"]["arguments"] for call in calls] == ['{"x":1}', '{"y":2}']  # type: ignore[index]
+        assert [call.function.arguments for call in calls] == ['{"x":1}', '{"y":2}']
 
     def test_a_contradictory_second_id_does_not_repoint_the_call(self) -> None:
         # id is documented never to repeat, so a second one for the same index is a platform bug.
@@ -588,9 +589,9 @@ class TestToolCallReassembly:
                 [self._more(0, "}", id="contradiction")],
             ]
         )
-        assert calls == [
-            {"id": "original", "type": "function", "function": {"name": "f", "arguments": "{}"}}
-        ]
+        assert len(calls) == 1
+        assert calls[0].id == "original"
+        assert calls[0].function.arguments == "{}"
 
     def test_a_stream_with_no_tool_calls_reports_none(self) -> None:
         assert self._feed([[]]) == []

@@ -41,6 +41,7 @@ from axonium.errors import (
     TimeoutError,
     TokenExpiredError,
     TokenRevokedError,
+    ToolCallArgumentsError,
     TransportError,
     UnauthorizedClientError,
     UnauthorizedError,
@@ -60,8 +61,10 @@ from axonium.models.chat import (
     ChatCompletionChunk,
     ChoiceDelta,
     CompletionMessage,
+    FunctionCall,
     StreamChoice,
     Timings,
+    ToolCall,
 )
 from axonium.models.common import APIObject, RateLimitSnapshot, ResponseMeta, Usage
 from axonium.models.inference import (
@@ -110,6 +113,7 @@ __all__ = [
     "Embedding",
     "EmbeddingsRequest",
     "ForbiddenError",
+    "FunctionCall",
     "GeneratedImage",
     "IdempotencyInProgressError",
     "IdempotencyKeyReuseError",
@@ -145,6 +149,8 @@ __all__ = [
     "TokenProvider",
     "TokenRevokedError",
     "TokenSet",
+    "ToolCall",
+    "ToolCallArgumentsError",
     "TransportError",
     "UnauthorizedClientError",
     "UnauthorizedError",

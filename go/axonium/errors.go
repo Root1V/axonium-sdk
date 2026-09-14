@@ -36,6 +36,12 @@ var (
 	// 422 -- the body carries an `errors` array naming the offending fields.
 	ErrValidation = errors.New("axonium: validation-error")
 
+	// ErrToolCallArguments reports a tool call whose arguments string could not be decoded.
+	// Almost always a generation stopped by max_tokens partway through writing the call. Raised
+	// rather than returning an empty map so a truncated call cannot be mistaken for one that
+	// genuinely took no arguments.
+	ErrToolCallArguments = errors.New("axonium: tool call arguments are not a JSON object")
+
 	// ErrUnknownInstance means a pinned instance does not serve the requested model. A pin never
 	// silently falls back: you get that instance or an error.
 	ErrUnknownInstance = errors.New("axonium: unknown-instance")

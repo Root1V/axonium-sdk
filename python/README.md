@@ -57,13 +57,21 @@ with client.chat.completions.stream(model="llama3-8b-q4", messages=messages, too
     for chunk in stream:
         ...
     for call in stream.tool_calls:
-        name = call["function"]["name"]
-        args = json.loads(call["function"]["arguments"])
+        print(call.name, call.parse_arguments())
 ```
 
-`arguments` stays a JSON *string* in both cases rather than a decoded object, so the same code
-handles streaming and non-streaming. A stream that stopped on a `finish_reason` of `length` leaves
-a truncated `arguments` that will not parse — check the finish reason before decoding.
+The same `ToolCall` comes back from `completion.tool_calls` on a non-streaming call, and a
+`Message` accepts it straight back, so a tool-use loop converts in neither direction:
+
+```python
+messages.append({"role": "assistant", "tool_calls": stream.tool_calls})
+messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
+```
+
+`call.function.arguments` stays the model's own JSON *string*; `parse_arguments()` decodes it and
+raises `ToolCallArgumentsError` if it will not parse. That happens when a generation stopped on
+`finish_reason == "length"` partway through writing the call — the raw string stays readable on the
+error, so you can still see what the model was trying to call.
 
 `AsyncAxonium` mirrors the whole surface — same names, same behavior, with `await`, `async with`
 and `async for`.

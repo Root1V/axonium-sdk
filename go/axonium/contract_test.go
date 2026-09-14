@@ -197,7 +197,9 @@ func invokeUnary(t *testing.T, client *Client, c contractCase) map[string]any {
 		generic["content"] = completion.Content()
 		generic["reasoning"] = completion.Reasoning()
 		if calls := completion.ToolCalls(); calls != nil {
-			generic["tool_calls"] = calls
+			// Through JSON rather than grafted on directly: the manifest resolves paths like
+			// tool_calls.0.function.name by walking maps, and a typed struct is not one.
+			generic["tool_calls"] = decodeAny(t, calls)
 		}
 	}
 	return generic
@@ -468,16 +470,32 @@ func equalJSON(got, want any) bool {
 	return reflect.DeepEqual(normalize(got), normalize(want))
 }
 
-// asJSON renders a value canonically for comparison. Go's map iteration order is randomised, so
-// encoding/json's sorted keys are what make two maps comparable as text at all.
+// asJSON renders a value canonically for comparison, via a decode to generic types first. That
+// round trip is what makes the two sides comparable at all: encoding/json sorts map keys but emits
+// struct fields in declaration order, so a ToolCall and the manifest's equivalent map would
+// otherwise differ as text while being identical as data.
 func asJSON(t *testing.T, v any) string {
 	t.Helper()
 	if v == nil {
 		v = []any{}
 	}
-	encoded, err := json.Marshal(v)
+	encoded, err := json.Marshal(decodeAny(t, v))
 	if err != nil {
 		t.Fatalf("could not encode %v: %v", v, err)
 	}
 	return string(encoded)
+}
+
+// decodeAny re-reads a value as maps, slices and scalars, discarding any Go type information.
+func decodeAny(t *testing.T, v any) any {
+	t.Helper()
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("could not encode %v: %v", v, err)
+	}
+	var generic any
+	if err := json.Unmarshal(encoded, &generic); err != nil {
+		t.Fatalf("could not re-read %s: %v", encoded, err)
+	}
+	return generic
 }

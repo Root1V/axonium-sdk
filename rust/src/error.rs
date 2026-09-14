@@ -187,6 +187,17 @@ pub enum Error {
     /// The client gave up waiting. Not retried unless an idempotency key was supplied: without
     /// one the backend is probably still generating, and a retry is a second billable generation.
     Timeout(String),
+    /// A tool call's `arguments` string could not be decoded.
+    ///
+    /// Almost always a generation stopped by `max_tokens` partway through writing the call,
+    /// leaving a string that was never going to parse. Returned rather than yielding an empty map
+    /// so a truncated call cannot be mistaken for one that genuinely took no arguments. The raw
+    /// string is left untouched and stays reachable on the call itself.
+    ToolCallArguments {
+        tool_call_id: String,
+        arguments: String,
+        reason: String,
+    },
     /// The stream failed partway through. Mid-stream failures cannot use an HTTP status -- by the
     /// time a backend fails, the `200` and `text/event-stream` headers are already committed --
     /// so the gateway signals them in band.
@@ -205,6 +216,16 @@ impl fmt::Display for Error {
         match self {
             Self::Configuration(m) => write!(f, "invalid Axonium configuration: {m}"),
             Self::InvalidRequest(m) => write!(f, "invalid request: {m}"),
+            Self::ToolCallArguments {
+                tool_call_id,
+                arguments,
+                reason,
+            } => write!(
+                f,
+                "the arguments for tool call {tool_call_id:?} are not a JSON object ({reason}). \
+                 A generation stopped by max_tokens leaves them truncated -- check finish_reason. \
+                 Raw value: {arguments:?}"
+            ),
             Self::Api(e) => write!(f, "{e}"),
             Self::OAuth {
                 status,

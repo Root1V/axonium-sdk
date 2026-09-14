@@ -49,6 +49,7 @@ __all__ = [
     "TimeoutError",
     "TokenExpiredError",
     "TokenRevokedError",
+    "ToolCallArgumentsError",
     "TransportError",
     "UnauthorizedClientError",
     "UnauthorizedError",
@@ -102,6 +103,23 @@ class InvalidRequestError(AxoniumError):
     trip. Everything this SDK raises is an :class:`AxoniumError`, so a caller never has to catch a
     validation library's exceptions alongside ours.
     """
+
+
+class ToolCallArgumentsError(AxoniumError):
+    """A tool call's ``arguments`` string could not be decoded.
+
+    Almost always a generation stopped by ``max_tokens`` partway through writing the call, leaving
+    a string that was never going to parse. The offending ``ToolCall`` is attached so the raw value
+    stays reachable — it is often enough to see what the model was trying to call.
+
+    Raised rather than returning ``None`` so a truncated call cannot be mistaken for a call with no
+    arguments, and typed rather than letting ``json``'s own error escape, so a caller never has to
+    catch a standard-library exception alongside this SDK's.
+    """
+
+    def __init__(self, message: str, *, tool_call: Any = None) -> None:
+        super().__init__(message)
+        self.tool_call = tool_call
 
 
 class TransportError(AxoniumError):

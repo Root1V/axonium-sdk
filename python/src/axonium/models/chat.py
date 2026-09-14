@@ -7,8 +7,10 @@ that a differently-shaped backend cannot make a valid response fail to parse.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
+from axonium.errors import ToolCallArgumentsError
 from axonium.models.common import APIObject, Usage, _Passthrough
 
 __all__ = [
@@ -17,9 +19,70 @@ __all__ = [
     "ChatCompletionChunk",
     "ChoiceDelta",
     "CompletionMessage",
+    "FunctionCall",
     "StreamChoice",
     "Timings",
+    "ToolCall",
 ]
+
+
+class FunctionCall(_Passthrough):
+    """The function a tool call names, and the arguments it was called with."""
+
+    name: str | None = None
+
+    #: The arguments **as the model produced them**: a JSON string, not a decoded object.
+    #:
+    #: Kept raw on purpose. Streaming delivers this in fragments that are only valid once
+    #: concatenated, and a generation cut short by ``max_tokens`` leaves a string that was never
+    #: going to parse -- decoding here would turn that into an exception raised from inside a
+    #: response model, for a caller who only wanted to see what the model had managed to say. Use
+    #: :meth:`ToolCall.parse_arguments` when you want the object.
+    arguments: str = ""
+
+
+class ToolCall(_Passthrough):
+    """A tool call, in the one shape both streaming and non-streaming produce.
+
+    Streamed calls arrive split across fragments that are individually invalid JSON; the SDK
+    reassembles them into exactly this, so the same caller code handles both.
+    """
+
+    id: str | None = None
+    #: ``"function"`` for everything the gateway forwards today. Modelled rather than assumed,
+    #: because the field exists on the wire precisely so it can grow.
+    type: str | None = None
+    function: FunctionCall = FunctionCall()
+
+    @property
+    def name(self) -> str | None:
+        """The function name, without reaching through :attr:`function`."""
+        return self.function.name
+
+    def parse_arguments(self) -> dict[str, Any]:
+        """Decode :attr:`FunctionCall.arguments` into an object.
+
+        Raises :class:`~axonium.errors.ToolCallArgumentsError` when the string is not valid JSON.
+        The usual cause is a generation that ran out of tokens mid-call, so check ``finish_reason``
+        before calling this on a response you have not verified completed.
+        """
+        try:
+            parsed = json.loads(self.function.arguments)
+        except ValueError as error:
+            raise ToolCallArgumentsError(
+                f"The arguments for tool call {self.id!r} are not valid JSON ({error}). "
+                f"A generation stopped by max_tokens leaves them truncated -- check "
+                f"finish_reason. Raw value: {self.function.arguments!r}",
+                tool_call=self,
+            ) from error
+
+        if not isinstance(parsed, dict):
+            raise ToolCallArgumentsError(
+                f"The arguments for tool call {self.id!r} decoded to {type(parsed).__name__}, "
+                f"not an object. Raw value: {self.function.arguments!r}",
+                tool_call=self,
+            )
+        return parsed
 
 
 class Timings(_Passthrough):
@@ -49,7 +112,7 @@ class CompletionMessage(_Passthrough):
     #: A reasoning model's chain of thought, kept separate from the answer. Not part of the
     #: gateway's documented contract — backends that do not reason simply omit it.
     reasoning_content: str | None = None
-    tool_calls: list[dict[str, Any]] | None = None
+    tool_calls: list[ToolCall] | None = None
 
 
 class ChatChoice(_Passthrough):
@@ -97,10 +160,11 @@ class ChatCompletion(APIObject):
         return message.reasoning_content if message else None
 
     @property
-    def tool_calls(self) -> list[dict[str, Any]]:
+    def tool_calls(self) -> list[ToolCall]:
         """Tool calls from the first choice.
 
-        Passed through untouched — the gateway does not interpret them.
+        The gateway does not interpret them, and neither does this SDK beyond giving them a shape:
+        ``arguments`` is still the model's own string, reachable raw.
         """
         if not self.choices:
             return []

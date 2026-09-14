@@ -24,7 +24,7 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use serde_json::Value;
 
-use crate::chat::{flatten, ChatCompletion};
+use crate::chat::{flatten, ChatCompletion, FunctionCall, ToolCall};
 use crate::error::{Error, Result};
 use crate::types::{ResponseMeta, Usage};
 
@@ -118,18 +118,21 @@ impl PartialToolCall {
         }
     }
 
-    /// Renders the call in the shape a non-streaming completion returns.
+    /// Renders the call as the same [`ToolCall`] a non-streaming completion returns.
     ///
     /// `arguments` stays a JSON *string*, exactly as non-streaming delivers it, rather than being
     /// decoded here. That is what lets one piece of caller code handle both, and it means a stream
     /// cut short by `max_tokens` still hands back the fragment that did arrive instead of failing
     /// or dropping the call.
-    fn assemble(&self) -> Value {
-        serde_json::json!({
-            "id": self.id,
-            "type": self.kind,
-            "function": {"name": self.name, "arguments": self.arguments},
-        })
+    fn assemble(&self) -> ToolCall {
+        ToolCall {
+            id: self.id.clone().unwrap_or_default(),
+            kind: self.kind.clone().unwrap_or_default(),
+            function: FunctionCall {
+                name: self.name.clone().unwrap_or_default(),
+                arguments: self.arguments.clone(),
+            },
+        }
     }
 }
 
@@ -296,13 +299,12 @@ impl ChatStream {
     ///
     /// Reassembled from fragments that are individually invalid JSON, so this is what a caller
     /// should read rather than the per-chunk [`Chunk::tool_call_fragments`]. `arguments` is a JSON
-    /// string here exactly as it is non-streaming, so the same `serde_json::from_str` works for
-    /// both.
+    /// string here exactly as it is non-streaming, and `call.parse_arguments()` decodes it.
     ///
     /// Populated as the stream runs, and complete once it ends. A stream that stopped on a
     /// `finish_reason` of `length` leaves a truncated `arguments` that will not parse -- check the
     /// finish reason before decoding.
-    pub fn tool_calls(&self) -> Vec<Value> {
+    pub fn tool_calls(&self) -> Vec<ToolCall> {
         self.tool_calls
             .values()
             .map(PartialToolCall::assemble)
@@ -385,7 +387,7 @@ mod tool_call_tests {
 
     use super::*;
 
-    fn assemble(groups: &[Vec<Value>]) -> Vec<Value> {
+    fn assemble(groups: &[Vec<Value>]) -> Vec<ToolCall> {
         let mut calls = BTreeMap::new();
         for group in groups {
             absorb_tool_calls(&mut calls, group);
@@ -413,7 +415,7 @@ mod tool_call_tests {
             vec![head(1, "b", "second", "{}")],
             vec![head(0, "a", "first", "{}")],
         ]);
-        let ids: Vec<_> = calls.iter().map(|c| c["id"].as_str().unwrap()).collect();
+        let ids: Vec<_> = calls.iter().map(|c| c.id.as_str()).collect();
         assert_eq!(ids, ["a", "b"]);
     }
 
@@ -427,7 +429,7 @@ mod tool_call_tests {
         ]);
         let args: Vec<_> = calls
             .iter()
-            .map(|c| c["function"]["arguments"].as_str().unwrap())
+            .map(|c| c.function.arguments.as_str())
             .collect();
         assert_eq!(args, ["{\"x\":1}", "{\"y\":2}"]);
     }
@@ -444,13 +446,9 @@ mod tool_call_tests {
                 "index": 0, "id": "contradiction", "function": {"arguments": "}"}
             })],
         ]);
-        assert_eq!(
-            calls,
-            vec![serde_json::json!({
-                "id": "original", "type": "function",
-                "function": {"name": "f", "arguments": "{}"},
-            })]
-        );
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "original");
+        assert_eq!(calls[0].function.arguments, "{}");
     }
 
     #[test]

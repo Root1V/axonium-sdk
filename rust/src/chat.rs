@@ -10,6 +10,78 @@ use crate::types::{ResponseMeta, Usage};
 
 const ENDPOINT: &str = "/v1/chat/completions";
 
+/// The function a tool call names, and the arguments it was called with.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FunctionCall {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+
+    /// The arguments **as the model produced them**: a JSON string, not a decoded object.
+    ///
+    /// Kept raw on purpose. Streaming delivers this in fragments that are only valid once
+    /// concatenated, and a generation cut short by `max_tokens` leaves a string that was never
+    /// going to parse -- decoding here would turn that into an error surfaced from inside a
+    /// response type, for a caller who only wanted to see what the model had managed to say. Use
+    /// [`ToolCall::parse_arguments`] when you want the object.
+    #[serde(default)]
+    pub arguments: String,
+}
+
+/// A tool call, in the one shape both streaming and non-streaming produce.
+///
+/// Streamed calls arrive split across fragments that are individually invalid JSON; the SDK
+/// reassembles them into exactly this, so the same caller code handles both.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ToolCall {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub id: String,
+    /// `"function"` for everything the gateway forwards today. Modelled rather than assumed,
+    /// because the field exists on the wire precisely so it can grow.
+    #[serde(rename = "type", default, skip_serializing_if = "String::is_empty")]
+    pub kind: String,
+    #[serde(default)]
+    pub function: FunctionCall,
+}
+
+impl ToolCall {
+    /// The function name, without reaching through [`ToolCall::function`].
+    pub fn name(&self) -> &str {
+        &self.function.name
+    }
+
+    /// Decodes [`FunctionCall::arguments`] into an object.
+    ///
+    /// Fails with [`Error::ToolCallArguments`] when the string is not a JSON object. The usual
+    /// cause is a generation that ran out of tokens mid-call, so check `finish_reason` before
+    /// calling this on a response you have not verified completed.
+    pub fn parse_arguments(&self) -> Result<serde_json::Map<String, Value>> {
+        match serde_json::from_str::<Value>(&self.function.arguments) {
+            Ok(Value::Object(map)) => Ok(map),
+            Ok(other) => Err(Error::ToolCallArguments {
+                tool_call_id: self.id.clone(),
+                arguments: self.function.arguments.clone(),
+                reason: format!("it decoded to {}, not an object", kind_of(&other)),
+            }),
+            Err(error) => Err(Error::ToolCallArguments {
+                tool_call_id: self.id.clone(),
+                arguments: self.function.arguments.clone(),
+                reason: error.to_string(),
+            }),
+        }
+    }
+}
+
+fn kind_of(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "a boolean",
+        Value::Number(_) => "a number",
+        Value::String(_) => "a string",
+        Value::Array(_) => "an array",
+        Value::Object(_) => "an object",
+    }
+}
+
 /// One turn of a conversation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
@@ -21,7 +93,7 @@ pub struct Message {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_content: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tool_calls: Option<Vec<Value>>,
+    pub tool_calls: Option<Vec<ToolCall>>,
 }
 
 impl Message {
@@ -225,8 +297,11 @@ impl ChatCompletion {
             .unwrap_or_default()
     }
 
-    /// Tool calls, passed through untouched: the gateway does not interpret them.
-    pub fn tool_calls(&self) -> Vec<Value> {
+    /// Tool calls from the first choice.
+    ///
+    /// The gateway does not interpret them, and neither does this SDK beyond giving them a shape:
+    /// `arguments` is still the model's own string, reachable raw.
+    pub fn tool_calls(&self) -> Vec<ToolCall> {
         self.choices
             .first()
             .and_then(|c| c.message.as_ref())

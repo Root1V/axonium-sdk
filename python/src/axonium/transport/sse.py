@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from axonium.errors import StreamInterruptedError
-from axonium.models.chat import ChatCompletionChunk
+from axonium.models.chat import ChatCompletionChunk, ToolCall
 from axonium.models.common import Usage
 
 __all__ = ["DONE", "SSEEvent", "StreamAccumulator", "decode_line"]
@@ -106,8 +106,8 @@ class _PartialToolCall:
         if isinstance(piece, str):
             self._arguments.append(piece)
 
-    def assemble(self) -> dict[str, Any]:
-        """The call in the shape a non-streaming completion returns.
+    def assemble(self) -> ToolCall:
+        """The call as the same :class:`~axonium.models.chat.ToolCall` non-streaming returns.
 
         ``arguments`` stays a JSON *string*, exactly as non-streaming delivers it, rather than
         being parsed here. That is what lets one piece of caller code handle both, and it means a
@@ -115,11 +115,13 @@ class _PartialToolCall:
         raising or dropping the call. Decode it with ``json.loads`` when the stream finished
         cleanly.
         """
-        return {
-            "id": self.id,
-            "type": self.type,
-            "function": {"name": self.name, "arguments": "".join(self._arguments)},
-        }
+        return ToolCall.model_validate(
+            {
+                "id": self.id,
+                "type": self.type,
+                "function": {"name": self.name, "arguments": "".join(self._arguments)},
+            }
+        )
 
 
 @dataclass
@@ -199,8 +201,8 @@ class StreamAccumulator:
         self._tool_calls.setdefault(index, _PartialToolCall()).absorb(fragment)
 
     @property
-    def tool_calls(self) -> list[dict[str, Any]]:
-        """The tool calls assembled so far, in the non-streaming shape.
+    def tool_calls(self) -> list[ToolCall]:
+        """The tool calls assembled so far, as the same type non-streaming returns.
 
         Ordered by the wire ``index`` rather than by arrival, so a backend that interleaves two
         calls still yields them in the order the model asked for.

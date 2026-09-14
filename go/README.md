@@ -75,13 +75,21 @@ if err := stream.Err(); err != nil {
 	return err
 }
 for _, call := range stream.ToolCalls() {
-	fmt.Printf("%v\n", call) // map[id:... type:function function:map[name:... arguments:...]]
+	args, err := call.ParseArguments()
+	if err != nil {
+		return err // ErrToolCallArguments: the generation was cut off mid-call
+	}
+	fmt.Println(call.Function.Name, args)
 }
 ```
 
-`arguments` stays a JSON *string* in both cases rather than a decoded object, so the same code
-handles streaming and non-streaming. A stream that stopped on a `finish_reason` of `length` leaves
-a truncated `arguments` that will not parse — check the finish reason before decoding.
+The same `ToolCall` comes back from `completion.ToolCalls()` on a non-streaming call, and
+`Message.ToolCalls` takes it straight back, so a tool-use loop converts in neither direction.
+
+`call.Function.Arguments` stays the model's own JSON *string*; `ParseArguments` decodes it and
+returns an error wrapping `ErrToolCallArguments` if it will not parse. That happens when a
+generation stopped on a `FinishReason` of `length` partway through writing the call — the raw
+string stays readable, so you can still see what the model was trying to call.
 
 
 **Always close the stream.** Closing is what propagates cancellation to the gateway and on to

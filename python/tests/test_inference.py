@@ -150,7 +150,9 @@ class TestChatCompletions:
         )
 
         assert completion.content is None
-        assert completion.tool_calls[0]["id"] == "call_1"
+        call = completion.tool_calls[0]
+        assert call.id == "call_1"
+        assert call.name == "get_weather"
         assert completion.choices[0].finish_reason == "tool_calls"
 
     @respx.mock
