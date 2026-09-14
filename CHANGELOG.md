@@ -7,6 +7,19 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+**One host instead of two.** The gateway issues tokens itself now, at the same `/oauth2/token`
+path, so `auth_base_url` left empty means *wherever the gateway is*.
+
+This is a correctness fix as much as a convenience one. Pointing the SDK at a self-hosted
+deployment used to mean changing two addresses; forgetting the second left the client asking the
+**official platform** for a token to use somewhere else, and nothing errored — it simply got a
+token issued by the wrong party. The token host now follows the gateway unless explicitly set.
+
+A deployment that still runs a separate auth-service sets `auth_base_url` and is not overridden.
+The old two-host path keeps working; the platform has not closed it.
+
+- `auth_base_url` defaults to empty, and `config.resolved_auth_base_url` is what the SDK actually calls. `DEFAULT_AUTH_BASE_URL` still exists and is now the same address as the gateway.
+
 Per-request usage lookup: what one of your own requests was charged, and why it stopped.
 
 Both aggregate usage endpoints require `admin:read`, which a normal client neither has nor should
@@ -202,6 +215,19 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+**One host instead of two.** The gateway issues tokens itself now, at the same `/oauth2/token`
+path, so `auth_base_url` left empty means *wherever the gateway is*.
+
+This is a correctness fix as much as a convenience one. Pointing the SDK at a self-hosted
+deployment used to mean changing two addresses; forgetting the second left the client asking the
+**official platform** for a token to use somewhere else, and nothing errored — it simply got a
+token issued by the wrong party. The token host now follows the gateway unless explicitly set.
+
+A deployment that still runs a separate auth-service sets `auth_base_url` and is not overridden.
+The old two-host path keeps working; the platform has not closed it.
+
+- `Config.AuthBaseURL` defaults to `GatewayBaseURL` during resolution. `DEFAULT_AUTH_BASE_URL` still exists and is now the same address as the gateway.
+
 Per-request usage lookup: what one of your own requests was charged, and why it stopped.
 
 Both aggregate usage endpoints require `admin:read`, which a normal client neither has nor should
@@ -297,6 +323,19 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+**One host instead of two.** The gateway issues tokens itself now, at the same `/oauth2/token`
+path, so `auth_base_url` left empty means *wherever the gateway is*.
+
+This is a correctness fix as much as a convenience one. Pointing the SDK at a self-hosted
+deployment used to mean changing two addresses; forgetting the second left the client asking the
+**official platform** for a token to use somewhere else, and nothing errored — it simply got a
+token issued by the wrong party. The token host now follows the gateway unless explicitly set.
+
+A deployment that still runs a separate auth-service sets `auth_base_url` and is not overridden.
+The old two-host path keeps working; the platform has not closed it.
+
+- `Config::auth_base_url` defaults to `gateway_base_url` during resolution. `DEFAULT_AUTH_BASE_URL` still exists and is now the same address as the gateway.
 
 Per-request usage lookup: what one of your own requests was charged, and why it stopped.
 

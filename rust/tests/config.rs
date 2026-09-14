@@ -25,8 +25,13 @@ fn urls_default_to_the_official_platform() {
 
 /// Overriding one must not force restating the other: a self-hosted gateway fronted by the
 /// official auth-service is a real shape.
+/// Pointing at a self-hosted gateway takes the token host with it.
+///
+/// The gateway issues tokens itself now, so the old behaviour -- keeping the official auth address
+/// when only the gateway was overridden -- would silently ask the official platform for a token to
+/// use somewhere else. Nothing errors in that shape, which is what makes it worth a test.
 #[test]
-fn one_url_can_be_overridden_alone() {
+fn the_token_host_follows_the_gateway() {
     std::env::remove_var("AXONIUM_AUTH_BASE_URL");
     std::env::remove_var("AXONIUM_GATEWAY_BASE_URL");
 
@@ -37,7 +42,23 @@ fn one_url_can_be_overridden_alone() {
     .expect("building");
 
     assert_eq!(client.config().gateway_base_url, "https://mine.example");
-    assert_eq!(client.config().auth_base_url, DEFAULT_AUTH_BASE_URL);
+    assert_eq!(client.config().auth_base_url, "https://mine.example");
+}
+
+/// A deployment that still runs a separate auth-service says so, and is not overridden.
+#[test]
+fn a_separate_auth_service_is_still_addressable() {
+    std::env::remove_var("AXONIUM_AUTH_BASE_URL");
+    std::env::remove_var("AXONIUM_GATEWAY_BASE_URL");
+
+    let client = Client::new(Config {
+        gateway_base_url: "https://mine.example".into(),
+        auth_base_url: "https://auth.mine.example".into(),
+        ..credentials_only()
+    })
+    .expect("building");
+
+    assert_eq!(client.config().auth_base_url, "https://auth.mine.example");
 }
 
 /// Defaulting removes the "you forgot one" error, not the "that is not a URL" one.
