@@ -70,7 +70,6 @@ func TestGovernedModeDeduplicatesConcurrentRejections(t *testing.T) {
 	defer srv.Close()
 
 	client, err := New(Config{
-		AuthBaseURL:    srv.URL,
 		GatewayBaseURL: srv.URL,
 		TokenProvider:  host.Token,
 	})
@@ -112,7 +111,6 @@ func TestGovernedModeHoldsNoSecret(t *testing.T) {
 
 	host := &hostTokenSource{}
 	client, err := New(Config{
-		AuthBaseURL:    "https://auth.example",
 		GatewayBaseURL: "https://gateway.example",
 		TokenProvider:  host.Token,
 	})
@@ -131,7 +129,6 @@ func TestGovernedModeHoldsNoSecret(t *testing.T) {
 // credential, and guessing which one the caller meant would be worse than saying so.
 func TestBothModesByNameIsRefused(t *testing.T) {
 	_, err := New(Config{
-		AuthBaseURL:    "https://auth.example",
 		GatewayBaseURL: "https://gateway.example",
 		ClientID:       "explicit",
 		ClientSecret:   "explicit",
@@ -149,7 +146,7 @@ func TestNoCredentialsAtAllIsRefused(t *testing.T) {
 		t.Setenv(v, "")
 		_ = os.Unsetenv(v)
 	}
-	_, err := New(Config{AuthBaseURL: "https://auth.example", GatewayBaseURL: "https://gateway.example"})
+	_, err := New(Config{GatewayBaseURL: "https://gateway.example"})
 	if !errors.Is(err, ErrConfiguration) {
 		t.Fatalf("expected a configuration error, got %v", err)
 	}
@@ -162,7 +159,6 @@ func TestProviderEmptyTokenIsRejected(t *testing.T) {
 	defer srv.Close()
 
 	client, err := New(Config{
-		AuthBaseURL:    srv.URL,
 		GatewayBaseURL: srv.URL,
 		TokenProvider:  func(context.Context, string) (string, error) { return "", nil },
 	})

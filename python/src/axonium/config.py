@@ -12,13 +12,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field, SecretStr, ValidationError, ValidationInfo, field_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from axonium.errors import ConfigurationError
 
 __all__ = [
-    "DEFAULT_AUTH_BASE_URL",
     "DEFAULT_GATEWAY_BASE_URL",
     "AxoniumConfig",
     "Timeouts",
@@ -29,8 +28,13 @@ ENV_PREFIX = "AXONIUM_"
 #: Where the official Prometheus platform lives, used when a caller supplies no URL of their own.
 #:
 #: This is what makes credentials the only thing most callers need to configure: an official SDK
-#: should point at the official platform, and asking every consumer to repeat the same two URLs is
-#: friction for nothing.
+#: should point at the official platform, and asking every consumer to repeat a URL is friction
+#: for nothing.
+#:
+#: **There is one address, not two.** The platform used to run a separate auth-service that every
+#: consumer also had to configure; the gateway issues tokens itself now, at ``/oauth2/token`` on
+#: this same host. Nothing in this SDK asks for that second address any more, and a caller never
+#: has to know it existed.
 #:
 #: **These are provisional.** The platform is not yet on its cloud host, so today they address a
 #: local deployment. When it moves, these two constants change and a consumer who upgrades follows
@@ -41,21 +45,9 @@ ENV_PREFIX = "AXONIUM_"
 #: address after the migration, so the release that changes them will say so loudly. And because
 #: the default is a loopback address, anyone running this without the platform on their own machine
 #: reaches their own localhost — normally a refused connection, which is clear enough, but set
-#: ``AXONIUM_AUTH_BASE_URL`` and ``AXONIUM_GATEWAY_BASE_URL`` for any deployment that is not this
-#: one.
+#: ``AXONIUM_GATEWAY_BASE_URL`` for any deployment that is not this one.
 DEFAULT_GATEWAY_BASE_URL = "http://127.0.0.1:8020"
 
-#: Where tokens come from, which is now **the same host as the gateway**.
-#:
-#: The platform used to run a separate auth-service on its own address, so every consumer
-#: configured two hosts. The gateway issues tokens itself now, at the same ``/oauth2/token`` path,
-#: so there is one address to know instead of two — and a deployment can stop exposing the service
-#: that holds the credentials, which was a second public surface offering nothing the gateway
-#: cannot.
-#:
-#: Kept as a name of its own because callers reference it, and because a deployment that still runs
-#: a separate auth-service can point :attr:`AxoniumConfig.auth_base_url` at it explicitly.
-DEFAULT_AUTH_BASE_URL = DEFAULT_GATEWAY_BASE_URL
 
 #: The gateway's own backend-forwarding timeout for non-streaming requests. A client-side read
 #: timeout below this is a known failure mode: the backend keeps computing after the client gives
@@ -103,14 +95,6 @@ class AxoniumConfig(BaseSettings):
         hide_input_in_errors=True,
     )
 
-    #: Where to ask for OAuth2 tokens. **Empty means "wherever the gateway is"**, which is the
-    #: normal case now that the gateway issues them itself.
-    #:
-    #: Left empty it follows :attr:`gateway_base_url`, so pointing the SDK at a self-hosted
-    #: deployment means changing one address rather than remembering to change two — forgetting the
-    #: second is how a client ends up asking the official platform for a token to use elsewhere.
-    #: Set it only for a deployment that still runs a separate auth-service.
-    auth_base_url: str = ""
     #: Base URL of the gateway serving the ``/v1/`` inference API. Defaults to the official
     #: platform. See :data:`DEFAULT_GATEWAY_BASE_URL`.
     gateway_base_url: str = DEFAULT_GATEWAY_BASE_URL
@@ -151,26 +135,12 @@ class AxoniumConfig(BaseSettings):
 
     timeouts: Timeouts = Field(default_factory=Timeouts)
 
-    @field_validator("auth_base_url", "gateway_base_url")
+    @field_validator("gateway_base_url")
     @classmethod
-    def _require_absolute_url(cls, value: str, info: ValidationInfo) -> str:
-        # Empty is meaningful for auth_base_url alone, where it means "follow the gateway". An
-        # empty gateway_base_url is still a configuration error: nothing would resolve it.
-        if not value and info.field_name == "auth_base_url":
-            return value
+    def _require_absolute_url(cls, value: str) -> str:
         if not value.startswith(("http://", "https://")):
             raise ValueError("must start with http:// or https://")
         return value.rstrip("/")
-
-    @property
-    def resolved_auth_base_url(self) -> str:
-        """Where tokens are actually requested from.
-
-        :attr:`auth_base_url` when it was set, and :attr:`gateway_base_url` otherwise — the gateway
-        issues tokens itself, so following it is both the default and the right answer for a
-        self-hosted deployment.
-        """
-        return self.auth_base_url or self.gateway_base_url
 
     @property
     def scopes(self) -> tuple[str, ...]:

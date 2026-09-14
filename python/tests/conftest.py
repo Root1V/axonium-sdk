@@ -27,7 +27,6 @@ def error_catalog() -> dict[str, Any]:
 def config_kwargs() -> dict[str, str]:
     """Minimal valid configuration, pointing at hosts that are never actually contacted."""
     return {
-        "auth_base_url": "https://auth.test.invalid",
         "gateway_base_url": "https://gateway.test.invalid",
         "client_id": "test-client",
         "client_secret": "test-secret",

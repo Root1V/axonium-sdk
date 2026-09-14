@@ -6,12 +6,11 @@
 // framework is consuming the models, so that there is one implementation of that vocabulary rather
 // than one per language SDK.
 //
-// No host, port, or certificate is baked in: every deployment supplies its own, by field or by
-// AXONIUM_* environment variable.
+// Credentials are the only required setting: the gateway address defaults to the official
+// platform and serves both inference and tokens, so there is one address rather than two, and
+// usually none to supply. Any field can still be set directly or by AXONIUM_* variable.
 //
 //	client, err := axonium.New(axonium.Config{
-//		AuthBaseURL:    "https://auth.example",
-//		GatewayBaseURL: "https://gateway.example",
 //		ClientID:       "...",
 //		ClientSecret:   "...",
 //	})

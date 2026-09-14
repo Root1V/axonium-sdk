@@ -12,7 +12,7 @@ from axonium.errors import ForbiddenError
 from axonium.observability.logging import request_fields
 from axonium.observability.scopes import explain_forbidden
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
 CATALOG_URL = "https://gateway.test.invalid/v1/models"
 

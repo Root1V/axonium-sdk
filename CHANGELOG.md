@@ -18,18 +18,19 @@ credentials and the request was abandoned rather than retried.
 `not-configured` shares that status and is deliberately *not* retryable, which is why the suffix
 drives the decision rather than the status.
 
-**One host instead of two.** The gateway issues tokens itself now, at the same `/oauth2/token`
-path, so `auth_base_url` left empty means *wherever the gateway is*.
+**One address, not two.** The gateway serves both the inference API and `/oauth2/token`, so the
+auth-service address is **gone from this SDK** rather than defaulted.
 
-This is a correctness fix as much as a convenience one. Pointing the SDK at a self-hosted
-deployment used to mean changing two addresses; forgetting the second left the client asking the
-**official platform** for a token to use somewhere else, and nothing errored — it simply got a
-token issued by the wrong party. The token host now follows the gateway unless explicitly set.
+Keeping it as a field that defaults to the gateway would still have taught every consumer that a
+second address exists. It does not, for them: the platform's auth-service is now reachable only
+from inside the deployment, which is what it was always for. Removing the field removes the failure
+it enabled — pointing the SDK at a self-hosted deployment used to mean changing two addresses, and
+forgetting the second left the client asking the **official platform** for a token to use somewhere
+else, with nothing erroring.
 
-A deployment that still runs a separate auth-service sets `auth_base_url` and is not overridden.
-The old two-host path keeps working; the platform has not closed it.
-
-- `auth_base_url` defaults to empty, and `config.resolved_auth_base_url` is what the SDK actually calls. `DEFAULT_AUTH_BASE_URL` still exists and is now the same address as the gateway.
+**Breaking**, and deliberately so while the surface is pre-1.0: `auth_base_url` and `DEFAULT_AUTH_BASE_URL` are **removed**, along with `AXONIUM_AUTH_BASE_URL`. A deployment whose gateway
+has no token endpoint wired up answers `not-configured`, which says exactly that rather than
+failing obscurely.
 
 Per-request usage lookup: what one of your own requests was charged, and why it stopped.
 
@@ -237,18 +238,19 @@ credentials and the request was abandoned rather than retried.
 `not-configured` shares that status and is deliberately *not* retryable, which is why the suffix
 drives the decision rather than the status.
 
-**One host instead of two.** The gateway issues tokens itself now, at the same `/oauth2/token`
-path, so `auth_base_url` left empty means *wherever the gateway is*.
+**One address, not two.** The gateway serves both the inference API and `/oauth2/token`, so the
+auth-service address is **gone from this SDK** rather than defaulted.
 
-This is a correctness fix as much as a convenience one. Pointing the SDK at a self-hosted
-deployment used to mean changing two addresses; forgetting the second left the client asking the
-**official platform** for a token to use somewhere else, and nothing errored — it simply got a
-token issued by the wrong party. The token host now follows the gateway unless explicitly set.
+Keeping it as a field that defaults to the gateway would still have taught every consumer that a
+second address exists. It does not, for them: the platform's auth-service is now reachable only
+from inside the deployment, which is what it was always for. Removing the field removes the failure
+it enabled — pointing the SDK at a self-hosted deployment used to mean changing two addresses, and
+forgetting the second left the client asking the **official platform** for a token to use somewhere
+else, with nothing erroring.
 
-A deployment that still runs a separate auth-service sets `auth_base_url` and is not overridden.
-The old two-host path keeps working; the platform has not closed it.
-
-- `Config.AuthBaseURL` defaults to `GatewayBaseURL` during resolution. `DEFAULT_AUTH_BASE_URL` still exists and is now the same address as the gateway.
+**Breaking**, and deliberately so while the surface is pre-1.0: `Config.AuthBaseURL` and `DefaultAuthBaseURL` are **removed**, along with `AXONIUM_AUTH_BASE_URL`. A deployment whose gateway
+has no token endpoint wired up answers `not-configured`, which says exactly that rather than
+failing obscurely.
 
 Per-request usage lookup: what one of your own requests was charged, and why it stopped.
 
@@ -357,18 +359,19 @@ credentials and the request was abandoned rather than retried.
 `not-configured` shares that status and is deliberately *not* retryable, which is why the suffix
 drives the decision rather than the status.
 
-**One host instead of two.** The gateway issues tokens itself now, at the same `/oauth2/token`
-path, so `auth_base_url` left empty means *wherever the gateway is*.
+**One address, not two.** The gateway serves both the inference API and `/oauth2/token`, so the
+auth-service address is **gone from this SDK** rather than defaulted.
 
-This is a correctness fix as much as a convenience one. Pointing the SDK at a self-hosted
-deployment used to mean changing two addresses; forgetting the second left the client asking the
-**official platform** for a token to use somewhere else, and nothing errored — it simply got a
-token issued by the wrong party. The token host now follows the gateway unless explicitly set.
+Keeping it as a field that defaults to the gateway would still have taught every consumer that a
+second address exists. It does not, for them: the platform's auth-service is now reachable only
+from inside the deployment, which is what it was always for. Removing the field removes the failure
+it enabled — pointing the SDK at a self-hosted deployment used to mean changing two addresses, and
+forgetting the second left the client asking the **official platform** for a token to use somewhere
+else, with nothing erroring.
 
-A deployment that still runs a separate auth-service sets `auth_base_url` and is not overridden.
-The old two-host path keeps working; the platform has not closed it.
-
-- `Config::auth_base_url` defaults to `gateway_base_url` during resolution. `DEFAULT_AUTH_BASE_URL` still exists and is now the same address as the gateway.
+**Breaking**, and deliberately so while the surface is pre-1.0: `Config::auth_base_url` and `DEFAULT_AUTH_BASE_URL` are **removed**, along with `AXONIUM_AUTH_BASE_URL`. A deployment whose gateway
+has no token endpoint wired up answers `not-configured`, which says exactly that rather than
+failing obscurely.
 
 Per-request usage lookup: what one of your own requests was charged, and why it stopped.
 

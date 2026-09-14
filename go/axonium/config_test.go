@@ -13,7 +13,7 @@ import (
 // that can supply it -- not later, as a confusing request error.
 
 func TestConfigurationErrorsNameTheFieldAndTheVariable(t *testing.T) {
-	for _, v := range []string{"AXONIUM_AUTH_BASE_URL", "AXONIUM_GATEWAY_BASE_URL"} {
+	for _, v := range []string{"AXONIUM_GATEWAY_BASE_URL"} {
 		t.Setenv(v, "")
 		_ = os.Unsetenv(v)
 	}
@@ -23,9 +23,9 @@ func TestConfigurationErrorsNameTheFieldAndTheVariable(t *testing.T) {
 		cfg     Config
 		mustSay []string
 	}{
-		{"scheme-less url", Config{AuthBaseURL: "a.example", GatewayBaseURL: "https://g.example", ClientID: "i", ClientSecret: "s"},
+		{"scheme-less url", Config{GatewayBaseURL: "g.example", ClientID: "i", ClientSecret: "s"},
 			[]string{"http://", "https://"}},
-		{"ratio out of range", Config{AuthBaseURL: "https://a.example", GatewayBaseURL: "https://g.example",
+		{"ratio out of range", Config{GatewayBaseURL: "https://g.example",
 			ClientID: "i", ClientSecret: "s", RefreshAheadRatio: 1.5}, []string{"RefreshAheadRatio"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -45,7 +45,7 @@ func TestConfigurationErrorsNameTheFieldAndTheVariable(t *testing.T) {
 // Credentials are the only thing most callers should have to supply: an official SDK points at the
 // official platform, and making everyone repeat the same two URLs is friction for nothing.
 func TestURLsDefaultToTheOfficialPlatform(t *testing.T) {
-	for _, v := range []string{"AXONIUM_AUTH_BASE_URL", "AXONIUM_GATEWAY_BASE_URL"} {
+	for _, v := range []string{"AXONIUM_GATEWAY_BASE_URL"} {
 		t.Setenv(v, "")
 		_ = os.Unsetenv(v)
 	}
@@ -57,32 +57,21 @@ func TestURLsDefaultToTheOfficialPlatform(t *testing.T) {
 	defer client.Close()
 
 	cfg := client.Config()
-	if cfg.AuthBaseURL != DefaultAuthBaseURL || cfg.GatewayBaseURL != DefaultGatewayBaseURL {
-		t.Errorf("got %q and %q", cfg.AuthBaseURL, cfg.GatewayBaseURL)
+	if cfg.GatewayBaseURL != DefaultGatewayBaseURL {
+		t.Errorf("got %q", cfg.GatewayBaseURL)
 	}
 
-	// Pointing at a self-hosted gateway must take the token host with it. The gateway issues
-	// tokens itself now, so the old behaviour -- keeping the official auth address when only the
-	// gateway was overridden -- would silently ask the official platform for a token to use
-	// somewhere else. Nothing errors in that shape, which is what makes it worth a test.
+	// There is one address. The platform used to run a separate auth-service that every consumer
+	// also had to configure, and forgetting it left a client asking the official platform for a
+	// token to use somewhere else -- silently, since nothing errored. Overriding the gateway moves
+	// the token endpoint with it because they are the same host.
 	partial, err := New(Config{ClientID: "i", ClientSecret: "s", GatewayBaseURL: "https://mine.example"})
 	if err != nil {
 		t.Fatalf("building: %v", err)
 	}
 	defer partial.Close()
-	if got := partial.Config(); got.GatewayBaseURL != "https://mine.example" || got.AuthBaseURL != "https://mine.example" {
-		t.Errorf("got %q and %q", got.GatewayBaseURL, got.AuthBaseURL)
-	}
-
-	// A deployment that still runs a separate auth-service says so, and is not overridden.
-	split, err := New(Config{ClientID: "i", ClientSecret: "s",
-		GatewayBaseURL: "https://mine.example", AuthBaseURL: "https://auth.mine.example"})
-	if err != nil {
-		t.Fatalf("building: %v", err)
-	}
-	defer split.Close()
-	if got := split.Config(); got.AuthBaseURL != "https://auth.mine.example" {
-		t.Errorf("an explicit auth host was overridden: %q", got.AuthBaseURL)
+	if got := partial.Config().GatewayBaseURL; got != "https://mine.example" {
+		t.Errorf("got %q", got)
 	}
 }
 
@@ -95,8 +84,7 @@ func TestAMalformedURLStillFails(t *testing.T) {
 }
 
 func TestTrailingSlashesAreNormalised(t *testing.T) {
-	client, err := New(Config{
-		AuthBaseURL: "https://a.example///", GatewayBaseURL: "https://g.example/",
+	client, err := New(Config{GatewayBaseURL: "https://g.example/",
 		ClientID: "i", ClientSecret: "s",
 	})
 	if err != nil {
@@ -105,8 +93,8 @@ func TestTrailingSlashesAreNormalised(t *testing.T) {
 	defer client.Close()
 
 	cfg := client.Config()
-	if cfg.AuthBaseURL != "https://a.example" || cfg.GatewayBaseURL != "https://g.example" {
-		t.Errorf("got %q and %q", cfg.AuthBaseURL, cfg.GatewayBaseURL)
+	if cfg.GatewayBaseURL != "https://g.example" {
+		t.Errorf("got %q", cfg.GatewayBaseURL)
 	}
 }
 
@@ -121,7 +109,6 @@ func TestScopesSplitOnWhitespace(t *testing.T) {
 }
 
 func TestEnvironmentFillsUnsetFields(t *testing.T) {
-	t.Setenv("AXONIUM_AUTH_BASE_URL", "https://env-auth.example")
 	t.Setenv("AXONIUM_GATEWAY_BASE_URL", "https://env-gateway.example")
 	t.Setenv("AXONIUM_CLIENT_ID", "env-id")
 	t.Setenv("AXONIUM_CLIENT_SECRET", "env-secret")
@@ -135,7 +122,7 @@ func TestEnvironmentFillsUnsetFields(t *testing.T) {
 	defer client.Close()
 
 	cfg := client.Config()
-	if cfg.AuthBaseURL != "https://env-auth.example" || cfg.ClientID != "env-id" {
+	if cfg.GatewayBaseURL != "https://env-gateway.example" || cfg.ClientID != "env-id" {
 		t.Errorf("environment not read: %+v", cfg)
 	}
 	if !cfg.VerifyModality {
@@ -149,8 +136,7 @@ func TestEnvironmentFillsUnsetFields(t *testing.T) {
 // A deployment behind a self-signed certificate supplies its own trust. A bundle that cannot be
 // read or contains nothing usable must fail at construction, not on the first request.
 func TestCABundleIsValidatedAtConstruction(t *testing.T) {
-	_, err := New(Config{
-		AuthBaseURL: "https://a.example", GatewayBaseURL: "https://g.example",
+	_, err := New(Config{GatewayBaseURL: "https://g.example",
 		ClientID: "i", ClientSecret: "s", CABundle: filepath.Join(t.TempDir(), "missing.pem"),
 	})
 	if !errors.Is(err, ErrConfiguration) || !strings.Contains(err.Error(), "could not read") {
@@ -161,8 +147,7 @@ func TestCABundleIsValidatedAtConstruction(t *testing.T) {
 	if err := os.WriteFile(empty, []byte("not a certificate"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err = New(Config{
-		AuthBaseURL: "https://a.example", GatewayBaseURL: "https://g.example",
+	_, err = New(Config{GatewayBaseURL: "https://g.example",
 		ClientID: "i", ClientSecret: "s", CABundle: empty,
 	})
 	if !errors.Is(err, ErrConfiguration) || !strings.Contains(err.Error(), "no usable certificates") {
@@ -171,8 +156,7 @@ func TestCABundleIsValidatedAtConstruction(t *testing.T) {
 }
 
 func TestPartialTimeoutsKeepTheOtherDefaults(t *testing.T) {
-	client, err := New(Config{
-		AuthBaseURL: "https://a.example", GatewayBaseURL: "https://g.example",
+	client, err := New(Config{GatewayBaseURL: "https://g.example",
 		ClientID: "i", ClientSecret: "s",
 		Timeouts: Timeouts{Request: 5 * time.Second},
 	})

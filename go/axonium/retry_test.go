@@ -55,8 +55,7 @@ func TestRetriesOnlyWhereNoGenerationOccurred(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			client, err := New(Config{
-				AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+			client, err := New(Config{GatewayBaseURL: srv.URL,
 				ClientID: "id", ClientSecret: "secret", Retry: fastRetry(),
 			})
 			if err != nil {
@@ -95,8 +94,7 @@ func TestOverlongRetryAfterIsSurfacedNotSlept(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "id", ClientSecret: "secret", Retry: fastRetry(),
 	})
 	if err != nil {
@@ -148,8 +146,7 @@ func TestClientTimeoutIsNotRetried(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "id", ClientSecret: "secret", Retry: fastRetry(),
 		Timeouts: Timeouts{Request: 200 * time.Millisecond},
 	})
@@ -180,8 +177,7 @@ func TestCooldownIsHonoredWithoutARequest(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "id", ClientSecret: "secret", Retry: fastRetry(),
 	})
 	if err != nil {
@@ -230,8 +226,7 @@ func TestReactiveRefreshReplaysOnceAfter401(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "id", ClientSecret: "secret", Retry: fastRetry(),
 	})
 	if err != nil {
@@ -319,8 +314,7 @@ func TestInstancePinSurvivesRetries(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "id", ClientSecret: "secret", Retry: fastRetry(),
 	})
 	if err != nil {
@@ -374,8 +368,7 @@ func TestCooldownIsScopedToOneModel(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	client, err := New(Config{GatewayBaseURL: srv.URL,
 		ClientID: "id", ClientSecret: "secret", Retry: fastRetry(),
 	})
 	if err != nil {

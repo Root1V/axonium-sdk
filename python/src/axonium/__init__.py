@@ -7,7 +7,6 @@ from axonium._version import __version__
 from axonium.auth import TokenClaims, TokenSet
 from axonium.client import AsyncAxonium, Axonium
 from axonium.config import (
-    DEFAULT_AUTH_BASE_URL,
     DEFAULT_GATEWAY_BASE_URL,
     AxoniumConfig,
     Timeouts,
@@ -89,7 +88,6 @@ from axonium.streaming import AsyncChatCompletionStream, ChatCompletionStream
 from axonium.transport.retry import CooldownRegistry, RetryPolicy
 
 __all__ = [
-    "DEFAULT_AUTH_BASE_URL",
     "DEFAULT_GATEWAY_BASE_URL",
     "APIError",
     "APIObject",

@@ -14,7 +14,6 @@ import (
 func testClient(t *testing.T, baseURL string) *Client {
 	t.Helper()
 	client, err := New(Config{
-		AuthBaseURL:    baseURL,
 		GatewayBaseURL: baseURL,
 		ClientID:       "test-client",
 		ClientSecret:   "test-secret",

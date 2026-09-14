@@ -105,7 +105,7 @@ func TestAnAbsurdLifetimeIsClamped(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg, err := Config{AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s"}.resolve()
+	cfg, err := Config{GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s"}.resolve()
 	if err != nil {
 		t.Fatalf("resolving: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestTokenEndpointFailuresAreTyped(t *testing.T) {
 			srv := httptest.NewServer(tc.handler)
 			defer srv.Close()
 
-			cfg, _ := Config{AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s"}.resolve()
+			cfg, _ := Config{GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s"}.resolve()
 			_, err := newTokenManager(cfg, srv.Client()).current(context.Background())
 
 			if !errors.Is(err, tc.sentinel) {

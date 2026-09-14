@@ -15,7 +15,7 @@ from axonium.errors import (
     UnknownModelError,
 )
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 CATALOG_URL = "https://gateway.test.invalid/v1/models"
 MINE_URL = "https://gateway.test.invalid/v1/models/mine"
 
@@ -320,7 +320,7 @@ class TestClientConstruction:
         from axonium.errors import ConfigurationError
 
         with pytest.raises(ConfigurationError, match="AXONIUM_CLIENT_ID"):
-            Axonium(auth_base_url="https://a.invalid", gateway_base_url="https://g.invalid")
+            Axonium(gateway_base_url="https://g.invalid")
 
     @respx.mock
     async def test_no_token_is_fetched_until_a_request_needs_one(

@@ -202,7 +202,6 @@ resolve in this order, first match wins:
 
 | Environment variable | Purpose |
 |---|---|
-| `AXONIUM_AUTH_BASE_URL` | token endpoint host — defaults to the gateway, set only for a separate auth-service |
 | `AXONIUM_GATEWAY_BASE_URL` | gateway base URL — overrides the official default |
 | `AXONIUM_CLIENT_ID` | OAuth2 client ID issued by the platform operator |
 | `AXONIUM_CLIENT_SECRET` | OAuth2 client secret |

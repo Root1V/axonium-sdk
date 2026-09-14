@@ -1,6 +1,6 @@
 //! Configuration resolution, and the defaults that make credentials the only required setting.
 
-use axonium::{Client, Config, Error, DEFAULT_AUTH_BASE_URL, DEFAULT_GATEWAY_BASE_URL};
+use axonium::{Client, Config, Error, DEFAULT_GATEWAY_BASE_URL};
 
 fn credentials_only() -> Config {
     Config {
@@ -15,24 +15,22 @@ fn credentials_only() -> Config {
 #[test]
 fn urls_default_to_the_official_platform() {
     // These tests share a process, so the environment is cleared rather than assumed empty.
-    std::env::remove_var("AXONIUM_AUTH_BASE_URL");
     std::env::remove_var("AXONIUM_GATEWAY_BASE_URL");
 
     let client = Client::new(credentials_only()).expect("credentials alone should be enough");
-    assert_eq!(client.config().auth_base_url, DEFAULT_AUTH_BASE_URL);
     assert_eq!(client.config().gateway_base_url, DEFAULT_GATEWAY_BASE_URL);
 }
 
 /// Overriding one must not force restating the other: a self-hosted gateway fronted by the
 /// official auth-service is a real shape.
-/// Pointing at a self-hosted gateway takes the token host with it.
+/// There is one address, not two.
 ///
-/// The gateway issues tokens itself now, so the old behaviour -- keeping the official auth address
-/// when only the gateway was overridden -- would silently ask the official platform for a token to
-/// use somewhere else. Nothing errors in that shape, which is what makes it worth a test.
+/// The platform used to run a separate auth-service that every consumer also had to configure, and
+/// forgetting it left a client asking the official platform for a token to use somewhere else --
+/// silently, since nothing errored. Overriding the gateway moves the token endpoint with it
+/// because they are the same host.
 #[test]
-fn the_token_host_follows_the_gateway() {
-    std::env::remove_var("AXONIUM_AUTH_BASE_URL");
+fn one_address_moves_both_inference_and_tokens() {
     std::env::remove_var("AXONIUM_GATEWAY_BASE_URL");
 
     let client = Client::new(Config {
@@ -42,23 +40,6 @@ fn the_token_host_follows_the_gateway() {
     .expect("building");
 
     assert_eq!(client.config().gateway_base_url, "https://mine.example");
-    assert_eq!(client.config().auth_base_url, "https://mine.example");
-}
-
-/// A deployment that still runs a separate auth-service says so, and is not overridden.
-#[test]
-fn a_separate_auth_service_is_still_addressable() {
-    std::env::remove_var("AXONIUM_AUTH_BASE_URL");
-    std::env::remove_var("AXONIUM_GATEWAY_BASE_URL");
-
-    let client = Client::new(Config {
-        gateway_base_url: "https://mine.example".into(),
-        auth_base_url: "https://auth.mine.example".into(),
-        ..credentials_only()
-    })
-    .expect("building");
-
-    assert_eq!(client.config().auth_base_url, "https://auth.mine.example");
 }
 
 /// Defaulting removes the "you forgot one" error, not the "that is not a URL" one.

@@ -215,12 +215,12 @@ async fn fetch(config: &Config, http: &reqwest::Client) -> Result<TokenSet> {
     // rather than granted as extra margin.
     let issued_at = Instant::now();
     let response = http
-        .post(format!("{}/oauth2/token", config.auth_base_url))
+        .post(format!("{}/oauth2/token", config.gateway_base_url))
         .form(&form)
         .timeout(config.timeouts.auth)
         .send()
         .await
-        .map_err(|e| Error::AuthTransport(format!("could not reach the auth-service: {e}")))?;
+        .map_err(|e| Error::AuthTransport(format!("could not reach the token endpoint: {e}")))?;
 
     let status = response.status().as_u16();
     let headers = response.headers().clone();
@@ -231,7 +231,7 @@ async fn fetch(config: &Config, http: &reqwest::Client) -> Result<TokenSet> {
     }
     let Some(body) = body else {
         return Err(Error::AuthTransport(format!(
-            "the auth-service returned a non-JSON {status} response"
+            "the token endpoint returned a non-JSON {status} response"
         )));
     };
 
@@ -239,9 +239,7 @@ async fn fetch(config: &Config, http: &reqwest::Client) -> Result<TokenSet> {
         .get("access_token")
         .and_then(Value::as_str)
         .filter(|t| !t.is_empty())
-        .ok_or_else(|| {
-            Error::AuthTransport("the auth-service response contained no access_token".into())
-        })?
+        .ok_or_else(|| Error::AuthTransport("the token response contained no access_token".into()))?
         .to_string();
 
     let expires_in = body

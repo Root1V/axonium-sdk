@@ -14,7 +14,7 @@ import respx
 from axonium import Axonium, NotFoundError
 
 GATEWAY = "https://gateway.test.invalid"
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 
 ROW = {
     "request_id": "a0f3ec1b",

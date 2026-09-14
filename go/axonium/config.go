@@ -30,18 +30,13 @@ const envPrefix = "AXONIUM_"
 // address after the migration, so the release that changes them will say so loudly. And because
 // the default is a loopback address, anyone running this without the platform on their own machine
 // reaches their own localhost -- normally a refused connection, which is clear enough, but set
-// AXONIUM_AUTH_BASE_URL and AXONIUM_GATEWAY_BASE_URL for any deployment that is not this one.
+// AXONIUM_GATEWAY_BASE_URL for any deployment that is not this one.
 const (
+	// There is one address, not two. The platform used to run a separate auth-service that every
+	// consumer also had to configure; the gateway issues tokens itself now, at /oauth2/token on
+	// this same host. Nothing in this SDK asks for that second address any more, and a caller
+	// never has to know it existed.
 	DefaultGatewayBaseURL = "http://127.0.0.1:8020"
-
-	// DefaultAuthBaseURL is where tokens come from, which is now the same host as the gateway.
-	//
-	// The platform used to run a separate auth-service on its own address, so every consumer
-	// configured two hosts. The gateway issues tokens itself now, at the same /oauth2/token
-	// path, so there is one address to know instead of two -- and a deployment can stop exposing
-	// the service that holds the credentials, which was a second public surface offering nothing
-	// the gateway cannot.
-	DefaultAuthBaseURL = DefaultGatewayBaseURL
 )
 
 const (
@@ -91,16 +86,9 @@ func DefaultTimeouts() Timeouts {
 // required setting is reported as ErrConfiguration naming both the field and the variable that can
 // supply it.
 type Config struct {
-	// AuthBaseURL is where to ask for OAuth2 tokens. Empty means "wherever the gateway is",
-	// which is the normal case now that the gateway issues them itself.
-	//
-	// Left empty it follows GatewayBaseURL, so pointing the SDK at a self-hosted deployment means
-	// changing one address rather than remembering to change two -- forgetting the second is how a
-	// client ends up asking the official platform for a token to use elsewhere. Set it only for a
-	// deployment that still runs a separate auth-service.
-	AuthBaseURL string
-	// GatewayBaseURL is the base URL of the gateway serving the /v1/ inference API. Defaults to
-	// DefaultGatewayBaseURL.
+	// GatewayBaseURL is the base URL of the gateway, which serves both the /v1/ inference API and
+	// the /oauth2/token endpoint. Defaults to DefaultGatewayBaseURL. It is the only address this
+	// SDK needs.
 	GatewayBaseURL string
 
 	// ClientID and ClientSecret are required in autonomous mode, where the SDK mints its own
@@ -176,12 +164,6 @@ func (c Config) resolve() (*Config, error) {
 	if out.GatewayBaseURL == "" {
 		out.GatewayBaseURL = envOr("GATEWAY_BASE_URL", DefaultGatewayBaseURL)
 	}
-	if out.AuthBaseURL == "" {
-		// Falls back to the gateway rather than to a constant, so a self-hosted deployment that
-		// sets one address does not silently ask the official platform for its tokens. Resolved
-		// after GatewayBaseURL for that reason.
-		out.AuthBaseURL = envOr("AUTH_BASE_URL", out.GatewayBaseURL)
-	}
 	if out.ClientID == "" {
 		out.ClientID = env("CLIENT_ID")
 	}
@@ -209,9 +191,6 @@ func (c Config) resolve() (*Config, error) {
 	var problems []string
 	var err error
 
-	if out.AuthBaseURL, err = normalizeURL(out.AuthBaseURL, "AuthBaseURL", "AUTH_BASE_URL"); err != nil {
-		problems = append(problems, err.Error())
-	}
 	if out.GatewayBaseURL, err = normalizeURL(out.GatewayBaseURL, "GatewayBaseURL", "GATEWAY_BASE_URL"); err != nil {
 		problems = append(problems, err.Error())
 	}

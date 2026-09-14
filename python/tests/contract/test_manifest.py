@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SPEC = REPO_ROOT / "spec"
 MANIFEST = json.loads((SPEC / "cases" / "manifest.json").read_text())
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 GATEWAY = "https://gateway.test.invalid"
 
 ENDPOINTS = {

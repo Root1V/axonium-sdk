@@ -23,7 +23,7 @@ from axonium.errors import (
 )
 from axonium.transport.http import build_async_client, build_sync_client
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 GATEWAY_URL = "https://gateway.test.invalid/v1/models/mine"
 
 

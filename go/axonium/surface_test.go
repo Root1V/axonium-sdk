@@ -200,8 +200,7 @@ func TestTokenClaimsReflectTheCredentialMode(t *testing.T) {
 		t.Errorf("scope: got %v", claims.Scope)
 	}
 
-	governed, err := New(Config{
-		AuthBaseURL: srv.URL, GatewayBaseURL: srv.URL,
+	governed, err := New(Config{GatewayBaseURL: srv.URL,
 		TokenProvider: func(context.Context, string) (string, error) {
 			return makeJWT(map[string]any{"sub": "host", "scope": "inference:read"}) + ".sig", nil
 		},

@@ -9,7 +9,7 @@ from axonium.errors import ModalityMismatchError, UnknownModelError
 from axonium.models.catalog import ModelList
 from axonium.preflight import check_model
 
-AUTH_URL = "https://auth.test.invalid/oauth2/token"
+AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 CATALOG_URL = "https://gateway.test.invalid/v1/models"
 CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
 EMBED_URL = "https://gateway.test.invalid/v1/embeddings"
