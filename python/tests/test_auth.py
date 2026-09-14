@@ -11,9 +11,16 @@ import httpx
 import pytest
 import respx
 
+from axonium import Axonium
 from axonium.auth import TokenManager, TokenSet, decode_claims
 from axonium.config import AxoniumConfig
-from axonium.errors import AuthTransportError, InvalidClientError, InvalidScopeError, OAuthError
+from axonium.errors import (
+    APIError,
+    AuthTransportError,
+    InvalidClientError,
+    InvalidScopeError,
+    OAuthError,
+)
 from axonium.transport.http import build_async_client, build_sync_client
 
 AUTH_URL = "https://auth.test.invalid/oauth2/token"
@@ -620,3 +627,74 @@ class TestRefreshDeduplication:
 
         assert await winner is await queued
         assert token_route.call_count == 1
+
+
+class TestTheTwoTokenEnvelopes:
+    """A failed token request can arrive in either of two shapes, and they mean opposite things.
+
+    Not in the shared contract corpus because the token endpoint is not in it at all — each runner
+    mocks it per case rather than exercising it. Recorded as its own gap rather than papered over.
+    """
+
+    @respx.mock
+    async def test_a_4xx_is_an_oauth2_error_and_is_not_retryable(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        respx.post(AUTH_URL).mock(
+            return_value=httpx.Response(
+                401, json={"error": "invalid_client", "error_description": "Invalid credentials."}
+            )
+        )
+
+        with Axonium(**config_kwargs) as client, pytest.raises(InvalidClientError) as caught:
+            client.models.mine()
+
+        assert caught.value.error == "invalid_client"
+
+    @respx.mock
+    async def test_a_503_is_the_gateway_failing_and_is_retryable(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        # The distinction that matters: reading this as OAuth2 would give it no type and no
+        # retryability, so a momentary blip would look exactly like bad credentials and the caller
+        # would abandon a request that was about to succeed.
+        respx.post(AUTH_URL).mock(
+            return_value=httpx.Response(
+                503,
+                json={
+                    "type": "https://prometheus.internal/errors/upstream-unavailable",
+                    "title": "Service Unavailable",
+                    "status": 503,
+                    "detail": "The gateway could not reach the auth-service.",
+                },
+            )
+        )
+
+        with Axonium(**config_kwargs) as client, pytest.raises(APIError) as caught:
+            client.models.mine()
+
+        assert not isinstance(caught.value, OAuthError), "a gateway failure typed as OAuth2"
+        assert caught.value.type_suffix == "upstream-unavailable"
+        assert caught.value.retryable is True
+
+    @respx.mock
+    async def test_a_deployment_without_a_token_endpoint_is_not_retryable(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        # Same status as the one above and the opposite answer, which is why the suffix has to
+        # drive the decision rather than the status.
+        respx.post(AUTH_URL).mock(
+            return_value=httpx.Response(
+                503,
+                json={
+                    "type": "https://prometheus.internal/errors/not-configured",
+                    "status": 503,
+                    "detail": "No token endpoint is configured.",
+                },
+            )
+        )
+
+        with Axonium(**config_kwargs) as client, pytest.raises(APIError) as caught:
+            client.models.mine()
+
+        assert caught.value.retryable is False

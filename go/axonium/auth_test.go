@@ -173,3 +173,77 @@ func TestOAuthErrorMessages(t *testing.T) {
 		t.Errorf("with nothing to report it should still name the status, got %q", bare)
 	}
 }
+
+// A failed token request can arrive in either of two shapes, and they mean opposite things.
+//
+// Not in the shared contract corpus because the token endpoint is not in it at all -- each runner
+// mocks it per case rather than exercising it. Recorded as its own gap rather than papered over.
+
+func tokenFailing(t *testing.T, status int, body string) *Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := New(Config{ClientID: "i", ClientSecret: "s", GatewayBaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("building: %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	return client
+}
+
+func TestA4xxFromTheTokenEndpointIsAnOAuth2Error(t *testing.T) {
+	client := tokenFailing(t, 401, `{"error":"invalid_client","error_description":"Invalid."}`)
+
+	_, err := client.Models.Mine(context.Background())
+
+	var oauthErr *OAuthError
+	if !errors.As(err, &oauthErr) {
+		t.Fatalf("got %T: %v", err, err)
+	}
+	if oauthErr.Code != "invalid_client" {
+		t.Errorf("code: got %q", oauthErr.Code)
+	}
+}
+
+func TestA503FromTheTokenEndpointIsTheGatewayFailingAndIsRetryable(t *testing.T) {
+	// The distinction that matters: reading this as OAuth2 would give it no type and no
+	// retryability, so a momentary blip would look exactly like bad credentials and the caller
+	// would abandon a request that was about to succeed.
+	client := tokenFailing(t, 503,
+		`{"type":"https://prometheus.internal/errors/upstream-unavailable","status":503,"detail":"x"}`)
+
+	_, err := client.Models.Mine(context.Background())
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("got %T: %v", err, err)
+	}
+	if apiErr.TypeSuffix != "upstream-unavailable" {
+		t.Errorf("suffix: got %q", apiErr.TypeSuffix)
+	}
+	if !apiErr.Retryable() {
+		t.Error("a gateway failure reaching the auth-service should be retryable")
+	}
+	if !errors.Is(err, ErrTokenEndpointUnavailable) {
+		t.Error("did not match its sentinel")
+	}
+}
+
+func TestADeploymentWithoutATokenEndpointIsNotRetryable(t *testing.T) {
+	// Same status as the one above and the opposite answer, which is why the suffix has to drive
+	// the decision rather than the status.
+	client := tokenFailing(t, 503,
+		`{"type":"https://prometheus.internal/errors/not-configured","status":503,"detail":"x"}`)
+
+	_, err := client.Models.Mine(context.Background())
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Retryable() {
+		t.Fatalf("got %T retryable=%v", err, err)
+	}
+}

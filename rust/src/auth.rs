@@ -227,7 +227,7 @@ async fn fetch(config: &Config, http: &reqwest::Client) -> Result<TokenSet> {
     let body: Option<Value> = response.json().await.ok();
 
     if status != 200 {
-        return Err(oauth_error_from_body(status, body.as_ref()));
+        return Err(token_error(status, body.as_ref()));
     }
     let Some(body) = body else {
         return Err(Error::AuthTransport(format!(
@@ -303,4 +303,29 @@ pub(crate) fn effective_lifetime(
         return Duration::ZERO;
     }
     expires_in.min(Duration::from_secs(remaining as u64))
+}
+
+/// Types a failed token response, which can arrive in either of two envelopes.
+///
+/// A `4xx` is an OAuth2 outcome in the RFC 6749 shape -- wrong credentials, a scope the client does
+/// not hold -- and is never worth retrying. A `5xx` is the gateway failing to do its job, arrives
+/// as problem+json, and *is* worth retrying when it is `upstream-unavailable`.
+///
+/// Reading every failure as OAuth2 would collapse that distinction: the 5xx would come back with no
+/// kind and no retryability, so a momentary blip would look exactly like bad credentials and the
+/// request would be abandoned rather than retried.
+///
+/// Keyed on the envelope rather than only the status, because the envelope is what a caller has to
+/// parse. A 5xx that somehow arrives in the OAuth2 shape is still an OAuth2 answer.
+fn token_error(status: u16, body: Option<&Value>) -> Error {
+    if body
+        .and_then(|b| b.get("type"))
+        .and_then(Value::as_str)
+        .is_some()
+    {
+        return Error::Api(Box::new(crate::error::api_error_from_body(
+            status, body, None,
+        )));
+    }
+    oauth_error_from_body(status, body)
 }

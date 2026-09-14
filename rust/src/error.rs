@@ -116,6 +116,10 @@ impl ErrorKind {
                 | Self::RateLimitingUnavailable
                 | Self::UsageStoreUnavailable
                 | Self::IdempotencyInProgress
+                // The gateway failing to reach the auth-service, not an OAuth2 outcome.
+                // TokenEndpointNotConfigured shares its status and is deliberately absent:
+                // it needs operator action, so retrying cannot help.
+                | Self::TokenEndpointUnavailable
                 | Self::OtherServerError
         )
     }

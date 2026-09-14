@@ -7,6 +7,17 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+A failed token request is now typed by its envelope rather than read as OAuth2 unconditionally.
+
+A `4xx` is an OAuth2 outcome in the RFC 6749 shape — wrong credentials, a scope the client does not
+hold — and is never worth retrying. A `5xx` is the gateway failing to reach the auth-service,
+arrives as problem+json, and `upstream-unavailable` **is** worth retrying. Reading both as OAuth2
+left the 5xx with no type and no retryability, so a momentary blip looked exactly like bad
+credentials and the request was abandoned rather than retried.
+
+`not-configured` shares that status and is deliberately *not* retryable, which is why the suffix
+drives the decision rather than the status.
+
 **One host instead of two.** The gateway issues tokens itself now, at the same `/oauth2/token`
 path, so `auth_base_url` left empty means *wherever the gateway is*.
 
@@ -215,6 +226,17 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+A failed token request is now typed by its envelope rather than read as OAuth2 unconditionally.
+
+A `4xx` is an OAuth2 outcome in the RFC 6749 shape — wrong credentials, a scope the client does not
+hold — and is never worth retrying. A `5xx` is the gateway failing to reach the auth-service,
+arrives as problem+json, and `upstream-unavailable` **is** worth retrying. Reading both as OAuth2
+left the 5xx with no type and no retryability, so a momentary blip looked exactly like bad
+credentials and the request was abandoned rather than retried.
+
+`not-configured` shares that status and is deliberately *not* retryable, which is why the suffix
+drives the decision rather than the status.
+
 **One host instead of two.** The gateway issues tokens itself now, at the same `/oauth2/token`
 path, so `auth_base_url` left empty means *wherever the gateway is*.
 
@@ -323,6 +345,17 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+A failed token request is now typed by its envelope rather than read as OAuth2 unconditionally.
+
+A `4xx` is an OAuth2 outcome in the RFC 6749 shape — wrong credentials, a scope the client does not
+hold — and is never worth retrying. A `5xx` is the gateway failing to reach the auth-service,
+arrives as problem+json, and `upstream-unavailable` **is** worth retrying. Reading both as OAuth2
+left the 5xx with no type and no retryability, so a momentary blip looked exactly like bad
+credentials and the request was abandoned rather than retried.
+
+`not-configured` shares that status and is deliberately *not* retryable, which is why the suffix
+drives the decision rather than the status.
 
 **One host instead of two.** The gateway issues tokens itself now, at the same `/oauth2/token`
 path, so `auth_base_url` left empty means *wherever the gateway is*.
