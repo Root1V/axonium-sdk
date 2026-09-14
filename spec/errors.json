@@ -1,5 +1,5 @@
 {
-  "$comment": "Error catalog for the Prometheus Gateway, derived from spec/prometheus-gateway.md §5.2. Every language SDK maps its exception/error types from this file so the taxonomy cannot drift between SDKs. `suffix` is the last path segment of the problem-details `type` URI and is the stable field to branch on; `detail` is human-readable and may change wording.",
+  "$comment": "Error catalog for the Prometheus Gateway, derived from spec/prometheus-gateway.md \u00a75.2. Every language SDK maps its exception/error types from this file so the taxonomy cannot drift between SDKs. `suffix` is the last path segment of the problem-details `type` URI and is the stable field to branch on; `detail` is human-readable and may change wording.",
   "envelopes": {
     "gateway": {
       "$comment": "RFC 9457 problem details, Content-Type: application/problem+json. Returned by every gateway endpoint.",
@@ -14,12 +14,12 @@
         "trace_id"
       ],
       "optional_fields": {
-        "retry_after": "Integer seconds. Present on rate-limit errors, which also omit trace_id. Confirmed by the platform team: the Retry-After header and this field are written from the same variable in the same call, so they cannot disagree — either source may be read.",
+        "retry_after": "Integer seconds. Present on rate-limit errors, which also omit trace_id. Confirmed by the platform team: the Retry-After header and this field are written from the same variable in the same call, so they cannot disagree \u2014 either source may be read.",
         "trace_id": "Omitted by the rate-limiting middleware envelope."
       }
     },
     "oauth": {
-      "$comment": "RFC 6749 §5.2, returned by the auth-service token endpoint only. Deliberately a different shape from the gateway envelope.",
+      "$comment": "RFC 6749 \u00a75.2, returned by the auth-service token endpoint only. Deliberately a different shape from the gateway envelope.",
       "fields": [
         "error",
         "error_description"
@@ -36,8 +36,9 @@
     {
       "status": 400,
       "suffix": "modality-mismatch",
-      "meaning": "Endpoint or content type does not match the model's modality, e.g. an image content part sent to a non-vision model, or a non-embedding model on /v1/embeddings.",
-      "retryable": false
+      "meaning": "The model's modality does not match the endpoint or the content sent: a model whose modality is neither text nor vision on /v1/chat/completions, an image content part sent to a non-vision model, or the wrong modality on /v1/embeddings or /v1/images/generations.",
+      "retryable": false,
+      "$comment": "Broadened by the platform's RM-66 fix, vendored 2026-09-14. Chat completions used to check modality only when an image part was present, so an embedding or image model ran and returned 200 with meaningless output -- billing a real, wasted generation instead of refusing for free. Verified live 2026-09-14: qwen3-embedding and sd-turbo both now return 400 modality-mismatch before any backend call."
     },
     {
       "status": 400,

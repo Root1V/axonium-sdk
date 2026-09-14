@@ -1,5 +1,9 @@
 # Prometheus Gateway — SDK Integration Guide
 
+**Revision**: 2026-09-14 · `55c2174`
+<!-- Consumers vendor this file and diff it. The date and commit above are what to quote
+     when asking whether a copy is current; they change whenever this document does. -->
+
 Technical reference for the team building client SDKs (Python, Go, Rust) that wrap this
 platform's inference API. It covers everything an SDK needs to encapsulate: authentication
 and token refresh, TLS, the request/response contract for every client-facing endpoint, the
@@ -8,7 +12,14 @@ gateway already implements server-side — so the SDK complements it instead of 
 
 Every fact below is sourced directly from the gateway/auth-service source and test suite, not
 from documentation that could have drifted. File:line references point at the current
-codebase for verification. Two things need confirming with the platform operator before
+codebase for verification.
+
+**Model names in the examples are real but not guaranteed.** They are taken from a live
+deployment so the examples can be run as written, rather than failing with `unknown-model` the
+first time somebody pastes one — which is what happened with the placeholder that used to be
+here. A catalog still differs between deployments and changes over time: **`GET /v1/models` is
+the source of truth**, and an SDK should never hardcode a model name it did not read from
+there. Two things need confirming with the platform operator before
 publishing an SDK against a specific deployment — flagged in §9.
 
 ---
@@ -46,7 +57,7 @@ JSON — the endpoint is declared with FastAPI `Form(...)` params.
 POST /oauth2/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=client_credentials&client_id=<id>&client_secret=<secret>&scope=inference:read model:llama3-8b-q4
+grant_type=client_credentials&client_id=<id>&client_secret=<secret>&scope=inference:read model:qwen3-0.6b
 ```
 
 - `grant_type` — required, must be exactly `client_credentials`.
@@ -66,7 +77,7 @@ grant_type=client_credentials&client_id=<id>&client_secret=<secret>&scope=infere
   "access_token": "<RS256 JWT>",
   "token_type": "bearer",
   "expires_in": 600,
-  "scope": "inference:read model:llama3-8b-q4"
+  "scope": "inference:read model:qwen3-0.6b"
 }
 ```
 
@@ -110,7 +121,7 @@ RS256, these claims are minted:
   "iat": 1700000000,
   "exp": 1700000600,
   "jti": "<uuid4>",
-  "scope": "inference:read model:llama3-8b-q4",
+  "scope": "inference:read model:qwen3-0.6b",
   "role": "app",
   "client_name": "my-integration"
 }
@@ -163,10 +174,9 @@ refresh-ahead pattern:
 ### 2.5 Scopes
 
 Fixed scope strings: `inference:read`, `inference:stream`, `admin:read`, `admin:write`,
-`admin:models`, `admin:usage`, `backend-registry:read`, `backend-registry:write`, `ui:chat`,
-`ops:dashboard`.
+`admin:models`, `admin:usage`, `backend-registry:read`, `backend-registry:write`, `ui:chat`.
 
-Per-model scope: `model:<model-id>` — e.g. `model:llama3-8b-q4`. Case-sensitive, must match
+Per-model scope: `model:<model-id>` — e.g. `model:qwen3-0.6b`. Case-sensitive, must match
 the model ID exactly.
 
 **Deny-by-default, and this is the part SDK authors most often get wrong**: holding
@@ -232,12 +242,12 @@ No authentication required. Returns every currently-deployed model:
   "object": "list",
   "data": [
     {
-      "id": "llama3-8b-q4",
+      "id": "qwen3-0.6b",
       "object": "model",
       "owned_by": "prometheus",
-      "context_length": 8192,
-      "family": "llama3",
-      "quantization": "Q4_0",
+      "context_length": 4096,
+      "family": "qwen3",
+      "quantization": "IQ4_NL",
       "modality": "text"
     }
   ]
@@ -265,7 +275,7 @@ instead of always waiting for a `403` from the actual inference call.
 
 ```json
 {
-  "model": "llama3-8b-q4",
+  "model": "qwen3-0.6b",
   "messages": [
     { "role": "user", "content": "Hello" }
   ],
@@ -319,7 +329,7 @@ image content part to a model whose `modality` isn't `vision` returns `400 modal
 {
   "id": "chatcmpl-...",
   "object": "chat.completion",
-  "model": "llama3-8b-q4",
+  "model": "qwen3-0.6b",
   "choices": [
     {
       "index": 0,
@@ -489,7 +499,7 @@ from §2.1) is RFC 9457 "Problem Details", `Content-Type: application/problem+js
   "type": "https://prometheus.internal/errors/forbidden",
   "title": "Forbidden",
   "status": 403,
-  "detail": "This client is not authorized to use model 'llama3-8b-q4'.",
+  "detail": "This client is not authorized to use model 'qwen3-0.6b'.",
   "instance": "/v1/chat/completions",
   "request_id": "5c1e2b3a-...",
   "trace_id": "b04044d6-..."
@@ -510,13 +520,54 @@ is specific to the rate-limiting middleware's error envelope; see the next secti
 circuit-breaker's `503 backend-unavailable`, which only ever sets the header, never a body
 field — a different response builder entirely.)
 
+**422 — request body validation, fixed (RM-65)**: an earlier version of the gateway let
+FastAPI's default validation-error handler run for a malformed/incomplete request body,
+which produced `Content-Type: application/json` and `{"detail": [...]}` — no `type`, no
+`request_id`, breaking the "every gateway error is `problem+json`" contract stated above. This
+is now fixed: a 422 uses the same envelope as everything else, with Pydantic's original
+per-field errors preserved under an `errors` extension member:
+
+```json
+{
+  "type": "https://prometheus.internal/errors/validation-error",
+  "title": "Validation Error",
+  "status": 422,
+  "detail": "body.messages: Field required",
+  "instance": "/v1/chat/completions",
+  "request_id": "1890eba3-...",
+  "trace_id": "d83c21ce-...",
+  "errors": [{ "type": "missing", "loc": ["body", "messages"], "msg": "Field required", "input": { "model": "..." } }]
+}
+```
+
+If your SDK already has a fallback path for a non-conforming error body (good defensive
+practice regardless), it doesn't need to change — but you can now rely on `type`/`request_id`
+being present for 422s the same as any other gateway error, against a gateway that includes
+this fix.
+
+**Modality check on `/v1/chat/completions` was one-directional, fixed (RM-66)**: `/v1/embeddings`
+and `/v1/images/generations` always rejected a model of the wrong modality outright. Chat
+completions only checked modality when an image content part was present (to require a
+vision-capable model) — it never checked whether the target model could do chat/text
+generation *at all*. Calling `/v1/chat/completions` with an embedding or image-generation
+model used to return `200` with garbage/meaningless output (the model still ran, it just
+isn't meant to produce chat completions) — billing the caller for a real, wasted generation
+instead of a clear, free error. Found live by our own integration testing while building this
+guide. Fixed: any model whose modality isn't `text` or `vision` now returns `400
+modality-mismatch` immediately, before any backend call, for both streaming and
+non-streaming. If your SDK has a "wrong-modality" client-side check of its own as a
+convenience, it can stay — this fix just makes the server-side guarantee actually hold for
+every direction, so you no longer need to treat "did I pick the right endpoint for this
+model" as something only the SDK can catch.
+
 ### 5.2 Full error catalog (client-facing endpoints only)
 
 | Status | `type` suffix | Meaning | Retryable? |
 |---|---|---|---|
 | 400 | `unknown-model` | Model ID not registered. Checked *before* any scope check — an unrecognized model is always 400, never 403, regardless of what the token can access. | No |
-| 400 | `modality-mismatch` | e.g. sent an image content part to a non-vision model, or called `/v1/embeddings` with a non-embedding model. | No |
+| 400 | `modality-mismatch` | Calling `/v1/chat/completions` with a model whose modality isn't `text`/`vision` (e.g. an embedding or image-generation model — fixed in RM-66, see note below), sending an image content part to a non-vision model, or calling `/v1/embeddings`/`/v1/images/generations` with the wrong modality. | No |
 | 400 | `context-exceeded` | Request exceeds the model's context window. | No (shrink the request) |
+| 422 | `validation-error` | Request body failed schema validation (missing/wrong-typed field). `errors` extension member carries Pydantic's per-field detail. | No (fix the request) |
 | 401 | `missing-credentials` | No/malformed `Authorization` header, or token passed as a query param. | No (fix the request) |
 | 401 | `invalid-token` | Signature/algorithm/issuer/audience/`sub`-claim validation failed. | No |
 | 401 | `token-expired` | JWT `exp` has passed. | **Yes** — refresh the token, then retry once |
