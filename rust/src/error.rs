@@ -44,6 +44,13 @@ pub enum ErrorKind {
     /// third case behind it and it is the common one: the id belongs to a replay, which is
     /// not billed and has no row.
     NotFound,
+    /// The gateway could not reach the auth-service to issue a token. The only problem+json a
+    /// token request can produce -- every other token outcome uses the RFC 6749 shape -- and
+    /// the distinction is what makes it safe to retry, where an OAuth2 failure never is.
+    TokenEndpointUnavailable,
+    /// This deployment has no token endpoint wired up. Shares a status with
+    /// `TokenEndpointUnavailable` but not its retryability.
+    TokenEndpointNotConfigured,
     // 429
     RateLimitExceeded,
     // 5xx
@@ -86,6 +93,8 @@ impl ErrorKind {
             "rate-limiting-unavailable" => Self::RateLimitingUnavailable,
             "usage-store-unavailable" => Self::UsageStoreUnavailable,
             "not-found" => Self::NotFound,
+            "upstream-unavailable" => Self::TokenEndpointUnavailable,
+            "not-configured" => Self::TokenEndpointNotConfigured,
             _ if status == 401 => Self::Unauthorized,
             _ if status >= 500 => Self::OtherServerError,
             _ => Self::OtherClientError,
