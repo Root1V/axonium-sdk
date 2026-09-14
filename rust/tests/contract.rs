@@ -220,9 +220,16 @@ async fn contract_corpus() {
                         (_, derived) => view["usage"] = derived,
                     }
                 }
+                // Every field a caller can read, not just the three the first cases happened
+                // to assert: anything missing here is unassertable by the manifest, which is how
+                // the cached-token lift went unverified in all three languages (AXO-81).
                 view["meta"] = serde_json::json!({
                     "request_id": completion.meta.request_id,
                     "trace_id": completion.meta.trace_id,
+                    "instance": completion.meta.instance,
+                    "instance_id": completion.meta.instance_id,
+                    "idempotent_replay": completion.meta.idempotent_replay,
+                    "idempotent_replay_of": completion.meta.idempotent_replay_of,
                     "rate_limit": completion.meta.rate_limit.as_ref().map(|r| serde_json::json!({
                         "limit_requests": r.limit_requests,
                         "remaining_requests": r.remaining_requests,

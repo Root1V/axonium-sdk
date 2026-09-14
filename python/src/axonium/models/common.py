@@ -172,6 +172,14 @@ class ResponseMeta(BaseModel):
     #: ``usage`` on a replay describes the original generation, not a second one.
     idempotent_replay: bool = False
 
+    #: On a replay, the ``request_id`` of the generation that was actually billed.
+    #:
+    #: A replay carries its own ``request_id``, and that id has no usage row of its own — looking
+    #: it up returns ``404``, correctly, because replaying does not reach a model and is not
+    #: billed. This is the id that *does* resolve, so it is the only way from the response a
+    #: caller received to the charge it corresponds to. ``None`` on anything that is not a replay.
+    idempotent_replay_of: str | None = None
+
     @classmethod
     def from_headers(cls, headers: Any) -> ResponseMeta:
         rate_limit = RateLimitSnapshot.from_headers(headers)
@@ -181,5 +189,6 @@ class ResponseMeta(BaseModel):
             instance=headers.get("X-Prometheus-Instance"),
             instance_id=headers.get("X-Prometheus-Instance-Id"),
             idempotent_replay=headers.get("Idempotent-Replay", "").lower() == "true",
+            idempotent_replay_of=headers.get("X-Idempotent-Replay-Of"),
             rate_limit=None if rate_limit.is_empty else rate_limit,
         )

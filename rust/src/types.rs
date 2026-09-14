@@ -89,6 +89,13 @@ pub struct ResponseMeta {
     /// True when this response was replayed from an `Idempotency-Key` rather than generated. A
     /// replay reached no model and recorded no usage, so its `usage` describes the original.
     pub idempotent_replay: bool,
+    /// On a replay, the request id of the generation that was actually billed.
+    ///
+    /// A replay carries its own request id, and that id has no usage row of its own -- looking it
+    /// up returns `404`, correctly, because replaying does not reach a model and is not billed.
+    /// This is the id that *does* resolve, so it is the only way from the response a caller
+    /// received to the charge it corresponds to. Empty on anything that is not a replay.
+    pub idempotent_replay_of: String,
     pub rate_limit: Option<RateLimit>,
 }
 
@@ -123,6 +130,7 @@ impl ResponseMeta {
             instance: text("x-prometheus-instance"),
             instance_id: text("x-prometheus-instance-id"),
             idempotent_replay: text("idempotent-replay").eq_ignore_ascii_case("true"),
+            idempotent_replay_of: text("x-idempotent-replay-of"),
             rate_limit: (!rate_limit.is_empty()).then_some(rate_limit),
         }
     }

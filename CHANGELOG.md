@@ -7,6 +7,14 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+`meta.idempotent_replay_of` carries, on a replay, the request id of the generation that was
+actually billed.
+
+A replay has its own request id and no usage row of its own, so looking that id up returns `404` —
+correctly, since replaying reaches no model and is not billed. This header names the id that does
+resolve, which makes it the only path from the response a caller received to the charge it
+corresponds to. `None`/empty on anything that is not a replay.
+
 The quickstart in the README used a model name that is not registered, so copying it produced
 `400 unknown-model` rather than a completion. Examples and doc comments now use a real slug, and
 each README says what a slug is: it never changes and is never reused, so pinning one is safe, but
@@ -178,6 +186,14 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+`ResponseMeta.IdempotentReplayOf` carries, on a replay, the request id of the generation that was
+actually billed.
+
+A replay has its own request id and no usage row of its own, so looking that id up returns `404` —
+correctly, since replaying reaches no model and is not billed. This header names the id that does
+resolve, which makes it the only path from the response a caller received to the charge it
+corresponds to. `None`/empty on anything that is not a replay.
+
 The quickstart in the README used a model name that is not registered, so copying it produced
 `400 unknown-model` rather than a completion. Examples and doc comments now use a real slug, and
 each README says what a slug is: it never changes and is never reused, so pinning one is safe, but
@@ -249,6 +265,14 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+`ResponseMeta::idempotent_replay_of` carries, on a replay, the request id of the generation that was
+actually billed.
+
+A replay has its own request id and no usage row of its own, so looking that id up returns `404` —
+correctly, since replaying reaches no model and is not billed. This header names the id that does
+resolve, which makes it the only path from the response a caller received to the charge it
+corresponds to. `None`/empty on anything that is not a replay.
 
 The quickstart in the README used a model name that is not registered, so copying it produced
 `400 unknown-model` rather than a completion. Examples and doc comments now use a real slug, and

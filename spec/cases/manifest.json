@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 11,
+  "version": 12,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -671,6 +671,39 @@
         "retryable": false,
         "has_request_id": true,
         "has_trace_id": true
+      }
+    },
+    {
+      "id": "chat-idempotent-replay",
+      "$comment": "Recorded live 2026-09-14, the day the header shipped. A replay carries its OWN request id, and that id has no usage row -- GET /v1/usage/{it} returns 404, correctly, because a replay reaches no model and is not billed. X-Idempotent-Replay-Of names the generation that WAS billed, and is the only path from the response a caller holds to the charge it corresponds to. Asserted here because the two ids differ: reading the wrong one silently yields a 404 rather than an error.",
+      "operation": "chat.completions.create",
+      "request": {
+        "model": "qwen3-0.6b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hola"
+          }
+        ],
+        "max_tokens": 8,
+        "idempotency_key": "k"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "X-Request-ID": "189da881-ff6f-4cd6-9522-58b02a3a427c",
+          "Idempotent-Replay": "true",
+          "X-Idempotent-Replay-Of": "939e2bd4-b3e9-4ee5-9dc5-368631099dfb"
+        },
+        "body_file": "chat_completion.json"
+      },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "meta.request_id": "189da881-ff6f-4cd6-9522-58b02a3a427c",
+          "meta.idempotent_replay": true,
+          "meta.idempotent_replay_of": "939e2bd4-b3e9-4ee5-9dc5-368631099dfb"
+        }
       }
     },
     {
