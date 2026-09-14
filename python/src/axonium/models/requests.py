@@ -23,6 +23,7 @@ from pydantic import (
 )
 
 from axonium.errors import InvalidRequestError, UnsupportedFieldWarning
+from axonium.models.chat import ToolCall
 
 __all__ = [
     "ChatCompletionRequest",
@@ -130,7 +131,11 @@ class Message(BaseModel):
     #: that carries only ``tool_calls``.
     content: str | list[ContentPart] | None = None
     name: str | None = None
-    tool_calls: list[dict[str, Any]] | None = None
+
+    #: Typed the same as what a response hands back, so a tool-use loop can feed
+    #: ``completion.tool_calls`` straight into the next assistant message. Plain dicts are still
+    #: accepted and validated into the model, so code written before this was typed keeps working.
+    tool_calls: list[ToolCall] | None = None
     tool_call_id: str | None = None
 
 

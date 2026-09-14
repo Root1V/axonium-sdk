@@ -119,12 +119,12 @@ func (s *ChatCompletionStream) Usage() *Usage { return s.acc.finalUsage() }
 //
 // Reassembled from fragments that are individually invalid JSON, so this is what a caller should
 // read rather than the per-chunk ToolCallFragments. arguments is a JSON string here exactly as it
-// is non-streaming, so the same json.Unmarshal works for both.
+// is non-streaming, and ParseArguments decodes it.
 //
 // Populated as the stream runs, and complete once it ends. A stream that stopped on
 // FinishReason "length" leaves a truncated arguments that will not parse -- check the finish
 // reason before decoding.
-func (s *ChatCompletionStream) ToolCalls() []any { return s.acc.finalToolCalls() }
+func (s *ChatCompletionStream) ToolCalls() []ToolCall { return s.acc.finalToolCalls() }
 
 // Meta returns the correlation IDs and rate-limit budget of the response that opened this stream.
 func (s *ChatCompletionStream) Meta() ResponseMeta { return s.meta }

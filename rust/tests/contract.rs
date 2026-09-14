@@ -193,7 +193,10 @@ async fn contract_corpus() {
                 // The manifest resolves a path against the SDK's own accessors where it exposes
                 // them, so a case asserting "content" checks what a caller would actually read.
                 view["content"] = Value::String(completion.content());
-                view["tool_calls"] = Value::Array(completion.tool_calls());
+                // Through serde rather than grafted on directly: the manifest resolves paths
+                // like tool_calls.0.function.name by walking JSON, and a typed struct is not.
+                view["tool_calls"] = serde_json::to_value(completion.tool_calls())
+                    .expect("tool calls are serialisable");
                 view["meta"] = serde_json::json!({
                     "request_id": completion.meta.request_id,
                     "trace_id": completion.meta.trace_id,
@@ -281,11 +284,9 @@ async fn contract_corpus() {
                         .get("tool_calls")
                         .cloned()
                         .unwrap_or_else(|| Value::Array(Vec::new()));
-                    assert_eq!(
-                        Value::Array(stream.tool_calls()),
-                        want_calls,
-                        "{id}: tool calls"
-                    );
+                    let got_calls = serde_json::to_value(stream.tool_calls())
+                        .expect("tool calls are serialisable");
+                    assert_eq!(got_calls, want_calls, "{id}: tool calls");
                     match (case["expect"].get("usage"), stream.usage()) {
                         (Some(Value::Null) | None, usage) => {
                             assert!(usage.is_none(), "{id}: expected no usage, got {usage:?}")

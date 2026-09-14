@@ -19,7 +19,7 @@ from typing import Any
 import httpx
 
 from axonium.errors import APIError
-from axonium.models.chat import ChatCompletionChunk
+from axonium.models.chat import ChatCompletionChunk, ToolCall
 from axonium.models.common import ResponseMeta, Usage
 from axonium.transport import dispatch
 from axonium.transport.sse import StreamAccumulator, decode_line
@@ -64,12 +64,12 @@ class _StreamBase:
         return self._state.reasoning
 
     @property
-    def tool_calls(self) -> list[dict[str, Any]]:
-        """The tool calls the model asked for, in the same shape non-streaming returns.
+    def tool_calls(self) -> list[ToolCall]:
+        """The tool calls the model asked for, as the same type non-streaming returns.
 
         Reassembled from fragments that are individually invalid JSON, so this is what a caller
         should read rather than the per-chunk ``tool_call_fragments``. ``arguments`` is a JSON
-        string here exactly as it is non-streaming, so the same ``json.loads`` works for both.
+        string here exactly as it is non-streaming, and ``call.parse_arguments()`` decodes it.
 
         Populated as the stream runs, and complete once it ends. A stream that stopped on
         ``finish_reason == "length"`` leaves a truncated ``arguments`` that will not parse -- check

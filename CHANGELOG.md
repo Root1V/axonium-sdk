@@ -7,6 +7,30 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+Tool calls are now typed like everything around them.
+
+They used to arrive as raw dicts while the message carrying them was a model. The asymmetry cost a
+consumer real work twice over: reaching in by hand to read a name, and converting back to dicts to
+feed a call into the next request. Both directions are now the same type.
+
+`arguments` deliberately stays the model's own JSON **string** rather than a decoded object.
+Decoding it at parse time would raise from inside a response model, for a caller who only wanted to
+see what the model had managed to say — a generation stopped by `max_tokens` leaves a string that
+was never going to parse. Decoding is a separate, explicit call that fails loudly, and the raw
+string stays reachable either way.
+
+**Breaking**, and deliberately so while the surface is still pre-1.0: anything indexing a tool call
+as a dict/map/`Value` needs the field instead.
+
+- `ToolCall` and `FunctionCall`, returned by `completion.tool_calls` and `stream.tool_calls`, and
+  accepted by `Message.tool_calls` on the request side. Plain dicts are still validated into the
+  model there, so request-building code written before this keeps working.
+- `call.parse_arguments()` decodes the arguments, raising `ToolCallArgumentsError` — which carries
+  the offending call — rather than letting `json`'s own `ValueError` escape. `call.name` reads the
+  function name without reaching through `call.function`.
+- Streamed *fragments* stay raw dicts on `chunk.tool_call_fragments`. A fragment is not a call: it
+  carries `index`, which the complete shape has no field for, and only a slice of the arguments.
+
 Streamed tool calls are now reassembled for you.
 
 A tool call arrives split across as many deltas as it takes — `{`, `"`, `city` — and the fragments
@@ -148,6 +172,30 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+Tool calls are now typed like everything around them.
+
+They used to arrive as raw dicts while the message carrying them was a model. The asymmetry cost a
+consumer real work twice over: reaching in by hand to read a name, and converting back to dicts to
+feed a call into the next request. Both directions are now the same type.
+
+`arguments` deliberately stays the model's own JSON **string** rather than a decoded object.
+Decoding it at parse time would raise from inside a response model, for a caller who only wanted to
+see what the model had managed to say — a generation stopped by `max_tokens` leaves a string that
+was never going to parse. Decoding is a separate, explicit call that fails loudly, and the raw
+string stays reachable either way.
+
+**Breaking**, and deliberately so while the surface is still pre-1.0: anything indexing a tool call
+as a dict/map/`Value` needs the field instead.
+
+- `ToolCall` and `FunctionCall`, returned by `(*ChatCompletion).ToolCalls()` and
+  `(*ChatCompletionStream).ToolCalls()`, and accepted by `Message.ToolCalls`.
+- `call.ParseArguments()` decodes the arguments, returning an error wrapping the new
+  `ErrToolCallArguments` sentinel.
+- `(*ChatCompletionChunk).ToolCallFragments()` now reads from the chunk's `Raw` rather than the
+  decoded delta. `Message` is the same struct for a message and a delta, so decoding a fragment
+  into the typed shape would have silently dropped `index` — the one field the reassembler
+  correlates on.
+
 Streamed tool calls are now reassembled for you.
 
 A tool call arrives split across as many deltas as it takes — `{`, `"`, `city` — and the fragments
@@ -189,6 +237,27 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+Tool calls are now typed like everything around them.
+
+They used to arrive as raw dicts while the message carrying them was a model. The asymmetry cost a
+consumer real work twice over: reaching in by hand to read a name, and converting back to dicts to
+feed a call into the next request. Both directions are now the same type.
+
+`arguments` deliberately stays the model's own JSON **string** rather than a decoded object.
+Decoding it at parse time would raise from inside a response model, for a caller who only wanted to
+see what the model had managed to say — a generation stopped by `max_tokens` leaves a string that
+was never going to parse. Decoding is a separate, explicit call that fails loudly, and the raw
+string stays reachable either way.
+
+**Breaking**, and deliberately so while the surface is still pre-1.0: anything indexing a tool call
+as a dict/map/`Value` needs the field instead.
+
+- `ToolCall` and `FunctionCall`, returned by `ChatCompletion::tool_calls()` and
+  `ChatStream::tool_calls()`, and accepted by `Message::tool_calls`. `type` is spelled `kind` on
+  the struct and still serialises as `type`.
+- `call.parse_arguments()` decodes the arguments, failing with the new `Error::ToolCallArguments`,
+  which carries the call id and the raw string. `call.name()` reads the function name directly.
 
 Streamed tool calls are now reassembled for you.
 

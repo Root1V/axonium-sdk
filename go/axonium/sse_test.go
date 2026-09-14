@@ -164,7 +164,7 @@ func TestEmptyTimingsProduceNoUsage(t *testing.T) {
 // the wire has never yet violated: fragments arriving out of index order, and a second,
 // contradictory identity for a call already in flight.
 
-func assembleToolCalls(groups [][]map[string]any) []any {
+func assembleToolCalls(groups [][]map[string]any) []ToolCall {
 	var acc accumulator
 	for _, group := range groups {
 		for _, fragment := range group {
@@ -192,23 +192,6 @@ func toolCallMore(index int, arguments string) map[string]any {
 	}
 }
 
-func toolCallField(t *testing.T, call any, path ...string) string {
-	t.Helper()
-	current := call
-	for _, key := range path {
-		m, ok := current.(map[string]any)
-		if !ok {
-			t.Fatalf("%v is not an object at %q", call, key)
-		}
-		current = m[key]
-	}
-	text, ok := current.(string)
-	if !ok {
-		t.Fatalf("%v at %v is %T, want string", call, path, current)
-	}
-	return text
-}
-
 func TestToolCallsComeBackInIndexOrderNotArrivalOrder(t *testing.T) {
 	// The gateway groups by index today, so this ordering has never been observed. Relying on
 	// arrival order would work right up until a backend interleaves, and then it would hand the
@@ -220,8 +203,8 @@ func TestToolCallsComeBackInIndexOrderNotArrivalOrder(t *testing.T) {
 	if len(calls) != 2 {
 		t.Fatalf("got %d calls, want 2", len(calls))
 	}
-	if got := []string{toolCallField(t, calls[0], "id"), toolCallField(t, calls[1], "id")}; got[0] != "a" || got[1] != "b" {
-		t.Errorf("ids: got %v, want [a b]", got)
+	if calls[0].ID != "a" || calls[1].ID != "b" {
+		t.Errorf("ids: got [%s %s], want [a b]", calls[0].ID, calls[1].ID)
 	}
 }
 
@@ -236,7 +219,7 @@ func TestInterleavedToolCallArgumentsStayWithTheirOwnCall(t *testing.T) {
 		t.Fatalf("got %d calls, want 2", len(calls))
 	}
 	for i, want := range []string{`{"x":1}`, `{"y":2}`} {
-		if got := toolCallField(t, calls[i], "function", "arguments"); got != want {
+		if got := calls[i].Function.Arguments; got != want {
 			t.Errorf("call %d arguments: got %q, want %q", i, got, want)
 		}
 	}
@@ -255,10 +238,10 @@ func TestAContradictoryToolCallIDDoesNotRepointTheCall(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("got %d calls, want 1", len(calls))
 	}
-	if got := toolCallField(t, calls[0], "id"); got != "original" {
+	if got := calls[0].ID; got != "original" {
 		t.Errorf("id: got %q, want %q", got, "original")
 	}
-	if got := toolCallField(t, calls[0], "function", "arguments"); got != "{}" {
+	if got := calls[0].Function.Arguments; got != "{}" {
 		t.Errorf("arguments: got %q, want %q", got, "{}")
 	}
 }

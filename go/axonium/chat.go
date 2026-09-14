@@ -21,9 +21,11 @@ type Message struct {
 	// is not part of the answer. Never inferred from Content and never merged into it.
 	ReasoningContent string `json:"reasoning_content,omitempty"`
 
-	ToolCalls  []any  `json:"tool_calls,omitempty"`
-	ToolCallID string `json:"tool_call_id,omitempty"`
-	Name       string `json:"name,omitempty"`
+	// ToolCalls are complete calls. On a streamed delta this stays empty and the fragments are
+	// read from the chunk's Raw instead -- see (*ChatCompletionChunk).ToolCallFragments.
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+	Name       string     `json:"name,omitempty"`
 }
 
 // TextMessage builds a plain text message.
@@ -162,6 +164,48 @@ func (r ChatRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(merged)
 }
 
+// FunctionCall is the function a tool call names, and the arguments it was called with.
+type FunctionCall struct {
+	Name string `json:"name,omitempty"`
+
+	// Arguments are the arguments as the model produced them: a JSON string, not a decoded
+	// object. Kept raw on purpose. Streaming delivers this in fragments that are only valid once
+	// concatenated, and a generation cut short by max_tokens leaves a string that was never going
+	// to parse -- decoding here would turn that into an error surfaced from inside a response
+	// type, for a caller who only wanted to see what the model had managed to say. Use
+	// ParseArguments when you want the object.
+	Arguments string `json:"arguments,omitempty"`
+}
+
+// ToolCall is a tool call, in the one shape both streaming and non-streaming produce.
+//
+// Streamed calls arrive split across fragments that are individually invalid JSON; the SDK
+// reassembles them into exactly this, so the same caller code handles both.
+type ToolCall struct {
+	ID string `json:"id,omitempty"`
+	// Type is "function" for everything the gateway forwards today. Modelled rather than assumed,
+	// because the field exists on the wire precisely so it can grow.
+	Type     string       `json:"type,omitempty"`
+	Function FunctionCall `json:"function"`
+}
+
+// ParseArguments decodes Function.Arguments into an object.
+//
+// The returned error wraps ErrToolCallArguments when the string is not valid JSON. The usual cause
+// is a generation that ran out of tokens mid-call, so check FinishReason before calling this on a
+// response you have not verified completed. The raw string is left untouched either way.
+func (t ToolCall) ParseArguments() (map[string]any, error) {
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(t.Function.Arguments), &parsed); err != nil {
+		return nil, fmt.Errorf(
+			"%w: tool call %q has arguments that are not a JSON object (%v). A generation stopped "+
+				"by max_tokens leaves them truncated -- check FinishReason. Raw value: %q",
+			ErrToolCallArguments, t.ID, err, t.Function.Arguments,
+		)
+	}
+	return parsed, nil
+}
+
 // Choice is one completion candidate.
 type Choice struct {
 	Index        int      `json:"index"`
@@ -211,8 +255,11 @@ func (c *ChatCompletion) FinishReason() string {
 	return c.Choices[0].FinishReason
 }
 
-// ToolCalls returns the first choice's tool calls, passed through untouched.
-func (c *ChatCompletion) ToolCalls() []any {
+// ToolCalls returns the first choice's tool calls.
+//
+// The gateway does not interpret them, and neither does this SDK beyond giving them a shape:
+// Arguments is still the model's own string, reachable raw.
+func (c *ChatCompletion) ToolCalls() []ToolCall {
 	if len(c.Choices) == 0 || c.Choices[0].Message == nil {
 		return nil
 	}
@@ -224,10 +271,24 @@ func (c *ChatCompletion) ToolCalls() []any {
 // the first one for a given index carries the identity. Use the stream's ToolCalls for the
 // assembled calls; this is here for a caller who wants to watch them arrive.
 func (c *ChatCompletionChunk) ToolCallFragments() []any {
-	if len(c.Choices) == 0 || c.Choices[0].Delta == nil {
+	// Read from Raw rather than from the decoded Delta. A fragment is not a ToolCall: it carries
+	// `index`, which the complete shape has no field for and would therefore drop, and only a
+	// slice of the arguments string. Decoding it into the typed struct would silently lose the one
+	// field the reassembler correlates on.
+	choices, ok := c.Raw["choices"].([]any)
+	if !ok || len(choices) == 0 {
 		return nil
 	}
-	return c.Choices[0].Delta.ToolCalls
+	choice, ok := choices[0].(map[string]any)
+	if !ok {
+		return nil
+	}
+	delta, ok := choice["delta"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	fragments, _ := delta["tool_calls"].([]any)
+	return fragments
 }
 
 // ChatCompletionChunk is one streamed delta.

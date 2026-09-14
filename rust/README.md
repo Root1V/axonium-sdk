@@ -52,16 +52,18 @@ non-streaming completion returns**:
 let mut stream = client.chat_stream(&request).await?;
 while stream.next().await?.is_some() {}
 for call in stream.tool_calls() {
-    let name = call["function"]["name"].as_str().unwrap_or_default();
-    let args: Value = serde_json::from_str(
-        call["function"]["arguments"].as_str().unwrap_or_default(),
-    )?;
+    // Err(Error::ToolCallArguments) if the generation was cut off mid-call.
+    println!("{} {:?}", call.name(), call.parse_arguments()?);
 }
 ```
 
-`arguments` stays a JSON *string* in both cases rather than a decoded object, so the same code
-handles streaming and non-streaming. A stream that stopped on a `finish_reason` of `length` leaves
-a truncated `arguments` that will not parse — check the finish reason before decoding.
+The same `ToolCall` comes back from `completion.tool_calls()` on a non-streaming call, and
+`Message::tool_calls` takes it straight back, so a tool-use loop converts in neither direction.
+
+`call.function.arguments` stays the model's own JSON *string*; `parse_arguments()` decodes it and
+fails with `Error::ToolCallArguments` if it will not parse. That happens when a generation stopped
+on a `finish_reason` of `length` partway through writing the call — the raw string stays readable,
+so you can still see what the model was trying to call.
 
 **Dropping the stream cancels the request**, which the gateway passes to Prometheus, which stops
 generating and frees the backend slot. An abandoned stream stops costing money — but only if you

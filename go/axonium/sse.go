@@ -205,17 +205,17 @@ func (p *partialToolCall) absorb(fragment map[string]any) {
 	}
 }
 
-// assemble renders the call in the shape a non-streaming completion returns.
+// assemble renders the call as the same ToolCall a non-streaming completion returns.
 //
 // arguments stays a JSON string, exactly as non-streaming delivers it, rather than being decoded
 // here. That is what lets one piece of caller code handle both, and it means a stream cut short by
 // max_tokens still hands back the fragment that did arrive instead of failing or dropping the
 // call. An identity field the backend never sent comes back as the zero value.
-func (p *partialToolCall) assemble() map[string]any {
-	return map[string]any{
-		"id":       p.id,
-		"type":     p.kind,
-		"function": map[string]any{"name": p.name, "arguments": p.arguments.String()},
+func (p *partialToolCall) assemble() ToolCall {
+	return ToolCall{
+		ID:       p.id,
+		Type:     p.kind,
+		Function: FunctionCall{Name: p.name, Arguments: p.arguments.String()},
 	}
 }
 
@@ -242,7 +242,7 @@ func (a *accumulator) absorbToolCall(fragment map[string]any) {
 //
 // Ordered by the wire index rather than by arrival, so a backend that interleaves two calls still
 // yields them in the order the model asked for.
-func (a *accumulator) finalToolCalls() []any {
+func (a *accumulator) finalToolCalls() []ToolCall {
 	if len(a.toolCalls) == 0 {
 		return nil
 	}
@@ -252,7 +252,7 @@ func (a *accumulator) finalToolCalls() []any {
 	}
 	sort.Ints(indices)
 
-	calls := make([]any, 0, len(indices))
+	calls := make([]ToolCall, 0, len(indices))
 	for _, index := range indices {
 		calls = append(calls, a.toolCalls[index].assemble())
 	}

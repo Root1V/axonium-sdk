@@ -69,7 +69,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-53 | Go cannot express an absent `content` | 🚫 | Closed: the real gateway sends "", never null. The divergence was a fixture I invented |
 | AXO-72 | Go: expose `TokenClaims()` | ✅ | Was dead code; Python exposed it and Go did not |
 | AXO-54 | `response.model` is not `request.model` | ✅ | Was a platform bug; fixed. An alias request now answers with the canonical slug |
-| AXO-55 | Type tool calls like the rest of the message | 📋 | They arrive as raw dicts while the message is a model; the asymmetry cost a consumer real work |
+| AXO-55 | Type tool calls like the rest of the message | ✅ | `ToolCall` in all three, used by streaming and non-streaming alike, and accepted back on the request side so a tool-use loop needs no conversion in either direction |
 | AXO-56 | Reassemble streamed tool calls | ✅ | All three, keyed by `index`, into the exact non-streaming shape. Recorded a live two-call stream because the single-call recording could not tell the correlation key apart from anything else |
 | AXO-57 | Expose `X-Prometheus-Instance*` on `ResponseMeta` | ✅ | Both SDKs; key on the id, the `#N` label can be reused |
 | AXO-58 | Catalogue and map `400 unknown-instance` | ✅ | In `spec/errors.json`, mapped in both SDKs |
