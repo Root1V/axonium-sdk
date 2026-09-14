@@ -41,7 +41,7 @@ Backlog catalog. One line per item — details live in the code, the commits and
 | AXO-28 | Rust SDK | ✅ | 0.2.0 published to crates.io via Trusted Publishing; 25/25 contract cases, structured logging and a tracing hook |
 | AXO-74 | Rust: structured logging and a tracing hook | ✅ | Behind a `tracing` feature, the Cargo equivalent of Python's `[otel]` extra |
 | AXO-75 | Publish the Rust crate to crates.io | ✅ | `0.1.0` published with a one-shot token; Trusted Publishing configured after |
-| AXO-73 | Ask for a per-request usage lookup without `admin:read` | 📋 | `termination_reason` is invisible to the caller; both usage endpoints need admin |
+| AXO-73 | Ask for a per-request usage lookup without `admin:read` | ✅ | Asked in the channel 2026-09-13, with the concrete shape (`GET /v1/usage/{request_id}`, own rows only). Theirs to answer now, not ours to build |
 | AXO-29 | Optional caller-supplied `X-Trace-ID` | 🚫 | Measured: the official platform is in OTEL mode and discards it. A parameter that does nothing is worse than none |
 | AXO-30 | Error-catalog cases in the contract manifest | ✅ | 4 recorded failures, asserting suffix, retryability and correlation IDs |
 | AXO-31 | Refresh GitHub Actions off deprecated Node 20 | ✅ | Zero deprecation warnings across all four workflows, verified by reading their logs |
