@@ -356,3 +356,79 @@ pub(crate) fn oauth_error_from_body(status: u16, body: Option<&Value>) -> Error 
 
 /// A convenient alias for everything this crate returns.
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[cfg(test)]
+mod catalog_parity {
+    //! The error catalog and this SDK's mapping have to agree, and a test has to say so.
+    //!
+    //! A contract that can drift from the code without anyone noticing is not a contract. Go has
+    //! had this guard from the start and it earned its keep immediately: when the platform added
+    //! two token errors to `spec/errors.json`, Go refused the change until both had a mapping, and
+    //! refused again until their retryability matched. This crate had no such guard and **silently
+    //! shipped `upstream-unavailable` as not retryable** until a hand-written test caught it.
+    //!
+    //! A unit test rather than an integration one because it calls the real constructor, which is
+    //! `pub(crate)`. Testing a copy of it would prove only that the copy works.
+
+    use super::*;
+
+    fn catalog() -> Vec<Value> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("workspace root")
+            .join("spec/errors.json");
+        let raw: Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("reading spec/errors.json"))
+                .expect("parsing spec/errors.json");
+        raw["gateway_errors"]
+            .as_array()
+            .expect("gateway_errors is an array")
+            .clone()
+    }
+
+    #[test]
+    fn the_catalog_is_not_empty() {
+        // Every assertion below is vacuously true against an empty list, which is exactly how a
+        // guard like this stops guarding without failing.
+        assert!(!catalog().is_empty());
+    }
+
+    #[test]
+    fn every_catalogued_error_maps_to_a_kind_with_the_catalogued_retryability() {
+        let mut problems = Vec::new();
+
+        for entry in catalog() {
+            let suffix = entry["suffix"].as_str().expect("suffix");
+            let status = entry["status"].as_u64().expect("status") as u16;
+            let want_retryable = entry["retryable"].as_bool().expect("retryable");
+
+            let body = serde_json::json!({
+                "type": format!("https://gateway.example/errors/{suffix}"),
+                "title": suffix,
+                "detail": "something went wrong",
+            });
+            let error = api_error_from_body(status, Some(&body), None);
+
+            // A suffix this build does not know falls back to a status-keyed kind, which is right
+            // for an unknown error and wrong for a catalogued one.
+            let fell_back = matches!(
+                error.kind,
+                ErrorKind::OtherClientError | ErrorKind::OtherServerError | ErrorKind::Unauthorized
+            );
+            if fell_back {
+                problems.push(format!(
+                    "{suffix} is in spec/errors.json but this SDK maps no kind for it"
+                ));
+                continue;
+            }
+            if error.retryable() != want_retryable {
+                problems.push(format!(
+                    "{suffix}: retryable is {} here, {want_retryable} in the catalog",
+                    error.retryable()
+                ));
+            }
+        }
+
+        assert!(problems.is_empty(), "{}", problems.join("\n"));
+    }
+}
