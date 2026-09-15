@@ -7,6 +7,14 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+`spec/errors.json` and this SDK's error mapping are now held together by a test (`tests/test_catalog_parity.py`): every
+catalogued error must map to a class, and its retryability must match the catalog.
+
+Go has had this from the start and it earned its keep the day the platform added two token errors —
+it refused the change until both had a mapping, then refused again until their retryability matched.
+This SDK had no equivalent, and shipped one of them with the wrong retryability until a hand-written
+test caught it.
+
 A failed token request is now typed by its envelope rather than read as OAuth2 unconditionally.
 
 A `4xx` is an OAuth2 outcome in the RFC 6749 shape — wrong credentials, a scope the client does not
@@ -347,6 +355,14 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+`spec/errors.json` and this SDK's error mapping are now held together by a test (a unit test in `src/error.rs`): every
+catalogued error must map to a class, and its retryability must match the catalog.
+
+Go has had this from the start and it earned its keep the day the platform added two token errors —
+it refused the change until both had a mapping, then refused again until their retryability matched.
+This SDK had no equivalent, and shipped one of them with the wrong retryability until a hand-written
+test caught it.
 
 A failed token request is now typed by its envelope rather than read as OAuth2 unconditionally.
 
