@@ -305,5 +305,14 @@ func tokenError(status int, body map[string]any) error {
 	if _, ok := body["type"].(string); ok {
 		return errorFromBody(status, body, nil, nil)
 	}
-	return oauthErrorFromBody(status, body)
+	if _, ok := body["error"].(string); ok {
+		return oauthErrorFromBody(status, body)
+	}
+
+	// Neither envelope. Almost always something that is not the gateway answering at all -- a proxy
+	// or load balancer with an HTML error page. Calling that an OAuth2 failure would tell a caller
+	// their credentials are the problem, which is both wrong and the most expensive wrong answer
+	// here: they would go and rotate a perfectly good secret.
+	return fmt.Errorf("%w: the token endpoint returned %d with a body in neither the OAuth2 nor the "+
+		"problem+json shape, so it was probably not the gateway that answered", ErrAuthTransport, status)
 }

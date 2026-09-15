@@ -344,11 +344,21 @@ def _token_error(*, status: int, body: dict[str, Any] | None) -> AxoniumError:
     no type and no retryability, so a momentary blip would look exactly like bad credentials and
     the request would be abandoned rather than retried.
     """
-    # Keyed on the envelope rather than only the status, because the envelope is what the caller
-    # has to parse. A 5xx that somehow arrives in the OAuth2 shape is still an OAuth2 answer.
+    # Keyed on the envelope rather than on the status, because the envelope is what the caller has
+    # to parse. A 5xx that somehow arrives in the OAuth2 shape is still an OAuth2 answer.
     if isinstance(body, dict) and isinstance(body.get("type"), str):
         return error_from_response(status=status, body=body)
-    return oauth_error_from_response(status=status, body=body)
+    if isinstance(body, dict) and isinstance(body.get("error"), str):
+        return oauth_error_from_response(status=status, body=body)
+
+    # Neither envelope. Almost always something that is not the gateway answering at all -- a proxy
+    # or load balancer with an HTML error page. Calling that an OAuth2 failure would tell a caller
+    # their credentials are the problem, which is both wrong and the most expensive wrong answer
+    # here: they would go and rotate a perfectly good secret.
+    return AuthTransportError(
+        f"The token endpoint returned {status} with a body in neither the OAuth2 nor the "
+        f"problem+json shape, so it was probably not the gateway that answered."
+    )
 
 
 def _token_from_response(response: httpx.Response, *, issued_at: float) -> TokenSet:

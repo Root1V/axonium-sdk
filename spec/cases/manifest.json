@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 13,
+  "version": 14,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -783,8 +783,141 @@
         "has_request_id": true,
         "has_trace_id": true
       }
+    },
+    {
+      "id": "token-sends-the-requested-scope",
+      "$comment": "The form body is the contract going out: client_credentials, form-encoded, never JSON. scope is sent only when the caller configured one.",
+      "operation": "token.fetch",
+      "request": {
+        "scope": "inference:read model:qwen3-0.6b"
+      },
+      "response": {
+        "status": 200,
+        "body_file": "token_success.json"
+      },
+      "expect": {
+        "kind": "ok",
+        "request_form": {
+          "grant_type": "client_credentials",
+          "scope": "inference:read model:qwen3-0.6b"
+        },
+        "request_content_type": "application/x-www-form-urlencoded"
+      }
+    },
+    {
+      "id": "token-omits-scope-when-none-was-requested",
+      "$comment": "An empty scope parameter is not the same as an absent one: some authorisation servers read it as 'grant nothing'. The key must not appear at all.",
+      "operation": "token.fetch",
+      "request": {},
+      "response": {
+        "status": 200,
+        "body_file": "token_success.json"
+      },
+      "expect": {
+        "kind": "ok",
+        "request_form": {
+          "grant_type": "client_credentials"
+        },
+        "request_form_absent": [
+          "scope"
+        ]
+      }
+    },
+    {
+      "id": "token-invalid-client",
+      "$comment": "Recorded live 2026-09-14. A 4xx is an OAuth2 outcome in the RFC 6749 shape and is never retryable: the credentials are wrong and repeating them cannot help.",
+      "operation": "token.fetch",
+      "request": {},
+      "response": {
+        "status": 401,
+        "body_file": "token_invalid_client.json"
+      },
+      "expect": {
+        "kind": "oauth_error",
+        "oauth_code": "invalid_client"
+      }
+    },
+    {
+      "id": "token-invalid-scope",
+      "$comment": "Recorded live 2026-09-14, asking for admin:write with a client that does not hold it.",
+      "operation": "token.fetch",
+      "request": {
+        "scope": "admin:write"
+      },
+      "response": {
+        "status": 400,
+        "body_file": "token_invalid_scope.json"
+      },
+      "expect": {
+        "kind": "oauth_error",
+        "oauth_code": "invalid_scope"
+      }
+    },
+    {
+      "id": "token-upstream-unavailable",
+      "$comment": "The gateway failing to reach the auth-service. Arrives as problem+json rather than the OAuth2 shape, and IS retryable -- reading it as OAuth2 makes a momentary blip indistinguishable from bad credentials, so the request gets abandoned instead of retried.",
+      "operation": "token.fetch",
+      "request": {},
+      "response": {
+        "status": 503,
+        "body_file": "token_upstream_unavailable.json"
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": "upstream-unavailable",
+        "retryable": true,
+        "has_request_id": true,
+        "has_trace_id": true
+      }
+    },
+    {
+      "id": "token-not-configured",
+      "$comment": "Same status as upstream-unavailable and the opposite answer: this deployment issues no tokens at all, which needs operator action. That is why the suffix has to drive retryability rather than the status.",
+      "operation": "token.fetch",
+      "request": {},
+      "response": {
+        "status": 503,
+        "body_file": "token_not_configured.json"
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": "not-configured",
+        "retryable": false,
+        "has_request_id": true,
+        "has_trace_id": true
+      }
+    },
+    {
+      "id": "token-non-json-body",
+      "$comment": "A proxy or load balancer answering instead of the gateway. A 200 is not enough to trust a body: parsing this as a token would surface somewhere far from the cause.",
+      "operation": "token.fetch",
+      "request": {},
+      "response": {
+        "status": 502,
+        "body_file": "token_not_json.txt",
+        "headers": {
+          "Content-Type": "text/html"
+        }
+      },
+      "expect": {
+        "kind": "auth_transport_error"
+      }
+    },
+    {
+      "id": "token-success-without-a-token",
+      "$comment": "Valid JSON, 200, and no access_token. Treating the absent field as an empty string produces `Authorization: Bearer ` and a 401 from the next call, which points at the wrong thing entirely.",
+      "operation": "token.fetch",
+      "request": {},
+      "response": {
+        "status": 200,
+        "body_file": "token_missing_access_token.json"
+      },
+      "expect": {
+        "kind": "auth_transport_error"
+      }
     }
   ],
   "$recording": "21 of 25 cases carry bytes recorded from a live deployment; each says so in its $comment. The four that do not explain why they cannot be produced. Only the recorded ones are evidence about the gateway.",
-  "$version_note": "Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame."
+  "$version_note": "Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame.",
+  "$token_cases": "Token-endpoint cases. Deliberately a subset of what each SDK tests about tokens: only what is observable by replaying bytes belongs here. The timing and concurrency rules -- refresh-ahead, single-flight, lifetime clamping -- cannot be expressed against a recorded exchange and stay per-language. What is here is the shape that goes out and the two envelopes that come back."
 }

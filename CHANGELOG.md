@@ -7,6 +7,15 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+A token response in neither documented envelope is now a transport failure rather than an OAuth2
+one.
+
+A `4xx` carrying `error` is an OAuth2 outcome; a `5xx` carrying `type` is the gateway's own
+problem+json. A body with neither — an HTML error page from a proxy or load balancer that answered
+instead of the gateway — used to be reported as an OAuth2 failure, which tells a caller their
+credentials are the problem. That is both wrong and the most expensive wrong answer available here:
+the obvious next step is rotating a perfectly good secret.
+
 `spec/errors.json` and this SDK's error mapping are now held together by a test (`tests/test_catalog_parity.py`): every
 catalogued error must map to a class, and its retryability must match the catalog.
 
@@ -235,6 +244,15 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+A token response in neither documented envelope is now a transport failure rather than an OAuth2
+one.
+
+A `4xx` carrying `error` is an OAuth2 outcome; a `5xx` carrying `type` is the gateway's own
+problem+json. A body with neither — an HTML error page from a proxy or load balancer that answered
+instead of the gateway — used to be reported as an OAuth2 failure, which tells a caller their
+credentials are the problem. That is both wrong and the most expensive wrong answer available here:
+the obvious next step is rotating a perfectly good secret.
+
 A failed token request is now typed by its envelope rather than read as OAuth2 unconditionally.
 
 A `4xx` is an OAuth2 outcome in the RFC 6749 shape — wrong credentials, a scope the client does not
@@ -355,6 +373,15 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+A token response in neither documented envelope is now a transport failure rather than an OAuth2
+one.
+
+A `4xx` carrying `error` is an OAuth2 outcome; a `5xx` carrying `type` is the gateway's own
+problem+json. A body with neither — an HTML error page from a proxy or load balancer that answered
+instead of the gateway — used to be reported as an OAuth2 failure, which tells a caller their
+credentials are the problem. That is both wrong and the most expensive wrong answer available here:
+the obvious next step is rotating a perfectly good secret.
 
 `spec/errors.json` and this SDK's error mapping are now held together by a test (a unit test in `src/error.rs`): every
 catalogued error must map to a class, and its retryability must match the catalog.

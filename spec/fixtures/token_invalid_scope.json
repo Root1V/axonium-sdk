@@ -1,0 +1,4 @@
+{
+  "error": "invalid_scope",
+  "error_description": "Scope(s) not permitted for this client: admin:write."
+}
