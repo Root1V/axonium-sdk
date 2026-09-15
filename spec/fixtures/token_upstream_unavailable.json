@@ -1,0 +1,9 @@
+{
+  "type": "https://prometheus.internal/errors/upstream-unavailable",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "The gateway could not reach the auth-service.",
+  "instance": "/oauth2/token",
+  "request_id": "8f1b2c3d-0000-4000-8000-000000000000",
+  "trace_id": "aa11bb22cc33dd44ee55ff6600112233"
+}

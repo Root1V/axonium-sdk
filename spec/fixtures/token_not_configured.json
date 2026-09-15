@@ -1,0 +1,9 @@
+{
+  "type": "https://prometheus.internal/errors/not-configured",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "This deployment has no token endpoint configured.",
+  "instance": "/oauth2/token",
+  "request_id": "9e2c3d4e-0000-4000-8000-000000000000",
+  "trace_id": "bb22cc33dd44ee55ff6600112233aabb"
+}

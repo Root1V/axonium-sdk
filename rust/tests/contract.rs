@@ -60,7 +60,26 @@ async fn serve(case: &Value) -> MockServer {
         }
     }
 
-    // The token endpoint first, so it wins over the catch-all.
+    let is_token_case = case["operation"] == "token.fetch";
+
+    // The token endpoint first, so it wins over the catch-all. On a token case the recorded
+    // response IS the token exchange, and the call that drives it gets a trivial body instead:
+    // what is under test is the exchange, not what comes after it.
+    if is_token_case {
+        Mock::given(wiremock::matchers::path("/oauth2/token"))
+            .respond_with(template)
+            .mount(&server)
+            .await;
+        Mock::given(any())
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"object": "list", "data": []})),
+            )
+            .mount(&server)
+            .await;
+        return server;
+    }
+
     Mock::given(wiremock::matchers::path("/oauth2/token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "access_token": "header.eyJzY29wZSI6ImluZmVyZW5jZTpyZWFkIn0.sig",
@@ -76,11 +95,12 @@ async fn serve(case: &Value) -> MockServer {
     server
 }
 
-fn client(url: &str) -> Client {
+fn client_with_scope(url: &str, scope: &str) -> Client {
     Client::new(Config {
         gateway_base_url: url.into(),
         client_id: "test".into(),
         client_secret: "test".into(),
+        scope: scope.into(),
         ..Default::default()
     })
     .expect("building the client")
@@ -156,6 +176,8 @@ fn kind_for(suffix: &str) -> ErrorKind {
         "idempotency-in-progress" => ErrorKind::IdempotencyInProgress,
         "idempotency-response-not-retained" => ErrorKind::IdempotencyResponseNotRetained,
         "not-found" => ErrorKind::NotFound,
+        "upstream-unavailable" => ErrorKind::TokenEndpointUnavailable,
+        "not-configured" => ErrorKind::TokenEndpointNotConfigured,
         other => panic!("the manifest names an error this SDK does not map: {other}"),
     }
 }
@@ -181,7 +203,56 @@ async fn contract_corpus() {
         let kind = case["expect"]["kind"].as_str().unwrap();
         let operation = case["operation"].as_str().unwrap();
         let server = serve(case).await;
-        let client = client(&server.uri());
+        let client = client_with_scope(
+            &server.uri(),
+            case["request"]["scope"].as_str().unwrap_or_default(),
+        );
+
+        // The token exchange is scaffolding for every other case, so it is matched first and
+        // driven by an ordinary authenticated call: what is under test is the exchange itself.
+        if operation == "token.fetch" {
+            let outcome = client.models_mine().await;
+            match kind {
+                "ok" => {
+                    outcome.unwrap_or_else(|e| {
+                        panic!("{id}: the exchange should have succeeded: {e}")
+                    });
+                }
+                "oauth_error" => {
+                    let want = case["expect"]["oauth_code"].as_str().unwrap();
+                    match outcome.unwrap_err() {
+                        axonium::Error::OAuth { code, .. } => assert_eq!(code, want, "{id}"),
+                        other => panic!("{id}: got {other:?}"),
+                    }
+                }
+                "error" => {
+                    let want = case["expect"]["error_type_suffix"].as_str().unwrap();
+                    match outcome.unwrap_err() {
+                        axonium::Error::Api(api) => {
+                            assert_eq!(api.type_suffix, want, "{id}: type suffix");
+                            assert_eq!(api.kind, kind_for(want), "{id}: kind");
+                            if let Some(retryable) = case["expect"]["retryable"].as_bool() {
+                                assert_eq!(api.retryable(), retryable, "{id}: retryable");
+                            }
+                            if case["expect"]["has_request_id"].as_bool() == Some(true) {
+                                assert!(!api.request_id.is_empty(), "{id}: request_id");
+                            }
+                            if case["expect"]["has_trace_id"].as_bool() == Some(true) {
+                                assert!(!api.trace_id.is_empty(), "{id}: trace_id");
+                            }
+                        }
+                        other => panic!("{id}: a gateway failure typed as {other:?}"),
+                    }
+                }
+                "auth_transport_error" => match outcome.unwrap_err() {
+                    axonium::Error::AuthTransport(_) => {}
+                    other => panic!("{id}: got {other:?}"),
+                },
+                other => panic!("{id}: unhandled token expectation {other}"),
+            }
+            ran += 1;
+            continue;
+        }
 
         match (kind, operation) {
             ("ok", "chat.completions.create") => {

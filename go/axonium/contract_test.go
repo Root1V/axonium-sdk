@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -40,17 +42,21 @@ type contractCase struct {
 		SSEFile  string            `json:"sse_file"`
 	} `json:"response"`
 	Expect struct {
-		Kind            string         `json:"kind"`
-		Fields          map[string]any `json:"fields"`
-		Content         *string        `json:"content"`
-		Chunks          *int           `json:"chunks"`
-		Usage           map[string]any `json:"usage"`
-		ToolCalls       []any          `json:"tool_calls"`
-		PartialContent  *string        `json:"partial_content"`
-		ErrorTypeSuffix string         `json:"error_type_suffix"`
-		Retryable       *bool          `json:"retryable"`
-		HasRequestID    *bool          `json:"has_request_id"`
-		HasTraceID      *bool          `json:"has_trace_id"`
+		Kind               string            `json:"kind"`
+		Fields             map[string]any    `json:"fields"`
+		Content            *string           `json:"content"`
+		Chunks             *int              `json:"chunks"`
+		Usage              map[string]any    `json:"usage"`
+		RequestForm        map[string]string `json:"request_form"`
+		RequestFormAbsent  []string          `json:"request_form_absent"`
+		RequestContentType string            `json:"request_content_type"`
+		OAuthCode          string            `json:"oauth_code"`
+		ToolCalls          []any             `json:"tool_calls"`
+		PartialContent     *string           `json:"partial_content"`
+		ErrorTypeSuffix    string            `json:"error_type_suffix"`
+		Retryable          *bool             `json:"retryable"`
+		HasRequestID       *bool             `json:"has_request_id"`
+		HasTraceID         *bool             `json:"has_trace_id"`
 	} `json:"expect"`
 }
 
@@ -93,10 +99,22 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 		t.Fatalf("reading fixture %s: %v", fixture, err)
 	}
 
+	var sentForm url.Values
+	var sentContentType string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/oauth2/token" {
+		if r.URL.Path == "/oauth2/token" && c.Operation != "token.fetch" {
 			writeToken(w, "contract", 300)
 			return
+		}
+		if c.Operation == "token.fetch" && r.URL.Path != "/oauth2/token" {
+			// The call that drives a token case; its own body is not what is under test.
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
+			return
+		}
+		if c.Operation == "token.fetch" {
+			sentForm = captureForm(r)
+			sentContentType = r.Header.Get("Content-Type")
 		}
 		for k, v := range c.Response.Headers {
 			w.Header().Set(k, v)
@@ -114,9 +132,25 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 	defer srv.Close()
 
 	client := testClient(t, srv.URL)
+	if scope, ok := c.Request["scope"].(string); ok {
+		built, err := New(Config{GatewayBaseURL: srv.URL, ClientID: "test-client",
+			ClientSecret: "test-secret", Scope: scope})
+		if err != nil {
+			t.Fatalf("building with a scope: %v", err)
+		}
+		t.Cleanup(func() { _ = built.Close() })
+		client = built
+	}
 
 	switch c.Expect.Kind {
 	case "ok":
+		if c.Operation == "token.fetch" {
+			if _, err := client.Models.Mine(context.Background()); err != nil {
+				t.Fatalf("the token exchange should have succeeded: %v", err)
+			}
+			assertTokenRequestShape(t, c, sentForm, sentContentType)
+			return
+		}
 		result := invokeUnary(t, client, c)
 		for path, want := range c.Expect.Fields {
 			got := resolvePath(t, result, path)
@@ -128,6 +162,8 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 		runErrorCase(t, client, c)
 	case "stream", "stream_error":
 		runStreamCase(t, client, c)
+	case "oauth_error", "auth_transport_error":
+		runTokenCase(t, client, c)
 	default:
 		t.Fatalf("unknown expectation kind %q", c.Expect.Kind)
 	}
@@ -258,6 +294,10 @@ func invokeExpectingError(t *testing.T, client *Client, c contractCase) error {
 		return err
 	case "usage.retrieve":
 		_, err := client.Usage.Retrieve(ctx, stringField(c.Request, "request_id"))
+		return err
+	case "token.fetch":
+		// Any authenticated call drives the exchange; the failure under test is the token's.
+		_, err := client.Models.Mine(ctx)
 		return err
 	default:
 		t.Fatalf("unsupported operation %q for an error case", c.Operation)
@@ -545,4 +585,62 @@ func overlay(t *testing.T, raw any, decoded any) any {
 func stringField(request map[string]any, key string) string {
 	v, _ := request[key].(string)
 	return v
+}
+
+// captureForm reads a token request's form body without consuming it for the handler's own use.
+func captureForm(r *http.Request) url.Values {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil
+	}
+	parsed, err := url.ParseQuery(string(body))
+	if err != nil {
+		return nil
+	}
+	return parsed
+}
+
+// assertTokenRequestShape checks what the SDK sent, which is as much of the contract as what it
+// received: form-encoded rather than JSON, and scope present only when one was configured.
+func assertTokenRequestShape(t *testing.T, c contractCase, form url.Values, contentType string) {
+	t.Helper()
+	for key, want := range c.Expect.RequestForm {
+		if got := form.Get(key); got != want {
+			t.Errorf("form field %s: got %q, want %q", key, got, want)
+		}
+	}
+	for _, key := range c.Expect.RequestFormAbsent {
+		// Absent, not empty: some authorisation servers read an empty scope as "grant nothing".
+		if _, present := form[key]; present {
+			t.Errorf("%s should not be sent at all", key)
+		}
+	}
+	if want := c.Expect.RequestContentType; want != "" && !strings.HasPrefix(contentType, want) {
+		t.Errorf("content type: got %q, want %q", contentType, want)
+	}
+}
+
+// runTokenCase asserts a failed token exchange, which can arrive in either of two envelopes -- or
+// in neither, when something that is not the gateway answered.
+func runTokenCase(t *testing.T, client *Client, c contractCase) {
+	t.Helper()
+	_, err := client.Models.Mine(context.Background())
+	if err == nil {
+		t.Fatalf("%s: expected the token exchange to fail", c.ID)
+	}
+
+	switch c.Expect.Kind {
+	case "oauth_error":
+		var oauthErr *OAuthError
+		if !errors.As(err, &oauthErr) {
+			t.Fatalf("got %T: %v", err, err)
+		}
+		if oauthErr.Code != c.Expect.OAuthCode {
+			t.Errorf("oauth code: got %q, want %q", oauthErr.Code, c.Expect.OAuthCode)
+		}
+	case "auth_transport_error":
+		if !errors.Is(err, ErrAuthTransport) {
+			t.Errorf("got %T: %v", err, err)
+		}
+	}
 }

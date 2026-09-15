@@ -316,14 +316,23 @@ pub(crate) fn effective_lifetime(
 /// Keyed on the envelope rather than only the status, because the envelope is what a caller has to
 /// parse. A 5xx that somehow arrives in the OAuth2 shape is still an OAuth2 answer.
 fn token_error(status: u16, body: Option<&Value>) -> Error {
-    if body
-        .and_then(|b| b.get("type"))
-        .and_then(Value::as_str)
-        .is_some()
-    {
+    let field = |name: &str| body.and_then(|b| b.get(name)).and_then(Value::as_str);
+
+    if field("type").is_some() {
         return Error::Api(Box::new(crate::error::api_error_from_body(
             status, body, None,
         )));
     }
-    oauth_error_from_body(status, body)
+    if field("error").is_some() {
+        return oauth_error_from_body(status, body);
+    }
+
+    // Neither envelope. Almost always something that is not the gateway answering at all -- a
+    // proxy or load balancer with an HTML error page. Calling that an OAuth2 failure would tell a
+    // caller their credentials are the problem, which is both wrong and the most expensive wrong
+    // answer here: they would go and rotate a perfectly good secret.
+    Error::AuthTransport(format!(
+        "the token endpoint returned {status} with a body in neither the OAuth2 nor the \
+         problem+json shape, so it was probably not the gateway that answered"
+    ))
 }

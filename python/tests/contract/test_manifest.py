@@ -10,13 +10,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl
 
 import httpx
 import pytest
 import respx
 
 from axonium import AsyncAxonium, Axonium
-from axonium.errors import APIError, StreamInterruptedError
+from axonium.errors import APIError, AuthTransportError, OAuthError, StreamInterruptedError
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SPEC = REPO_ROOT / "spec"
@@ -33,6 +34,9 @@ ENDPOINTS = {
     "models.list": f"{GATEWAY}/v1/models",
     "models.mine": f"{GATEWAY}/v1/models/mine",
     "usage.retrieve": f"{GATEWAY}/v1/usage/{{request_id}}",
+    # The token exchange is scaffolding for every other case, so it is routed and dispatched
+    # apart -- but it is listed here so the routability guard covers it too.
+    "token.fetch": AUTH_URL,
 }
 
 CASES = MANIFEST["cases"]
@@ -167,9 +171,12 @@ def assert_usage(usage: Any, expected: dict[str, Any] | None, case_id: str) -> N
         assert got == want, f"{case_id}: usage.{field} was {got!r}, expected {want!r}"
 
 
-NON_STREAMING = [case for case in CASES if case["expect"]["kind"] == "ok"]
-STREAMING = [case for case in CASES if case["expect"]["kind"].startswith("stream")]
-ERRORS = [case for case in CASES if case["expect"]["kind"] == "error"]
+TOKEN = [case for case in CASES if case["operation"] == "token.fetch"]
+_RESOURCE = [case for case in CASES if case["operation"] != "token.fetch"]
+
+NON_STREAMING = [case for case in _RESOURCE if case["expect"]["kind"] == "ok"]
+STREAMING = [case for case in _RESOURCE if case["expect"]["kind"].startswith("stream")]
+ERRORS = [case for case in _RESOURCE if case["expect"]["kind"] == "error"]
 
 
 class TestNonStreamingCases:
@@ -288,7 +295,7 @@ class TestManifestIntegrity:
     def test_every_case_is_executed_by_one_of_the_runners(self) -> None:
         # A case with an unrecognized kind would otherwise be silently skipped, leaving the
         # behavior it describes unverified while looking covered.
-        executed = {case["id"] for case in NON_STREAMING + STREAMING + ERRORS}
+        executed = {case["id"] for case in NON_STREAMING + STREAMING + ERRORS + TOKEN}
         assert executed == set(CASE_IDS)
 
     def test_every_operation_is_routable(self) -> None:
@@ -308,3 +315,78 @@ class TestManifestIntegrity:
         }
         on_disk = {path.name for path in (SPEC / "fixtures").iterdir() if path.is_file()}
         assert on_disk == referenced
+
+
+class TestTokenCases:
+    """The token exchange itself, which every other case only uses as scaffolding.
+
+    Deliberately a subset of what ``test_auth.py`` covers. Only what is observable by replaying
+    recorded bytes belongs in a shared corpus: the shape that goes out and the two envelopes that
+    come back. The timing and concurrency rules — refresh-ahead, single-flight, lifetime clamping —
+    cannot be expressed against a recorded exchange and stay per-language, in all three SDKs.
+    """
+
+    @staticmethod
+    def _route(case: dict[str, Any]) -> Any:
+        # Registered before the autouse happy-path mock so it wins: respx matches in registration
+        # order, and this case's whole point is that the token exchange is not the happy one.
+        route = respx.post(AUTH_URL).mock(return_value=mock_response(case))
+        respx.get(f"{GATEWAY}/v1/models/mine").mock(
+            return_value=httpx.Response(200, json={"object": "list", "data": []})
+        )
+        return route
+
+    @respx.mock
+    @pytest.mark.parametrize("case", TOKEN, ids=[c["id"] for c in TOKEN])
+    def test_token_exchange(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
+        expect = case["expect"]
+        route = self._route(case)
+        kwargs = {**config_kwargs}
+        if "scope" in case["request"]:
+            kwargs["scope"] = case["request"]["scope"]
+
+        with Axonium(**kwargs) as client:
+            if expect["kind"] == "ok":
+                client.models.mine()
+            elif expect["kind"] == "oauth_error":
+                with pytest.raises(OAuthError) as caught:
+                    client.models.mine()
+                assert caught.value.error == expect["oauth_code"], case["id"]
+            elif expect["kind"] == "error":
+                with pytest.raises(APIError) as api:
+                    client.models.mine()
+                assert not isinstance(api.value, OAuthError), (
+                    f"{case['id']}: a gateway failure typed as an OAuth2 outcome"
+                )
+                assert api.value.type_suffix == expect["error_type_suffix"], case["id"]
+                assert api.value.retryable is expect["retryable"], case["id"]
+                if expect.get("has_request_id"):
+                    assert api.value.request_id, case["id"]
+                if expect.get("has_trace_id"):
+                    assert api.value.trace_id, case["id"]
+            elif expect["kind"] == "auth_transport_error":
+                with pytest.raises(AuthTransportError):
+                    client.models.mine()
+            else:
+                raise AssertionError(f"unhandled token expectation {expect['kind']}")
+
+        self._assert_request_shape(case, route)
+
+    @staticmethod
+    def _assert_request_shape(case: dict[str, Any], route: Any) -> None:
+        """What the SDK sent, which is as much of the contract as what it received."""
+        expect = case["expect"]
+        shape_keys = ("request_form", "request_form_absent", "request_content_type")
+        if not any(key in expect for key in shape_keys):
+            return
+
+        request = route.calls.last.request
+        sent = dict(parse_qsl(request.read().decode()))
+
+        for key, value in expect.get("request_form", {}).items():
+            assert sent.get(key) == value, f"{case['id']}: form field {key}"
+        for key in expect.get("request_form_absent", []):
+            # Absent, not empty: some authorisation servers read an empty scope as "grant nothing".
+            assert key not in sent, f"{case['id']}: {key} should not be sent at all"
+        if "request_content_type" in expect:
+            assert request.headers["Content-Type"].startswith(expect["request_content_type"])

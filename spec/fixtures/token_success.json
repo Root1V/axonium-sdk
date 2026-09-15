@@ -1,0 +1,6 @@
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdmMtYXhvbml1bSIsImNsaWVudF9uYW1lIjoiYXhvbml1bS1jb250cmFjdCIsInJvbGUiOiJhcHAiLCJzY29wZSI6ImluZmVyZW5jZTpyZWFkIGluZmVyZW5jZTpzdHJlYW0gbW9kZWw6cXdlbjMtMC42YiIsImlhdCI6MTc4OTAwMDAwMCwiZXhwIjoxNzg5MDAwMzAwfQ.c2lnbmF0dXJlLW5vdC12ZXJpZmllZA",
+  "token_type": "bearer",
+  "expires_in": 300,
+  "scope": "inference:read inference:stream model:qwen3-0.6b"
+}
