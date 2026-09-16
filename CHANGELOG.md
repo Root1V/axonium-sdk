@@ -7,6 +7,19 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+`POST /v1/rerank`, for models with `rerank` modality.
+
+A reranker is a cross-encoder: it scores a query against each document and returns them ordered. It
+generates nothing, so there are no completion tokens and billing is prompt-only.
+
+Two things matter if you were doing this through the chat endpoint. The **whole document set is one
+request**, not one per document — against a 60 RPM budget, scoring 50 candidates costs 1 unit rather
+than 50. And each result's `index` points into the `documents` you sent, never into the results, so
+a reordered result stays attributable to its input.
+
+- `client.rerank.create(...)` (and the async mirror), returning `RerankResponse`, whose `.ranking` gives the input indices best-first. An empty `documents` list is refused before the wire, which the gateway would answer
+  `400 validation-error`.
+
 The SDK now says when it is waiting, and for how long.
 
 The platform's `Retry-After` on a `429` is seconds until the window resets, so it runs 0–60. An SDK
@@ -255,6 +268,19 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+`POST /v1/rerank`, for models with `rerank` modality.
+
+A reranker is a cross-encoder: it scores a query against each document and returns them ordered. It
+generates nothing, so there are no completion tokens and billing is prompt-only.
+
+Two things matter if you were doing this through the chat endpoint. The **whole document set is one
+request**, not one per document — against a 60 RPM budget, scoring 50 candidates costs 1 unit rather
+than 50. And each result's `index` points into the `documents` you sent, never into the results, so
+a reordered result stays attributable to its input.
+
+- `client.Rerank.Create(ctx, RerankRequest)`, returning `*RerankResponse`, whose `Ranking()` gives the input indices best-first. An empty `documents` list is refused before the wire, which the gateway would answer
+  `400 validation-error`.
+
 The SDK now says when it is waiting, and for how long.
 
 The platform's `Retry-After` on a `429` is seconds until the window resets, so it runs 0–60. An SDK
@@ -395,6 +421,19 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+`POST /v1/rerank`, for models with `rerank` modality.
+
+A reranker is a cross-encoder: it scores a query against each document and returns them ordered. It
+generates nothing, so there are no completion tokens and billing is prompt-only.
+
+Two things matter if you were doing this through the chat endpoint. The **whole document set is one
+request**, not one per document — against a 60 RPM budget, scoring 50 candidates costs 1 unit rather
+than 50. And each result's `index` points into the `documents` you sent, never into the results, so
+a reordered result stays attributable to its input.
+
+- `client.rerank(&RerankRequest).await`, returning `RerankResponse`, whose `ranking()` gives the input indices best-first. An empty `documents` list is refused before the wire, which the gateway would answer
+  `400 validation-error`.
 
 The SDK now says when it is waiting, and for how long.
 

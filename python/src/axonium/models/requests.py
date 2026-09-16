@@ -31,6 +31,7 @@ __all__ = [
     "EmbeddingsRequest",
     "ImageGenerationRequest",
     "Message",
+    "RerankRequest",
 ]
 
 Role = Literal["system", "user", "assistant", "tool"]
@@ -181,6 +182,34 @@ class EmbeddingsRequest(_AllowlistRequest):
     model: str
     #: A single string or a list of strings.
     input: str | list[str]
+
+
+class RerankRequest(_AllowlistRequest):
+    """Body for ``POST /v1/rerank``."""
+
+    #: ``logprobs`` and ``top_logprobs`` are rejected by the gateway on every endpoint, and a
+    #: chat-based reranking workaround used to need them. Named here so the warning says why
+    #: rather than only that they were dropped.
+    KNOWN_UNSUPPORTED: ClassVar[frozenset[str]] = frozenset(
+        {"logprobs", "top_logprobs", "return_documents", "rank_fields"}
+    )
+
+    model: str
+    query: str
+    #: The whole set is one request, not one per document. Scoring 50 candidates costs one unit of
+    #: the rate limit rather than fifty.
+    documents: list[str]
+    #: Omit to get every document back.
+    top_n: int | None = None
+
+    @field_validator("documents")
+    @classmethod
+    def _require_documents(cls, value: list[str]) -> list[str]:
+        # The gateway answers 400 validation-error for an empty list. Refusing here saves the round
+        # trip and says which field, which the envelope does too but only after the fact.
+        if not value:
+            raise ValueError("must contain at least one document")
+        return value
 
 
 class ImageGenerationRequest(_AllowlistRequest):

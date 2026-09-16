@@ -1,0 +1,22 @@
+{
+  "model": "qwen3-reranker",
+  "object": "list",
+  "usage": {
+    "prompt_tokens": 275,
+    "total_tokens": 275
+  },
+  "results": [
+    {
+      "index": 2,
+      "relevance_score": 0.9870797991752625
+    },
+    {
+      "index": 0,
+      "relevance_score": 0.025541560724377632
+    },
+    {
+      "index": 1,
+      "relevance_score": 5.1143077143933624e-05
+    }
+  ]
+}

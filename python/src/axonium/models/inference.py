@@ -10,7 +10,14 @@ from pydantic import Field
 
 from axonium.models.common import APIObject, Usage, _Passthrough
 
-__all__ = ["CreateEmbeddingResponse", "Embedding", "GeneratedImage", "ImagesResponse"]
+__all__ = [
+    "CreateEmbeddingResponse",
+    "Embedding",
+    "GeneratedImage",
+    "ImagesResponse",
+    "RerankResponse",
+    "RerankResult",
+]
 
 
 class Embedding(_Passthrough):
@@ -72,3 +79,36 @@ class ImagesResponse(APIObject):
 
     def __len__(self) -> int:
         return len(self.data)
+
+
+class RerankResult(_Passthrough):
+    """One document's score against the query."""
+
+    #: Position in the ``documents`` array **you sent**, which is what keeps a reordered result
+    #: attributable to its input. Never an index into ``results``.
+    index: int | None = None
+    #: A probability in ``[0, 1]``, computed by the engine rather than reconstructed from
+    #: ``logprobs``.
+    relevance_score: float | None = None
+
+
+class RerankResponse(APIObject):
+    """Documents scored against a query, best first.
+
+    ``usage.total_tokens`` equals ``prompt_tokens``: a reranker generates nothing, so there are no
+    completion tokens and billing is prompt-only.
+    """
+
+    object: str | None = None
+    model: str | None = None
+    results: list[RerankResult] = Field(default_factory=list)
+    usage: Usage | None = None
+
+    @property
+    def ranking(self) -> list[int]:
+        """The indices of your ``documents``, best first.
+
+        The common case is reordering the list you already hold, and doing that through
+        ``results`` means remembering that ``index`` points into the input rather than the output.
+        """
+        return [r.index for r in self.results if r.index is not None]

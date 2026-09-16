@@ -311,6 +311,27 @@ async fn contract_corpus() {
             }
             ("ok", "models.list") => expect_fields(&client.models().await.unwrap().raw, case),
             ("ok", "models.mine") => expect_fields(&client.models_mine().await.unwrap().raw, case),
+            ("ok", "rerank.create") => {
+                let request = &case["request"];
+                let response = client
+                    .rerank(&axonium::RerankRequest {
+                        model: request["model"].as_str().unwrap_or_default().into(),
+                        query: request["query"].as_str().unwrap_or_default().into(),
+                        documents: request["documents"]
+                            .as_array()
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(|v| v.as_str().map(str::to_string))
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        top_n: request["top_n"].as_u64().map(|n| n as u32),
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap_or_else(|e| panic!("{id}: {e}"));
+                expect_fields(&response.raw, case);
+            }
             ("ok", "usage.retrieve") => {
                 let request_id = case["request"]["request_id"].as_str().unwrap_or_default();
                 let row = client
