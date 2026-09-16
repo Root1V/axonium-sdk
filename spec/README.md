@@ -6,7 +6,7 @@ rather than reimplemented three times from prose.
 
 | Path | What it is |
 |---|---|
-| `prometheus-gateway.md` | Vendored copy of the platform team's integration guide — the API contract. **Revision 2026-09-15b · `e636e51`** |
+| `prometheus-gateway.md` | Vendored copy of the platform team's integration guide — the API contract. **Revision 2026-09-16a · `f8cf34d`** |
 | `errors.json` | The error catalog: HTTP status × `type` suffix × retryability |
 | `cases/manifest.json` | Contract-test case index, replayed by each SDK's test suite |
 | `fixtures/` | Golden response bodies (`*.json`) and literal SSE wire captures (`*.sse`) |
@@ -72,14 +72,6 @@ against the gateway source. Every SDK should follow these.
   9457 envelope §5.1 describes, and they carry **no `request_id` or `trace_id`**. A client that
   hits one has nothing to give support. 422 is also absent from the §5.2 catalog. Observed against
   a live deployment; SDKs currently fall back by status code.
-
-## Where the guide and this catalog disagree
-
-`errors.json` is the authority for the SDKs, and at revision `2026-09-15b` it is ahead of the guide
-in one place worth knowing about. Five error suffixes it carries appear nowhere in the guide, and
-the guide's retry guidance still says the API has no idempotency-key mechanism while another
-section of the same document documents the replay header. Both were measured against a live
-deployment on 2026-09-15 and reported as A-18; the `$comment` in `errors.json` carries the detail.
 
 ## Updating the vendored guide
 

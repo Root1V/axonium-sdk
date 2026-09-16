@@ -44,6 +44,17 @@ pub enum ErrorKind {
     /// third case behind it and it is the common one: the id belongs to a replay, which is
     /// not billed and has no row.
     NotFound,
+    /// The replicas serving one model disagree about their modality. The gateway refuses the
+    /// group rather than dropping the odd one: answering a chat request from an embedding
+    /// backend produces confident nonsense, which is the expensive failure.
+    InconsistentModelGroup,
+    /// The request carried no verified claims. Distinct from `MissingCredentials`, which the
+    /// auth middleware raises earlier, and not a token that aged out -- refreshing does not help.
+    UnauthorizedRequest,
+    /// The usage-export range errors.
+    InvalidDate,
+    InvalidRange,
+    RangeTooLarge,
     /// The gateway could not reach the auth-service to issue a token. The only problem+json a
     /// token request can produce -- every other token outcome uses the RFC 6749 shape -- and
     /// the distinction is what makes it safe to retry, where an OAuth2 failure never is.
@@ -93,6 +104,11 @@ impl ErrorKind {
             "rate-limiting-unavailable" => Self::RateLimitingUnavailable,
             "usage-store-unavailable" => Self::UsageStoreUnavailable,
             "not-found" => Self::NotFound,
+            "inconsistent-model-group" => Self::InconsistentModelGroup,
+            "unauthorized" => Self::UnauthorizedRequest,
+            "invalid-date" => Self::InvalidDate,
+            "invalid-range" => Self::InvalidRange,
+            "range-too-large" => Self::RangeTooLarge,
             "upstream-unavailable" => Self::TokenEndpointUnavailable,
             "not-configured" => Self::TokenEndpointNotConfigured,
             _ if status == 401 => Self::Unauthorized,

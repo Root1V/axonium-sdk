@@ -32,8 +32,11 @@ __all__ = [
     "IdempotencyInProgressError",
     "IdempotencyKeyReuseError",
     "IdempotencyResponseNotRetainedError",
+    "InconsistentModelGroupError",
     "InvalidClientError",
+    "InvalidDateError",
     "InvalidIdempotencyKeyError",
+    "InvalidRangeError",
     "InvalidRequestError",
     "InvalidScopeError",
     "InvalidTokenError",
@@ -42,6 +45,7 @@ __all__ = [
     "ModelNotLoadedError",
     "NotFoundError",
     "OAuthError",
+    "RangeTooLargeError",
     "RateLimitError",
     "RateLimitingUnavailableError",
     "ServerError",
@@ -56,6 +60,7 @@ __all__ = [
     "TransportError",
     "UnauthorizedClientError",
     "UnauthorizedError",
+    "UnauthorizedRequestError",
     "UnknownInstanceError",
     "UnknownModelError",
     "UnsupportedFieldWarning",
@@ -216,6 +221,52 @@ class BadRequestError(APIError):
 
 class UnauthorizedError(APIError):
     """401 that is not one of the specific token errors."""
+
+
+class InconsistentModelGroupError(BadRequestError):
+    """The replicas serving one model disagree about their modality.
+
+    The gateway refuses the whole group rather than quietly dropping the odd one, which is the
+    right call: answering a chat request from an embedding backend produces confident nonsense
+    rather than an error, and nonsense is the expensive failure. ``detail`` names each instance and
+    what it claims.
+    """
+
+    type_suffix = "inconsistent-model-group"
+    retryable = False
+
+
+class UnauthorizedRequestError(UnauthorizedError):
+    """The request carried no verified claims.
+
+    Distinct from :class:`MissingCredentialsError`, which the auth middleware raises earlier for a
+    missing or malformed header. Not a token that aged out, so refreshing one does not help — which
+    is why this is the one ``401`` this SDK will not retry after a refresh.
+    """
+
+    type_suffix = "unauthorized"
+    retryable = False
+
+
+class InvalidDateError(BadRequestError):
+    """A usage query's ``start`` or ``end`` is not a ``YYYY-MM-DD`` date."""
+
+    type_suffix = "invalid-date"
+    retryable = False
+
+
+class InvalidRangeError(BadRequestError):
+    """A usage export's ``end`` is before its ``start``."""
+
+    type_suffix = "invalid-range"
+    retryable = False
+
+
+class RangeTooLargeError(BadRequestError):
+    """A usage export's range exceeds 366 days. Split it into several exports."""
+
+    type_suffix = "range-too-large"
+    retryable = False
 
 
 class NotFoundError(APIError):
@@ -602,6 +653,11 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         UpstreamError,
         ModelNotLoadedError,
         NotFoundError,
+        InconsistentModelGroupError,
+        UnauthorizedRequestError,
+        InvalidDateError,
+        InvalidRangeError,
+        RangeTooLargeError,
         TokenEndpointUnavailableError,
         TokenEndpointNotConfiguredError,
         BackendUnavailableError,
