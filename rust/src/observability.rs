@@ -19,6 +19,11 @@ use crate::types::ResponseMeta;
 
 /// The wait at or above which a retry is reported at INFO rather than DEBUG: long enough that
 /// a caller will notice it as a stall and want it explained.
+///
+/// Gated with the feature that uses it: without `tracing` this module compiles to nothing, and
+/// an ungated constant is dead code that `clippy -D warnings` rejects -- which is exactly what
+/// CI does, and what a local `--all-features` run hides.
+#[cfg(feature = "tracing")]
 const NOTICEABLE_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// One traced operation. A no-op unless the `tracing` feature is on, so call sites need no `cfg`.

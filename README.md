@@ -32,6 +32,16 @@ go/         Go SDK
 rust/       Rust SDK
 ```
 
+Run everything CI runs, in one command:
+
+```bash
+./scripts/verify.sh
+```
+
+It mirrors the workflow files deliberately — a local check that is *nearly* the CI check reports
+green and hides the difference.
+
+
 ## Configuration
 
 No SDK in this repo hardcodes a host, port, or certificate. Base URLs, credentials and TLS
