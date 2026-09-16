@@ -371,10 +371,13 @@ class TestARetryWaitIsExplained:
             httpx.Response(200, json={"object": "list", "data": []}),
         ]
 
-        with caplog.at_level(logging.INFO, logger="axonium.client"), Axonium(
-            **config_kwargs,
-            retry=RetryPolicy(initial_backoff=0.01, max_backoff=0.01, jitter=False),
-        ) as c:
+        with (
+            caplog.at_level(logging.INFO, logger="axonium.client"),
+            Axonium(
+                **config_kwargs,
+                retry=RetryPolicy(initial_backoff=0.01, max_backoff=0.01, jitter=False),
+            ) as c,
+        ):
             c.models.mine()
 
         assert not [r for r in caplog.records if "waiting before a retry" in r.message.lower()]
