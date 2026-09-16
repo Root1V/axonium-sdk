@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 14,
+  "version": 16,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -914,6 +914,35 @@
       },
       "expect": {
         "kind": "auth_transport_error"
+      }
+    },
+    {
+      "id": "rerank-scores-documents",
+      "$comment": "Recorded live 2026-09-15. What is asserted is the ORDER -- the indices, best first -- and not the scores: two identical requests came back 0.9870797991752625 and 0.987057626247406, so pinning a score would be flaky for a reason that has nothing to do with the contract. The point is that `index` refers to the caller's own documents array rather than to a position in `results`, which is what keeps a reordered result attributable to its input.",
+      "operation": "rerank.create",
+      "request": {
+        "model": "qwen3-reranker",
+        "query": "how do I reorder search results by relevance?",
+        "documents": [
+          "A reranker is a cross-encoder that scores each query-document pair.",
+          "Lima is the capital of Peru.",
+          "Use a reranker after retrieval to reorder the top-k candidates."
+        ]
+      },
+      "response": {
+        "status": 200,
+        "body_file": "rerank.json"
+      },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "results.0.index": 2,
+          "results.1.index": 0,
+          "results.2.index": 1,
+          "model": "qwen3-reranker",
+          "usage.prompt_tokens": 275,
+          "usage.total_tokens": 275
+        }
       }
     }
   ],

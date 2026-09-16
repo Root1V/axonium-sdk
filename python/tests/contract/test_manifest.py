@@ -33,6 +33,7 @@ ENDPOINTS = {
     "images.generate": f"{GATEWAY}/v1/images/generations",
     "models.list": f"{GATEWAY}/v1/models",
     "models.mine": f"{GATEWAY}/v1/models/mine",
+    "rerank.create": f"{GATEWAY}/v1/rerank",
     "usage.retrieve": f"{GATEWAY}/v1/usage/{{request_id}}",
     # The token exchange is scaffolding for every other case, so it is routed and dispatched
     # apart -- but it is listed here so the routability guard covers it too.
@@ -118,6 +119,8 @@ def call_sync(client: Axonium, case: dict[str, Any]) -> Any:
         return client.models.list()
     if operation == "models.mine":
         return client.models.mine()
+    if operation == "rerank.create":
+        return client.rerank.create(**request)
     if operation == "usage.retrieve":
         return client.usage.retrieve(request["request_id"])
     raise AssertionError(f"unhandled operation {operation}")
@@ -137,6 +140,8 @@ async def call_async(client: AsyncAxonium, case: dict[str, Any]) -> Any:
         return await client.models.list()
     if operation == "models.mine":
         return await client.models.mine()
+    if operation == "rerank.create":
+        return await client.rerank.create(**request)
     if operation == "usage.retrieve":
         return await client.usage.retrieve(request["request_id"])
     raise AssertionError(f"unhandled operation {operation}")

@@ -206,6 +206,12 @@ func invokeUnary(t *testing.T, client *Client, c contractCase) map[string]any {
 		if out != nil {
 			value, meta = out, out.Meta
 		}
+	case "rerank.create":
+		var out *RerankResponse
+		out, err = client.Rerank.Create(ctx, rerankRequestFrom(c.Request))
+		if out != nil {
+			value, meta = out, out.Meta
+		}
 	case "embeddings.create":
 		var out *EmbeddingList
 		out, err = client.Embeddings.Create(ctx, embeddingRequestFrom(c.Request))
@@ -643,4 +649,24 @@ func runTokenCase(t *testing.T, client *Client, c contractCase) {
 			t.Errorf("got %T: %v", err, err)
 		}
 	}
+}
+
+// rerankRequestFrom builds a rerank request out of a case's request object.
+func rerankRequestFrom(request map[string]any) RerankRequest {
+	out := RerankRequest{
+		Model: stringField(request, "model"),
+		Query: stringField(request, "query"),
+	}
+	if docs, ok := request["documents"].([]any); ok {
+		for _, d := range docs {
+			if text, ok := d.(string); ok {
+				out.Documents = append(out.Documents, text)
+			}
+		}
+	}
+	if n, ok := numeric(request["top_n"]); ok {
+		top := int(n)
+		out.TopN = &top
+	}
+	return out
 }

@@ -74,6 +74,8 @@ from axonium.models.inference import (
     Embedding,
     GeneratedImage,
     ImagesResponse,
+    RerankResponse,
+    RerankResult,
 )
 from axonium.models.requests import (
     ChatCompletionRequest,
@@ -81,6 +83,7 @@ from axonium.models.requests import (
     EmbeddingsRequest,
     ImageGenerationRequest,
     Message,
+    RerankRequest,
 )
 from axonium.models.usage import RequestUsage
 from axonium.providers import AsyncTokenProvider, TokenProvider
@@ -139,6 +142,9 @@ __all__ = [
     "RateLimitSnapshot",
     "RateLimitingUnavailableError",
     "RequestUsage",
+    "RerankRequest",
+    "RerankResponse",
+    "RerankResult",
     "ResponseMeta",
     "RetryPolicy",
     "ServerError",

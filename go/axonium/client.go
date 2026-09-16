@@ -47,6 +47,7 @@ type Client struct {
 	cooldown *cooldownRegistry
 
 	Chat       *ChatService
+	Rerank     *RerankService
 	Usage      *UsageService
 	Models     *ModelsService
 	Embeddings *EmbeddingsService
@@ -108,6 +109,7 @@ func New(cfg Config) (*Client, error) {
 	}
 
 	c.Chat = &ChatService{client: c}
+	c.Rerank = &RerankService{client: c}
 	c.Usage = &UsageService{client: c}
 	c.Models = &ModelsService{client: c}
 	c.Embeddings = &EmbeddingsService{client: c}
