@@ -2,7 +2,7 @@
 
 Rust SDK for the Prometheus Gateway inference API.
 
-> **Status: 0.2.0, published to crates.io.** Chat, streaming with cancellation, embeddings,
+> **Status: 0.3.0, published to crates.io.** Chat, streaming with cancellation, embeddings,
 > images, both credential modes, idempotency keys, instance pinning and the full error taxonomy are
 > implemented, and all 25 shared contract cases replay against the same recorded wire bytes the
 > Python and Go SDKs use. Structured logging and an optional tracing hook are in.
@@ -125,7 +125,7 @@ Off by default, behind a feature, so the crate stays free of a tracing dependenc
 traces with something else or not at all:
 
 ```toml
-axonium = { version = "0.2", features = ["tracing"] }
+axonium = { version = "0.3", features = ["tracing"] }
 ```
 
 With it on, each operation opens a span and each attempt emits an event carrying `method`, `path`,

@@ -2,7 +2,7 @@
 
 Go SDK for the Prometheus Gateway inference API.
 
-> **Status: v0.2.0.** Streaming with real cancellation, both credential modes, idempotency keys,
+> **Status: v0.3.0.** Streaming with real cancellation, both credential modes, idempotency keys,
 > instance pinning, the full error taxonomy and the shared contract corpus — all implemented and
 > tested, with 25 of 25 contract cases replaying the same recorded wire bytes the Python SDK does.
 >
