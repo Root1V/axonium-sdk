@@ -7,6 +7,17 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+The SDK now says when it is waiting, and for how long.
+
+The platform's `Retry-After` on a `429` is seconds until the window resets, so it runs 0–60. An SDK
+that respects it — as it should — looks from outside like one slow call among fast ones, and that
+arrives as a latency bug report. A wait long enough for a person to notice is now reported at INFO
+with `delay_s`; sub-second backoff stays at DEBUG, because the noise worry is frequent small retries
+rather than the rare long one.
+
+The wait is reported as a wait, never folded into `duration_ms` — that is measured per attempt and
+deliberately excludes time spent sleeping. Time waiting is not time the gateway took.
+
 A token response in neither documented envelope is now a transport failure rather than an OAuth2
 one.
 
@@ -244,6 +255,17 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+The SDK now says when it is waiting, and for how long.
+
+The platform's `Retry-After` on a `429` is seconds until the window resets, so it runs 0–60. An SDK
+that respects it — as it should — looks from outside like one slow call among fast ones, and that
+arrives as a latency bug report. A wait long enough for a person to notice is now reported at INFO
+with `delay_s`; sub-second backoff stays at DEBUG, because the noise worry is frequent small retries
+rather than the rare long one.
+
+The wait is reported as a wait, never folded into `duration_ms` — that is measured per attempt and
+deliberately excludes time spent sleeping. Time waiting is not time the gateway took.
+
 A token response in neither documented envelope is now a transport failure rather than an OAuth2
 one.
 
@@ -373,6 +395,17 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+The SDK now says when it is waiting, and for how long.
+
+The platform's `Retry-After` on a `429` is seconds until the window resets, so it runs 0–60. An SDK
+that respects it — as it should — looks from outside like one slow call among fast ones, and that
+arrives as a latency bug report. A wait long enough for a person to notice is now reported at INFO
+with `delay_s`; sub-second backoff stays at DEBUG, because the noise worry is frequent small retries
+rather than the rare long one.
+
+The wait is reported as a wait, never folded into `duration_ms` — that is measured per attempt and
+deliberately excludes time spent sleeping. Time waiting is not time the gateway took.
 
 A token response in neither documented envelope is now a transport failure rather than an OAuth2
 one.

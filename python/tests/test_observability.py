@@ -7,7 +7,7 @@ import httpx
 import pytest
 import respx
 
-from axonium import AsyncAxonium, Axonium
+from axonium import AsyncAxonium, Axonium, RetryPolicy
 from axonium.errors import ForbiddenError
 from axonium.observability.logging import request_fields
 from axonium.observability.scopes import explain_forbidden
@@ -15,6 +15,7 @@ from axonium.observability.scopes import explain_forbidden
 AUTH_URL = "https://gateway.test.invalid/oauth2/token"
 CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
 CATALOG_URL = "https://gateway.test.invalid/v1/models"
+MINE_URL = "https://gateway.test.invalid/v1/models/mine"
 
 SECRET_PROMPT = "my patient id is 123-45-6789"
 SECRET_REPLY = "Acknowledged, 123-45-6789."
@@ -320,3 +321,88 @@ def test_spec_fixtures_are_reachable_from_the_python_suite(spec_dir: Path) -> No
     # The Go and Rust SDKs will assert against these same files.
     assert (spec_dir / "errors.json").exists()
     assert (spec_dir / "fixtures" / "chat_stream_ok.sse").exists()
+
+
+class TestARetryWaitIsExplained:
+    """A wait a caller would notice has to say so, or it arrives as a latency bug.
+
+    The platform warned us about this shape directly: they were sent a report of "requests hanging
+    30-60 seconds with no clean load threshold". They were not hangs. Their ``Retry-After`` on a
+    ``429`` is seconds until the window resets, so it runs 0-60, and an SDK that respects it — as
+    it should — looks from outside like one slow call among fast ones.
+    """
+
+    @respx.mock
+    async def test_a_long_wait_is_reported_at_info(
+        self, caplog: pytest.LogCaptureFixture, config_kwargs: dict[str, str]
+    ) -> None:
+        respx.post(AUTH_URL).mock(return_value=token())
+        route = respx.get(MINE_URL)
+        route.side_effect = [
+            httpx.Response(
+                429,
+                headers={"Retry-After": "2"},
+                json={"type": "x/rate-limit-exceeded-requests", "status": 429},
+            ),
+            httpx.Response(200, json={"object": "list", "data": []}),
+        ]
+
+        policy = RetryPolicy(max_backoff=5.0, jitter=False)
+        with (
+            caplog.at_level(logging.INFO, logger="axonium.client"),
+            Axonium(**config_kwargs, retry=policy) as client,
+        ):
+            client.models.mine()
+
+        waits = [r for r in caplog.records if "waiting before a retry" in r.message.lower()]
+        assert waits, "a two-second wait left nothing at INFO to explain it"
+        assert waits[0].delay_s >= 1.0  # type: ignore[attr-defined]
+
+    @respx.mock
+    async def test_a_short_backoff_stays_at_debug(
+        self, caplog: pytest.LogCaptureFixture, config_kwargs: dict[str, str]
+    ) -> None:
+        # The noise worry is frequent small retries, not the rare long one. A sub-second backoff
+        # that shouted at INFO would train people to filter the level that matters.
+        respx.post(AUTH_URL).mock(return_value=token())
+        route = respx.get(MINE_URL)
+        route.side_effect = [
+            httpx.Response(503, json={"type": "x/backend-unavailable", "status": 503}),
+            httpx.Response(200, json={"object": "list", "data": []}),
+        ]
+
+        with caplog.at_level(logging.INFO, logger="axonium.client"), Axonium(
+            **config_kwargs,
+            retry=RetryPolicy(initial_backoff=0.01, max_backoff=0.01, jitter=False),
+        ) as c:
+            c.models.mine()
+
+        assert not [r for r in caplog.records if "waiting before a retry" in r.message.lower()]
+
+    @respx.mock
+    async def test_the_wait_is_never_counted_as_request_latency(
+        self, caplog: pytest.LogCaptureFixture, config_kwargs: dict[str, str]
+    ) -> None:
+        # The distinction the platform asked about: time spent sleeping is not time the gateway
+        # took. duration_ms is measured per attempt and must exclude the wait entirely.
+        respx.post(AUTH_URL).mock(return_value=token())
+        route = respx.get(MINE_URL)
+        route.side_effect = [
+            httpx.Response(
+                429,
+                headers={"Retry-After": "2"},
+                json={"type": "x/rate-limit-exceeded-requests", "status": 429},
+            ),
+            httpx.Response(200, json={"object": "list", "data": []}),
+        ]
+
+        policy = RetryPolicy(max_backoff=5.0, jitter=False)
+        with (
+            caplog.at_level(logging.DEBUG, logger="axonium.client"),
+            Axonium(**config_kwargs, retry=policy) as client,
+        ):
+            client.models.mine()
+
+        durations = [r.duration_ms for r in caplog.records if hasattr(r, "duration_ms")]
+        assert durations, "no attempt was timed"
+        assert max(durations) < 1000, f"a 2s wait leaked into request latency: {durations}"

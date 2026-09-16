@@ -220,7 +220,9 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 			// the stored result without reaching a model -- so it is the one thing that makes this
 			// retryable, and only for a timeout. Connection failures stay untouched either way.
 			if idemKey != "" && errors.Is(err, ErrTimeout) && attempt < policy.MaxAttempts {
-				if !sleepFor(ctx, policy.backoff(attempt)) {
+				backoff := policy.backoff(attempt)
+				c.logRetryWait(model, 0, attempt, "", backoff)
+				if !sleepFor(ctx, backoff) {
 					return nil, meta, ctx.Err()
 				}
 				continue
@@ -235,6 +237,7 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 			return nil, meta, err
 		}
 
+		c.logRetryWait(model, apiErr.Status, attempt, apiErr.TypeSuffix, delay)
 		if !sleepFor(ctx, delay) {
 			return nil, meta, ctx.Err()
 		}

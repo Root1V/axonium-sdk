@@ -17,6 +17,10 @@ use std::time::Duration;
 
 use crate::types::ResponseMeta;
 
+/// The wait at or above which a retry is reported at INFO rather than DEBUG: long enough that
+/// a caller will notice it as a stall and want it explained.
+const NOTICEABLE_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+
 /// One traced operation. A no-op unless the `tracing` feature is on, so call sites need no `cfg`.
 pub(crate) struct Operation {
     #[cfg(feature = "tracing")]
@@ -60,6 +64,49 @@ impl Operation {
             if !_meta.instance_id.is_empty() {
                 self.span
                     .record("prometheus.instance_id", _meta.instance_id.as_str());
+            }
+        }
+    }
+
+    /// Reports that the SDK is about to sleep before retrying, and for how long.
+    ///
+    /// A caller who sees a call take 45 seconds and finds nothing in their logs files a latency
+    /// bug. The `429` was the rate limit working and the wait is the whole explanation, so a wait
+    /// a person would notice is reported at INFO. Sub-second backoff stays at DEBUG, where it
+    /// belongs: the noise worry is frequent small retries, not the rare long one.
+    ///
+    /// Recorded as a wait rather than folded into `duration_ms`, which is measured per attempt and
+    /// deliberately excludes it: time spent sleeping is not latency.
+    pub(crate) fn record_retry_wait(
+        &self,
+        _model: &str,
+        _status: u16,
+        _attempt: u32,
+        _suffix: &str,
+        _delay: std::time::Duration,
+    ) {
+        #[cfg(feature = "tracing")]
+        {
+            let _enter = self.span.enter();
+            let delay_s = _delay.as_secs_f64();
+            if _delay >= NOTICEABLE_WAIT {
+                tracing::info!(
+                    model = _model,
+                    status = _status,
+                    attempt = _attempt,
+                    r#type = _suffix,
+                    delay_s,
+                    "axonium waiting before a retry"
+                );
+            } else {
+                tracing::debug!(
+                    model = _model,
+                    status = _status,
+                    attempt = _attempt,
+                    r#type = _suffix,
+                    delay_s,
+                    "axonium waiting before a retry"
+                );
             }
         }
     }
