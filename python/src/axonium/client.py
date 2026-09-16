@@ -50,6 +50,10 @@ __all__ = ["AsyncAxonium", "Axonium"]
 
 logger = logging.getLogger("axonium.client")
 
+#: A wait at or above this many seconds is reported at INFO rather than DEBUG: it is long
+#: enough that a caller will notice it as a stall and want it explained.
+_NOTICEABLE_WAIT = 1.0
+
 
 def _validate_idempotency_key(key: str | None) -> None:
     """Reject a key the gateway would reject, without spending a round trip on it."""
@@ -270,8 +274,15 @@ class _BaseAxonium:
         self._cooldowns.note(key, error)
 
         delay = self._retry.delay_for(error, attempt=attempt)
-        logger.debug(
-            "Request failed" if delay is None else "Retrying after a retryable error",
+        # A wait long enough for a person to notice is reported at INFO, not DEBUG. A caller who
+        # sees a call take 45 seconds and finds nothing in their logs files a latency bug; the
+        # 429 was the rate limit working, and the wait is the whole explanation. Sub-second
+        # backoff stays at DEBUG, where it belongs -- the noise worry is frequent small retries,
+        # not the rare long one.
+        level = logging.INFO if delay is not None and delay >= _NOTICEABLE_WAIT else logging.DEBUG
+        logger.log(
+            level,
+            "Request failed" if delay is None else "Waiting before a retry",
             extra=request_fields(
                 model=model,
                 status=error.status,
@@ -279,6 +290,8 @@ class _BaseAxonium:
                 trace_id=error.trace_id,
                 attempt=attempt,
                 type=error.type_suffix,
+                # Named as a wait rather than folded into duration_ms, which is measured per
+                # attempt and deliberately excludes it: time spent sleeping is not latency.
                 delay_s=None if delay is None else round(delay, 3),
             ),
         )

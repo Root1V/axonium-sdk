@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // recordingTracer is the few lines a host writes to feed Axonium's spans into its own tracing.
@@ -212,4 +213,99 @@ func TestNoTracerMeansNoSpans(t *testing.T) {
 	span.SetAttributes(map[string]any{"k": "v"})
 	span.RecordError(errors.New("x"))
 	span.End()
+}
+
+// A wait a caller would notice has to say so, or it arrives as a latency bug.
+//
+// The platform warned us about this shape directly: they were sent a report of "requests hanging
+// 30-60 seconds with no clean load threshold". They were not hangs. Their Retry-After on a 429 is
+// seconds until the window resets, so it runs 0-60, and an SDK that respects it -- as it should --
+// looks from outside like one slow call among fast ones.
+
+func TestALongRetryWaitIsReportedAtInfo(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			writeToken(w, "contract", 300)
+			return
+		}
+		calls++
+		w.Header().Set("Content-Type", "application/problem+json")
+		if calls == 1 {
+			w.Header().Set("Retry-After", "2")
+			w.WriteHeader(429)
+			_, _ = w.Write([]byte(`{"type":"x/rate-limit-exceeded-requests","status":429}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
+	}))
+	defer srv.Close()
+
+	client, err := New(Config{
+		GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s", Logger: logger,
+		Retry: &RetryPolicy{MaxAttempts: 3, MaxBackoff: 5 * time.Second},
+	})
+	if err != nil {
+		t.Fatalf("building: %v", err)
+	}
+	defer client.Close()
+
+	if _, err := client.Models.Mine(context.Background()); err != nil {
+		t.Fatalf("the retry should have succeeded: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "waiting before a retry") {
+		t.Errorf("a two-second wait left nothing at INFO to explain it:\n%s", out)
+	}
+	if !strings.Contains(out, "delay_s=2") {
+		t.Errorf("the wait was not reported with its length:\n%s", out)
+	}
+}
+
+func TestAShortBackoffStaysAtDebug(t *testing.T) {
+	// The noise worry is frequent small retries, not the rare long one. A sub-second backoff that
+	// shouted at INFO would train people to filter the level that matters.
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			writeToken(w, "contract", 300)
+			return
+		}
+		calls++
+		if calls == 1 {
+			w.Header().Set("Content-Type", "application/problem+json")
+			w.WriteHeader(503)
+			_, _ = w.Write([]byte(`{"type":"x/backend-unavailable","status":503}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"list","data":[]}`))
+	}))
+	defer srv.Close()
+
+	client, err := New(Config{
+		GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s", Logger: logger,
+		Retry: &RetryPolicy{MaxAttempts: 3, InitialBackoff: 10 * time.Millisecond,
+			MaxBackoff: 10 * time.Millisecond},
+	})
+	if err != nil {
+		t.Fatalf("building: %v", err)
+	}
+	defer client.Close()
+
+	if _, err := client.Models.Mine(context.Background()); err != nil {
+		t.Fatalf("the retry should have succeeded: %v", err)
+	}
+
+	if strings.Contains(buf.String(), "waiting before a retry") {
+		t.Errorf("a 10ms backoff should not reach INFO:\n%s", buf.String())
+	}
 }

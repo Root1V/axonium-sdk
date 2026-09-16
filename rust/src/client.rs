@@ -202,6 +202,13 @@ impl Client {
                     self.cooldowns.note(&key, &api);
                     match self.config.retry.delay_for(&api, attempt) {
                         Some(delay) => {
+                            op.record_retry_wait(
+                                &opts.model,
+                                api.status,
+                                attempt,
+                                &api.type_suffix,
+                                delay,
+                            );
                             tokio::time::sleep(delay).await;
                             attempt += 1;
                         }
@@ -216,7 +223,9 @@ impl Client {
                     {
                         return Err(Error::Timeout(message));
                     }
-                    tokio::time::sleep(self.config.retry.backoff(attempt)).await;
+                    let backoff = self.config.retry.backoff(attempt);
+                    op.record_retry_wait(&opts.model, 0, attempt, "", backoff);
+                    tokio::time::sleep(backoff).await;
                     attempt += 1;
                 }
                 Err(other) => return Err(other),

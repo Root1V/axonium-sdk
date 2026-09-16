@@ -129,3 +129,38 @@ func (c *Client) logger() *slog.Logger {
 	}
 	return c.config.Logger
 }
+
+// noticeableWait is the wait at or above which a retry is reported at INFO rather than DEBUG: long
+// enough that a caller will notice it as a stall and want it explained.
+const noticeableWait = time.Second
+
+// logRetryWait reports that the SDK is about to sleep before retrying, and for how long.
+//
+// A caller who sees a call take 45 seconds and finds nothing in their logs files a latency bug. The
+// 429 was the rate limit working and the wait is the whole explanation, so a wait a person would
+// notice is reported at INFO. Sub-second backoff stays at DEBUG, where it belongs: the noise worry
+// is frequent small retries, not the rare long one.
+//
+// Recorded as a wait rather than folded into duration_ms, which is measured per attempt and
+// deliberately excludes it: time spent sleeping is not latency.
+func (c *Client) logRetryWait(model string, status, attempt int, suffix string, delay time.Duration) {
+	attrs := []any{
+		slog.Float64("delay_s", delay.Seconds()),
+		slog.Int("attempt", attempt),
+	}
+	if model != "" {
+		attrs = append(attrs, slog.String("model", model))
+	}
+	if status != 0 {
+		attrs = append(attrs, slog.Int("status", status))
+	}
+	if suffix != "" {
+		attrs = append(attrs, slog.String("type", suffix))
+	}
+
+	if delay >= noticeableWait {
+		c.logger().Info("axonium waiting before a retry", attrs...)
+		return
+	}
+	c.logger().Debug("axonium waiting before a retry", attrs...)
+}

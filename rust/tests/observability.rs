@@ -135,3 +135,82 @@ async fn records_metadata_and_never_content() {
         );
     }
 }
+
+/// A wait a caller would notice has to say so, or it arrives as a latency bug.
+///
+/// The platform warned us about this shape directly: they were sent a report of "requests hanging
+/// 30-60 seconds with no clean load threshold". They were not hangs. Their `Retry-After` on a `429`
+/// is seconds until the window resets, so it runs 0-60, and an SDK that respects it -- as it should
+/// -- looks from outside like one slow call among fast ones.
+async fn call_retrying_after(collected: &Collected, retry_after: &str, level: tracing::Level) {
+    let server = MockServer::start().await;
+    Mock::given(wiremock::matchers::path("/oauth2/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "access_token": "header.eyJzY29wZSI6ImluZmVyZW5jZTpyZWFkIn0.sig",
+            "token_type": "Bearer",
+            "expires_in": 300
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(any())
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("retry-after", retry_after)
+                .set_body_json(serde_json::json!({
+                    "type": "https://prometheus.internal/errors/rate-limit-exceeded-requests",
+                    "status": 429
+                })),
+        )
+        .mount(&server)
+        .await;
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(collected.clone())
+        .with_ansi(false)
+        .with_max_level(level)
+        .finish();
+
+    let client = Client::new(Config {
+        gateway_base_url: server.uri(),
+        client_id: "i".into(),
+        client_secret: "s".into(),
+        ..Default::default()
+    })
+    .expect("building");
+
+    tracing::subscriber::with_default(subscriber, || {
+        // The same pattern the test above uses: driven on the current thread inside the subscriber
+        // guard rather than spawned past it, so the events land in this collector.
+        let _ = futures_executor_block_on(client.models());
+    });
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_long_retry_wait_is_reported_at_info() {
+    let collected = Collected::default();
+    call_retrying_after(&collected, "2", tracing::Level::INFO).await;
+
+    let text = collected.text();
+    assert!(
+        text.contains("waiting before a retry"),
+        "a two-second wait left nothing at INFO to explain it:\n{text}"
+    );
+    assert!(
+        text.contains("delay_s=2"),
+        "the wait was not reported with its length:\n{text}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_short_backoff_stays_at_debug() {
+    // The noise worry is frequent small retries, not the rare long one. A sub-second backoff that
+    // shouted at INFO would train people to filter the level that matters.
+    let collected = Collected::default();
+    call_retrying_after(&collected, "0", tracing::Level::INFO).await;
+
+    let text = collected.text();
+    assert!(
+        !text.contains("waiting before a retry"),
+        "a zero-second wait should not reach INFO:\n{text}"
+    );
+}
