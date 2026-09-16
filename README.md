@@ -11,14 +11,16 @@ response.
 
 ## Language matrix
 
-| Language | Package | Status |
+| Language | Install | Version |
 |---|---|---|
-| Python | [`axonium`](python/) on PyPI | ✅ Release candidate — reference implementation |
-| Go | `github.com/Root1V/axonium-sdk/go` | 📋 Planned — see [go/README.md](go/) |
-| Rust | [`axonium`](rust/) on crates.io | 📋 Planned — see [rust/README.md](rust/) |
+| Python | `pip install axonium` | [`1.0.0rc4`](https://pypi.org/project/axonium/) on PyPI |
+| Go | `go get github.com/Root1V/axonium-sdk/go@v0.3.0` | `v0.3.0` |
+| Rust | `axonium = "0.3"` | [`0.3.0`](https://crates.io/crates/axonium) on crates.io |
 
-Python is built first as the reference implementation. Go and Rust follow, validated against
-the same shared contract fixtures in [`spec/`](spec/) so all three behave identically.
+All three are published and implement the same surface. Python was built first as the reference
+implementation; every behaviour the three share is pinned by the contract corpus in
+[`spec/`](spec/) — one manifest, one set of recorded wire bytes, three runners that share no code,
+so identical behaviour is verified rather than intended.
 
 Backlog and delivered work: [ROADMAP.md](ROADMAP.md).
 

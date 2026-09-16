@@ -5,7 +5,7 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ## Python
 
-### Unreleased
+### 1.0.0rc4 — 2026-09-16
 
 Five error types the platform ships and nobody had mapped: `inconsistent-model-group`,
 `unauthorized`, `invalid-date`, `invalid-range` and `range-too-large`.
@@ -277,7 +277,7 @@ which spoke to a platform generation that no longer exists.
 
 ## Go
 
-### Unreleased
+### 0.3.0 — 2026-09-16
 
 Five error types the platform ships and nobody had mapped: `inconsistent-model-group`,
 `unauthorized`, `invalid-date`, `invalid-range` and `range-too-large`.
@@ -442,7 +442,7 @@ No third-party dependencies: standard library only.
 
 ## Rust
 
-### Unreleased
+### 0.3.0 — 2026-09-16
 
 Five error types the platform ships and nobody had mapped: `inconsistent-model-group`,
 `unauthorized`, `invalid-date`, `invalid-range` and `range-too-large`.
