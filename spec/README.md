@@ -73,6 +73,14 @@ against the gateway source. Every SDK should follow these.
   hits one has nothing to give support. 422 is also absent from the §5.2 catalog. Observed against
   a live deployment; SDKs currently fall back by status code.
 
+## Where the guide and this catalog disagree
+
+`errors.json` is the authority for the SDKs, and at revision `2026-09-15b` it is ahead of the guide
+in one place worth knowing about. Five error suffixes it carries appear nowhere in the guide, and
+the guide's retry guidance still says the API has no idempotency-key mechanism while another
+section of the same document documents the replay header. Both were measured against a live
+deployment on 2026-09-15 and reported as A-18; the `$comment` in `errors.json` carries the detail.
+
 ## Updating the vendored guide
 
 `prometheus-gateway.md` is a copy, not the original. When the platform team revises the guide,
