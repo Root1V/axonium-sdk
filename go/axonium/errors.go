@@ -42,6 +42,21 @@ var (
 	// it is the common one -- the id belongs to a replay, which is not billed and has no row.
 	ErrNotFound = errors.New("axonium: not-found")
 
+	// ErrInconsistentModelGroup reports replicas of one model disagreeing about their modality.
+	// The gateway refuses the group rather than dropping the odd one: answering a chat request
+	// from an embedding backend produces confident nonsense, which is the expensive failure.
+	ErrInconsistentModelGroup = errors.New("axonium: inconsistent-model-group")
+
+	// ErrUnauthorizedRequest reports a request that carried no verified claims. Distinct from
+	// ErrMissingCredentials, which the auth middleware raises earlier, and not a token that aged
+	// out -- so refreshing one does not help.
+	ErrUnauthorizedRequest = errors.New("axonium: unauthorized")
+
+	// ErrInvalidDate, ErrInvalidRange and ErrRangeTooLarge are the usage-export range errors.
+	ErrInvalidDate   = errors.New("axonium: invalid-date")
+	ErrInvalidRange  = errors.New("axonium: invalid-range")
+	ErrRangeTooLarge = errors.New("axonium: range-too-large")
+
 	// ErrTokenEndpointUnavailable reports that the gateway could not reach the auth-service to
 	// issue a token. The only problem+json a token request can produce -- every other token
 	// outcome uses the RFC 6749 OAuth2 shape -- and the distinction is what makes it safe to
@@ -136,6 +151,11 @@ var suffixSentinels = map[string]error{
 	"context-exceeded":                  ErrContextExceeded,
 	"validation-error":                  ErrValidation,
 	"not-found":                         ErrNotFound,
+	"inconsistent-model-group":          ErrInconsistentModelGroup,
+	"unauthorized":                      ErrUnauthorizedRequest,
+	"invalid-date":                      ErrInvalidDate,
+	"invalid-range":                     ErrInvalidRange,
+	"range-too-large":                   ErrRangeTooLarge,
 	"upstream-unavailable":              ErrTokenEndpointUnavailable,
 	"not-configured":                    ErrTokenEndpointNotConfigured,
 	"unknown-instance":                  ErrUnknownInstance,

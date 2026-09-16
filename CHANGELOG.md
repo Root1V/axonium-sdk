@@ -7,6 +7,17 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+Five error types the platform ships and nobody had mapped: `inconsistent-model-group`,
+`unauthorized`, `invalid-date`, `invalid-range` and `range-too-large`.
+
+They surfaced from the other side of a gap we reported. We told the platform that five suffixes
+they send appear nowhere in their guide; they wrote a test comparing every `type` the gateway
+raises against that table, and it found ten. Five were ours, and these five had been there longer
+and nobody had noticed.
+
+Three of them belong to the admin-scoped usage export, which this SDK does not call. They are
+mapped anyway so the taxonomy is complete and an unknown suffix means what it says.
+
 `POST /v1/rerank`, for models with `rerank` modality.
 
 A reranker is a cross-encoder: it scores a query against each document and returns them ordered. It
@@ -268,6 +279,17 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+Five error types the platform ships and nobody had mapped: `inconsistent-model-group`,
+`unauthorized`, `invalid-date`, `invalid-range` and `range-too-large`.
+
+They surfaced from the other side of a gap we reported. We told the platform that five suffixes
+they send appear nowhere in their guide; they wrote a test comparing every `type` the gateway
+raises against that table, and it found ten. Five were ours, and these five had been there longer
+and nobody had noticed.
+
+Three of them belong to the admin-scoped usage export, which this SDK does not call. They are
+mapped anyway so the taxonomy is complete and an unknown suffix means what it says.
+
 `POST /v1/rerank`, for models with `rerank` modality.
 
 A reranker is a cross-encoder: it scores a query against each document and returns them ordered. It
@@ -421,6 +443,17 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+Five error types the platform ships and nobody had mapped: `inconsistent-model-group`,
+`unauthorized`, `invalid-date`, `invalid-range` and `range-too-large`.
+
+They surfaced from the other side of a gap we reported. We told the platform that five suffixes
+they send appear nowhere in their guide; they wrote a test comparing every `type` the gateway
+raises against that table, and it found ten. Five were ours, and these five had been there longer
+and nobody had noticed.
+
+Three of them belong to the admin-scoped usage export, which this SDK does not call. They are
+mapped anyway so the taxonomy is complete and an unknown suffix means what it says.
 
 `POST /v1/rerank`, for models with `rerank` modality.
 

@@ -1,5 +1,5 @@
 {
-  "$comment": "Error catalog for the Prometheus Gateway, derived from spec/prometheus-gateway.md \u00a75.2. Every language SDK maps its exception/error types from this file so the taxonomy cannot drift between SDKs. `suffix` is the last path segment of the problem-details `type` URI and is the stable field to branch on; `detail` is human-readable and may change wording. Five suffixes in this catalog appear NOWHERE in the vendored guide at revision 2026-09-15b: invalid-idempotency-key, unknown-instance, and the three idempotency 409s. All five are verified live. Worse, the guide's retry guidance (6.2) states that there is no idempotency-key mechanism in this API, while 3.8 of the same document describes the X-Idempotent-Replay-Of header. Measured 2026-09-15: a repeated request under an Idempotency-Key replays and carries that header, and X-Prometheus-Instance pins. Reported as A-18. This catalog is the authority for the SDKs until the guide catches up.",
+  "$comment": "The error taxonomy the SDKs map, keyed on the type suffix. Verified against a live deployment where a $comment says so. Reconciled with the platform's own table at guide revision 2026-09-16a, which closed the gap A-18 reported: five suffixes we carried were undocumented, and looking for them turned up five more we did not have.",
   "envelopes": {
     "gateway": {
       "$comment": "RFC 9457 problem details, Content-Type: application/problem+json. Returned by every gateway endpoint.",
@@ -195,6 +195,45 @@
       "retryable": false,
       "remedy": "Requires operator action; retrying cannot help.",
       "$comment": "Added with revision 2026-09-14e. Shares a status with upstream-unavailable but not its retryability, which is why the suffix has to drive the decision rather than the status."
+    },
+    {
+      "status": 400,
+      "suffix": "inconsistent-model-group",
+      "meaning": "The replicas serving one model disagree about their modality, so the gateway refuses the whole group rather than quietly dropping the odd one. The detail names each instance and what it claims.",
+      "retryable": false,
+      "remedy": "Requires operator action; retrying cannot help.",
+      "$comment": "Added from guide 2026-09-16a. Refusing the group is the right call and worth knowing why: answering a chat request from an embedding backend produces confident nonsense rather than an error, which is the expensive failure."
+    },
+    {
+      "status": 401,
+      "suffix": "unauthorized",
+      "meaning": "Only on GET /v1/usage/{request_id} -- the request carried no verified claims. Distinct from missing-credentials, which the auth middleware raises earlier for a missing or malformed header.",
+      "retryable": false,
+      "$comment": "Added from guide 2026-09-16a. Shares a status with three other 401s and is the only one this SDK will not refresh a token for, since it is not about the token's age."
+    },
+    {
+      "status": 400,
+      "suffix": "invalid-date",
+      "meaning": "Only on GET /v1/usage and /v1/usage/export -- start or end is not a YYYY-MM-DD date.",
+      "retryable": false,
+      "remedy": "Fix the request.",
+      "$comment": "Added from guide 2026-09-16a. An admin-scoped endpoint this SDK does not call, carried so the taxonomy is complete and so an SDK that grows one maps it rather than falling back."
+    },
+    {
+      "status": 400,
+      "suffix": "invalid-range",
+      "meaning": "Only on GET /v1/usage/export -- end is before start.",
+      "retryable": false,
+      "remedy": "Fix the request.",
+      "$comment": "Added from guide 2026-09-16a. Admin-scoped; see invalid-date."
+    },
+    {
+      "status": 400,
+      "suffix": "range-too-large",
+      "meaning": "Only on GET /v1/usage/export -- the range exceeds 366 days.",
+      "retryable": false,
+      "remedy": "Split it into several exports.",
+      "$comment": "Added from guide 2026-09-16a. Admin-scoped; see invalid-date."
     }
   ],
   "oauth_errors": [
