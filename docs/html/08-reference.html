@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Python API reference · Axonium</title>
-<meta name="description" content="Client SDKs for the Prometheus Gateway">
+<meta name="description" content="Client SDKs for the Prometheus inference platform">
 <style>
 :root {
   --bg: #fbfbfa; --panel: #ffffff; --ink: #1c1d1f; --muted: #6a6d72; --line: #e3e3e0;
@@ -139,7 +139,7 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <div class="shell">
 <nav>
   <div class="brand"><a href="index.html">Axonium</a></div>
-  <div class="tag">Client SDKs for the Prometheus Gateway</div>
+  <div class="tag">Client SDKs for the Prometheus inference platform</div>
   <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html" aria-current="page">Python API reference</a></li></ol>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
@@ -158,7 +158,7 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <h2>Clients</h2>
 <p>The one object you construct.</p>
 <h3><code>Axonium</code></h3>
-<p>Synchronous client for the Prometheus Gateway.</p>
+<p>Synchronous client for the Prometheus inference platform.</p>
 <p>Usable as a context manager, which closes the underlying connection pools::</p>
 <pre><code>with Axonium() as client:
     completion = client.chat.completions.create(
@@ -183,7 +183,7 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 </tbody>
 </table></div>
 <h3><code>AsyncAxonium</code></h3>
-<p>Asynchronous client for the Prometheus Gateway. See :class:<code>Axonium</code>.</p>
+<p>Asynchronous client for the Prometheus inference platform. See :class:<code>Axonium</code>.</p>
 <div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">AsyncAxonium</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">retry</span><span class="p">:</span> <span class="n">RetryPolicy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">token_provider</span><span class="p">:</span> <span class="n">AsyncTokenProvider</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">settings</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
 <div class="table-scroll"><table>
 <thead>

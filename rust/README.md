@@ -1,6 +1,11 @@
 # axonium (Rust)
 
-Rust SDK for the Prometheus Gateway inference API.
+Rust SDK for the Prometheus inference platform.
+
+Prometheus is a self-hosted inference platform — a catalog of small language, embedding, reranking
+and image models across managed instances, behind one authenticated API with per-model access
+control, rate limits, spend caps and usage accounting. This SDK talks to one of its components, the
+**gateway**, which serves inference and issues tokens at a single address.
 
 > **Status: 0.3.0, published to crates.io.** Chat, streaming with cancellation, embeddings,
 > images, both credential modes, idempotency keys, instance pinning and the full error taxonomy are

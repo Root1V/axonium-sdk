@@ -1,4 +1,4 @@
-//! Rust SDK for the Prometheus Gateway inference API.
+//! Rust SDK for the Prometheus inference platform.
 //!
 //! The SDK is **pure transport**. It speaks the gateway's contract faithfully -- authentication,
 //! retries that cannot double-bill, typed errors, streaming with real cancellation -- and does not

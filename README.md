@@ -1,8 +1,18 @@
 # Axonium
 
-Client SDKs for the **Prometheus Gateway** inference API, in Python, Go and Rust.
+Client SDKs for the **Prometheus** inference platform, in Python, Go and Rust.
 
-Axonium wraps the platform's `/v1/` inference API and everything around it that a production
+**Prometheus** is a self-hosted inference platform: a catalog of small language, embedding,
+reranking and image models, served across managed instances behind one authenticated API, with
+per-model access control, rate limits, spend caps and per-request usage accounting.
+
+Your client talks to exactly one of its components — the **gateway**, which serves inference and
+issues tokens at a single address. The rest of the platform sits behind it: the model registry and
+the instances it schedules across, the auth service, the rate limiter and per-backend circuit
+breaker, and the usage store. These SDKs never address any of those directly, which is why there is
+one host to configure and not six.
+
+Axonium wraps that `/v1/` inference API and everything around it that a production
 integration needs: OAuth2 `client_credentials` authentication with refresh-ahead token caching,
 a typed error hierarchy mapped to the gateway's RFC 9457 problem-details catalog, SSE streaming
 with in-band failure detection, retry behavior that complements (rather than fights) the

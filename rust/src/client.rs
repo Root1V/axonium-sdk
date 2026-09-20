@@ -18,7 +18,8 @@ pub(crate) const IDEMPOTENCY_HEADER: &str = "Idempotency-Key";
 /// way, so the only question is whether the caller learns before or after the request.
 pub(crate) const MAX_IDEMPOTENCY_KEY_LENGTH: usize = 255;
 
-/// A Prometheus Gateway client. Cheap to clone conceptually; share one per process.
+/// A Client for the Prometheus inference platform. Cheap to clone conceptually; share one per
+/// process.
 pub struct Client {
     pub(crate) config: Config,
     pub(crate) http: reqwest::Client,

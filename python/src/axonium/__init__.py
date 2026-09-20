@@ -1,4 +1,4 @@
-"""Python SDK for the Prometheus Gateway inference API.
+"""Python SDK for the Prometheus inference platform.
 
 See ``spec/prometheus-gateway.md`` in the repository for the API contract this package implements.
 """

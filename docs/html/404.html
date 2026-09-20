@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Getting started · Axonium</title>
-<meta name="description" content="Client SDKs for the Prometheus Gateway">
+<meta name="description" content="Client SDKs for the Prometheus inference platform">
 <style>
 :root {
   --bg: #fbfbfa; --panel: #ffffff; --ink: #1c1d1f; --muted: #6a6d72; --line: #e3e3e0;
@@ -139,7 +139,7 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <div class="shell">
 <nav>
   <div class="brand"><a href="index.html">Axonium</a></div>
-  <div class="tag">Client SDKs for the Prometheus Gateway</div>
+  <div class="tag">Client SDKs for the Prometheus inference platform</div>
   <ol><li><a href="index.html" aria-current="page">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
@@ -149,7 +149,16 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 </nav>
 <main>
 <h1>Getting started</h1>
-<p><strong>Axonium</strong> is a set of client SDKs for the <strong>Prometheus Gateway</strong> inference API, in Python, Go and Rust.</p>
+<p><strong>Axonium</strong> is a set of client SDKs for the <strong>Prometheus</strong> inference platform, in Python, Go
+and Rust.</p>
+<p><strong>Prometheus</strong> is a self-hosted inference platform: a catalog of small language, embedding,
+reranking and image models, served across managed instances behind one authenticated API, with
+per-model access control, rate limits, spend caps and per-request usage accounting.</p>
+<p>Your client talks to exactly one of its components — the <strong>gateway</strong>, which serves inference and
+issues tokens at a single address. The rest of the platform sits behind it: the model registry and
+the instances it schedules across, the auth service, the rate limiter and per-backend circuit
+breaker, and the usage store. These SDKs never address any of those directly, which is why there is
+one host to configure and not six.</p>
 <p>Three SDKs, one contract. They are separate implementations that share no code — what keeps them
 identical is a corpus of recorded wire bytes that all three replay. Behaviour that matches is
 verified, not intended.</p>

@@ -1,4 +1,4 @@
-// Package axonium is the Go SDK for the Prometheus Gateway inference API.
+// Package axonium is the Go SDK for the Prometheus inference platform.
 //
 // The SDK is pure transport. It speaks the gateway's contract faithfully -- authentication,
 // retries that cannot double-bill, typed errors, streaming with real cancellation -- and does not
@@ -39,7 +39,7 @@ const userAgent = "axonium-go/" + Version
 // Version is this SDK's version.
 const Version = "0.2.0"
 
-// Client is a Prometheus Gateway client. Safe for concurrent use.
+// Client is a client for the Prometheus inference platform. Safe for concurrent use.
 type Client struct {
 	config   *Config
 	http     *http.Client

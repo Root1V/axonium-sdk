@@ -1,4 +1,7 @@
-"""Exception hierarchy for the Prometheus Gateway.
+"""Exception hierarchy for the Prometheus inference platform.
+
+One class per row of the gateway's error catalog: the gateway is the component that answers, so
+its catalog is what an SDK can type against.
 
 Two error envelopes exist and they are deliberately kept apart:
 
