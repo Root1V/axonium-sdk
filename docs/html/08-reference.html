@@ -1,0 +1,1970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Python API reference · Axonium</title>
+<meta name="description" content="Client SDKs for the Prometheus Gateway">
+<style>
+:root {
+  --bg: #fbfbfa; --panel: #ffffff; --ink: #1c1d1f; --muted: #6a6d72; --line: #e3e3e0;
+  --accent: #1a5fb4; --accent-soft: #eaf1fb; --warn: #8a5a00; --warn-soft: #fdf4e3;
+  --code-bg: #f6f6f4; --code-ink: #24292f;
+  --c-key: #a3005f; --c-str: #0a6b39; --c-num: #8a4b00; --c-com: #6a6d72;
+  --c-fn: #4b3fbb; --c-type: #0b6a72; --c-punc: #4a4d52;
+  --radius: 7px; --measure: 41rem;
+}
+:root:not([data-theme="light"]) { }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181a; --panel: #1d1f22; --ink: #e7e8ea; --muted: #9ba0a6; --line: #2e3136;
+    --accent: #7eb3ff; --accent-soft: #1b2739; --warn: #e3b566; --warn-soft: #2a2213;
+    --code-bg: #151719; --code-ink: #dfe2e6;
+    --c-key: #ff8fc4; --c-str: #86d9a4; --c-num: #e8b07a; --c-com: #8b9199;
+    --c-fn: #b9aaff; --c-type: #6fd3dd; --c-punc: #aab0b8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181a; --panel: #1d1f22; --ink: #e7e8ea; --muted: #9ba0a6; --line: #2e3136;
+  --accent: #7eb3ff; --accent-soft: #1b2739; --warn: #e3b566; --warn-soft: #2a2213;
+  --code-bg: #151719; --code-ink: #dfe2e6;
+  --c-key: #ff8fc4; --c-str: #86d9a4; --c-num: #e8b07a; --c-com: #8b9199;
+  --c-fn: #b9aaff; --c-type: #6fd3dd; --c-punc: #aab0b8;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.65 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.shell { display: grid; grid-template-columns: 16rem minmax(0, 1fr); gap: 3rem;
+  max-width: 68rem; margin: 0 auto; padding: 0 16px; }
+
+nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+  padding: 2rem 0; border-right: 1px solid var(--line); }
+nav .brand { font-weight: 650; font-size: 1.05rem; letter-spacing: -0.01em; }
+nav .brand a { color: var(--ink); text-decoration: none; }
+nav .tag { color: var(--muted); font-size: 0.82rem; margin: 0.15rem 0 1.4rem; }
+nav ol { list-style: none; margin: 0; padding: 0; }
+nav li { margin: 0.1rem 0; }
+nav a { display: block; padding: 0.3rem 0.6rem; margin-left: -0.6rem; border-radius: var(--radius);
+  color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+nav a:hover { color: var(--ink); background: var(--accent-soft); }
+nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); font-weight: 560; }
+nav .ext { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+nav .ext a { font-size: 0.84rem; }
+
+main { padding: 2.6rem 0 5rem; min-width: 0; }
+main > * { max-width: var(--measure); }
+main > .code, main > .tabs, main > .table-scroll { max-width: min(54rem, 100%); }
+
+h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 1.2rem; }
+h2 { font-size: 1.3rem; letter-spacing: -0.01em; margin: 2.6rem 0 0.8rem;
+  padding-top: 1.2rem; border-top: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 1.8rem 0 0.6rem; }
+p, li { color: var(--ink); }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+blockquote { margin: 1.4rem 0; padding: 0.85rem 1.1rem; border-left: 3px solid var(--warn);
+  background: var(--warn-soft); border-radius: 0 var(--radius) var(--radius) 0; }
+blockquote p { margin: 0.3rem 0; color: var(--warn); }
+blockquote strong { color: var(--warn); }
+
+code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.875em; }
+:not(pre) > code { background: var(--code-bg); padding: 0.12em 0.36em; border-radius: 4px;
+  border: 1px solid var(--line); }
+
+.code { position: relative; margin: 1.1rem 0; }
+.code pre { margin: 0; overflow-x: auto; background: var(--code-bg); color: var(--code-ink);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 0.9rem 1rem; line-height: 1.55; }
+.code .copy { position: absolute; top: 0.5rem; right: 0.5rem; opacity: 0; transition: opacity .12s;
+  font: inherit; font-size: 0.75rem; padding: 0.2rem 0.55rem; cursor: pointer;
+  color: var(--muted); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 5px; }
+.code:hover .copy, .copy:focus-visible { opacity: 1; }
+@media (hover: none) { .code .copy { opacity: 1; } }
+
+.tabs { margin: 1.1rem 0; }
+.tabs .code { margin: 0; }
+.tabs .tablist { display: flex; gap: 0.25rem; margin-bottom: -1px; }
+.tabs .tablist button { font: inherit; font-size: 0.82rem; cursor: pointer;
+  padding: 0.3rem 0.8rem; color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-radius: var(--radius) var(--radius) 0 0; }
+.tabs .tablist button[aria-selected="true"] { color: var(--accent); background: var(--code-bg);
+  border-color: var(--line); border-bottom-color: var(--code-bg); }
+.tabs.enhanced .code pre { border-top-left-radius: 0; }
+
+.table-scroll { overflow-x: auto; margin: 1.2rem 0; border: 1px solid var(--line);
+  border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; background: var(--code-bg); }
+tr:last-child td { border-bottom: none; }
+
+.pager { display: flex; justify-content: space-between; gap: 1rem; margin-top: 3.5rem;
+  padding-top: 1.4rem; border-top: 1px solid var(--line); font-size: 0.9rem; }
+.pager a { display: block; text-decoration: none; }
+.pager .dir { display: block; color: var(--muted); font-size: 0.78rem; }
+.pager .next { text-align: right; margin-left: auto; }
+footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
+
+/* Pygments token classes, exactly as the highlighter emits them. Inventing names here is how a
+   stylesheet ends up styling nothing: the classes in the HTML come from Pygments, not from us. */
+.k, .kc, .kd, .kn, .kp, .kr { color: var(--c-key); }
+.s, .s1, .s2, .sa, .sb, .sc, .dl, .sd, .se, .sh, .si, .sx, .sr, .ss { color: var(--c-str); }
+.m, .mb, .mf, .mh, .mi, .mo, .il { color: var(--c-num); }
+.c, .c1, .cm, .cs, .cp, .cpf, .ch { color: var(--c-com); font-style: italic; }
+.nf, .fm, .nd { color: var(--c-fn); }
+.kt, .nc, .nn, .nb, .ne, .no, .bp { color: var(--c-type); }
+.p, .o, .ow { color: var(--c-punc); }
+.err { color: var(--ink); background: none; }
+/* Deliberately unstyled, inheriting the base colour: .n and .nx are plain identifiers (every Go
+   symbol is .nx), .w is whitespace, .nl/.py/.nv/.vi are names too. Colouring every identifier is
+   how highlighting turns into noise. */
+
+@media (max-width: 62rem) {
+  .shell { grid-template-columns: 1fr; gap: 0; }
+  nav { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line);
+    padding: 1.4rem 0 1rem; }
+  nav ol { columns: 2; column-gap: 1rem; }
+  /* Without this, a two-line entry is split across the column break and reads as two entries. */
+  nav li { break-inside: avoid; page-break-inside: avoid; }
+  main { padding-top: 1.8rem; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+<nav>
+  <div class="brand"><a href="index.html">Axonium</a></div>
+  <div class="tag">Client SDKs for the Prometheus Gateway</div>
+  <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html" aria-current="page">Python API reference</a></li></ol>
+  <div class="ext">
+    <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
+    <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
+    <a href="https://github.com/Root1V/axonium-sdk">Source ↗</a>
+  </div>
+</nav>
+<main>
+<h1>Python API reference</h1>
+<blockquote>
+<p><strong>What is the exact name of the thing I need?</strong></p>
+</blockquote>
+<p>Generated from <code>axonium.__all__</code>. Every symbol the package exports appears here, and nothing that it does not.</p>
+<p>Go and Rust reference documentation is generated by their own ecosystems — <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">pkg.go.dev</a> and <a href="https://docs.rs/axonium/latest/axonium/">docs.rs</a>. Duplicating them here would create a second copy to keep in step.</p>
+<p>Covers <strong>90 exported symbols</strong>.</p>
+<h2>Clients</h2>
+<p>The one object you construct.</p>
+<h3><code>Axonium</code></h3>
+<p>Synchronous client for the Prometheus Gateway.</p>
+<p>Usable as a context manager, which closes the underlying connection pools::</p>
+<pre><code>with Axonium() as client:
+    completion = client.chat.completions.create(
+        model=&quot;qwen3-0.6b&quot;,
+        messages=[{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Hello&quot;}],
+    )
+    print(completion.content)
+</code></pre>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">Axonium</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">retry</span><span class="p">:</span> <span class="n">RetryPolicy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">token_provider</span><span class="p">:</span> <span class="n">TokenProvider</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">settings</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>close(self) -&gt; None</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>AsyncAxonium</code></h3>
+<p>Asynchronous client for the Prometheus Gateway. See :class:<code>Axonium</code>.</p>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">AsyncAxonium</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">retry</span><span class="p">:</span> <span class="n">RetryPolicy</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">token_provider</span><span class="p">:</span> <span class="n">AsyncTokenProvider</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">settings</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>aclose(self) -&gt; None</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Configuration</h2>
+<p>Supplied to the client, or read from <code>AXONIUM_*</code> variables.</p>
+<h3><code>AxoniumConfig</code></h3>
+<p>Resolved client configuration.</p>
+<p>Values are taken from explicit arguments first and from the environment otherwise. A missing
+required setting raises :class:<code>~axonium.errors.ConfigurationError</code> naming both the field and
+the environment variable that can supply it.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gateway_base_url</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td><code>'http://127.0.0.1:8020'</code></td>
+</tr>
+<tr>
+<td><code>client_id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>client_secret</code></td>
+<td><code>pydantic.types.SecretStr | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>scope</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>ca_bundle</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>otel_enabled</code></td>
+<td><code>&lt;class bool&gt;</code></td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>verify_modality</code></td>
+<td><code>&lt;class bool&gt;</code></td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>refresh_ahead_ratio</code></td>
+<td><code>&lt;class float&gt;</code></td>
+<td><code>0.8</code></td>
+</tr>
+<tr>
+<td><code>refresh_ahead_min_seconds</code></td>
+<td><code>&lt;class float&gt;</code></td>
+<td><code>30.0</code></td>
+</tr>
+<tr>
+<td><code>timeouts</code></td>
+<td><code>&lt;class axonium.config.Timeouts&gt;</code></td>
+<td><code>PydanticUndefined</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scopes</code></td>
+<td>The requested scope as a tuple, empty when no scope was requested.</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>Timeouts</code></h3>
+<p>Per-phase HTTP timeouts, in seconds.</p>
+<p>Defaults follow the gateway's own limits. Image generation legitimately takes minutes, so the
+non-streaming read timeout is deliberately long; override it per call for endpoints where a
+faster failure is preferable.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>connect</code></td>
+<td><code>&lt;class float&gt;</code></td>
+<td><code>10.0</code></td>
+</tr>
+<tr>
+<td><code>read</code></td>
+<td><code>&lt;class float&gt;</code></td>
+<td><code>600.0</code></td>
+</tr>
+<tr>
+<td><code>write</code></td>
+<td><code>&lt;class float&gt;</code></td>
+<td><code>600.0</code></td>
+</tr>
+<tr>
+<td><code>pool</code></td>
+<td><code>&lt;class float&gt;</code></td>
+<td><code>10.0</code></td>
+</tr>
+<tr>
+<td><code>stream_read</code></td>
+<td><code>&lt;class float&gt;</code></td>
+<td><code>180.0</code></td>
+</tr>
+<tr>
+<td><code>auth_read</code></td>
+<td><code>&lt;class float&gt;</code></td>
+<td><code>30.0</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>RetryPolicy</code></h3>
+<p>When to retry, and how long to wait.</p>
+<p><code>retry_upstream_errors</code> is off by default. A <code>502 upstream-error</code> means the gateway's own
+three attempts already failed, so an immediate fourth is unlikely to help — and unlike the
+fast-fail errors, the request may have reached a model, making a retry a second billable
+generation. Enable it only where that trade is acceptable.</p>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">RetryPolicy</span><span class="p">(</span><span class="n">max_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">initial_backoff</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">max_backoff</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">60.0</span><span class="p">,</span> <span class="n">jitter</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">retry_upstream_errors</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>backoff_for(self, attempt: int) -&gt; float</code></td>
+<td>Exponential backoff with jitter for attempt <code>attempt</code>, 1-based.</td>
+</tr>
+<tr>
+<td>`delay_for(self, error: APIError, *, attempt: int) -&gt; float</td>
+<td>None`</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>DEFAULT_GATEWAY_BASE_URL</code></h3>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">DEFAULT_GATEWAY_BASE_URL</span> <span class="o">=</span> <span class="s1">'http://127.0.0.1:8020'</span></code></pre></div>
+<h3><code>__version__</code></h3>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">__version__</span> <span class="o">=</span> <span class="s1">'1.0.0rc4'</span></code></pre></div>
+<h2>Requests</h2>
+<p>What you send. Validated client-side against what the contract constrains.</p>
+<h3><code>ChatCompletionRequest</code></h3>
+<p>Body for <code>POST /v1/chat/completions</code>.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>messages</code></td>
+<td><code>list[axonium.models.requests.Message]</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>stream</code></td>
+<td><code>&lt;class bool&gt;</code></td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>max_tokens</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td><code>float | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>top_p</code></td>
+<td><code>float | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>stop</code></td>
+<td><code>str | list[str] | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>tools</code></td>
+<td><code>list[dict[str, Any]] | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>tool_choice</code></td>
+<td><code>str | dict[str, Any] | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>EmbeddingsRequest</code></h3>
+<p>Body for <code>POST /v1/embeddings</code>.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>input</code></td>
+<td><code>str | list[str]</code></td>
+<td>required</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>ImageGenerationRequest</code></h3>
+<p>Body for <code>POST /v1/images/generations</code>.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>prompt</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>n</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>RerankRequest</code></h3>
+<p>Body for <code>POST /v1/rerank</code>.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>query</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>documents</code></td>
+<td><code>list[str]</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>top_n</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>Message</code></h3>
+<p>One chat message.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>role</code></td>
+<td><code>Literal[system, user, assistant, tool]</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td><code>str | list[axonium.models.requests.ContentPart] | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>tool_calls</code></td>
+<td><code>list[axonium.models.chat.ToolCall] | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>tool_call_id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>ContentPart</code></h3>
+<p>One part of a multi-part message, used for vision models.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>type</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>text</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>image_url</code></td>
+<td><code>dict[str, Any] | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>ToolCall</code></h3>
+<p>A tool call, in the one shape both streaming and non-streaming produce.</p>
+<p>Streamed calls arrive split across fragments that are individually invalid JSON; the SDK
+reassembles them into exactly this, so the same caller code handles both.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>function</code></td>
+<td><code>&lt;class axonium.models.chat.FunctionCall&gt;</code></td>
+<td><code>FunctionCall(name=None, arguments='')</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>The function name, without reaching through :attr:<code>function</code>.</td>
+</tr>
+<tr>
+<td><code>parse_arguments(self) -&gt; dict[str, Any]</code></td>
+<td>Decode :attr:<code>FunctionCall.arguments</code> into an object.</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>FunctionCall</code></h3>
+<p>The function a tool call names, and the arguments it was called with.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>arguments</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td><code>''</code></td>
+</tr>
+</tbody>
+</table></div>
+<h2>Responses</h2>
+<p>What comes back. Every one keeps the raw payload, so an unmodelled field stays reachable.</p>
+<h3><code>ChatCompletion</code></h3>
+<p>A non-streaming chat completion.</p>
+<p><code>id</code>, <code>created</code> and <code>system_fingerprint</code> are backend-dependent rather than guaranteed by
+the gateway contract, so they are optional here.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>object</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>created</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>choices</code></td>
+<td><code>list[axonium.models.chat.ChatChoice]</code></td>
+<td><code>[]</code></td>
+</tr>
+<tr>
+<td><code>usage</code></td>
+<td><code>axonium.models.common.Usage | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>system_fingerprint</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>timings</code></td>
+<td><code>axonium.models.chat.Timings | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>content</code></td>
+<td>Text of the first choice, or <code>None</code> for a tool-call response.</td>
+</tr>
+<tr>
+<td><code>model_post_init(self: BaseModel, context: Any, /) -&gt; None</code></td>
+<td>This function is meant to behave like a BaseModel method to initialize private attributes.</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>The first choice's chain of thought, if the model produced one.</td>
+</tr>
+<tr>
+<td><code>tool_calls</code></td>
+<td>Tool calls from the first choice.</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>ChatChoice</code></h3>
+<p>Base for backend-shaped payloads: tolerant on input, preserving unknown fields.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>index</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td><code>axonium.models.chat.CompletionMessage | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>finish_reason</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>CompletionMessage</code></h3>
+<p>The assistant message in a completion.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>role</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>reasoning_content</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>tool_calls</code></td>
+<td><code>list[axonium.models.chat.ToolCall] | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>CreateEmbeddingResponse</code></h3>
+<p>An embeddings response.</p>
+<p><code>usage</code> carries no <code>completion_tokens</code>: embedding has no generation phase.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>object</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td><code>list[axonium.models.inference.Embedding]</code></td>
+<td><code>PydanticUndefined</code></td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>usage</code></td>
+<td><code>axonium.models.common.Usage | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model_post_init(self: BaseModel, context: Any, /) -&gt; None</code></td>
+<td>This function is meant to behave like a BaseModel method to initialize private attributes.</td>
+</tr>
+<tr>
+<td><code>vectors</code></td>
+<td>Just the vectors, in request order.</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>Embedding</code></h3>
+<p>Base for backend-shaped payloads: tolerant on input, preserving unknown fields.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>object</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>index</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>embedding</code></td>
+<td><code>list[float]</code></td>
+<td><code>PydanticUndefined</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>ImagesResponse</code></h3>
+<p>A top-level response body, carrying the correlation metadata of the response it came from.</p>
+<p><code>meta</code> is a private attribute rather than a field so that it cannot collide with a payload
+key of the same name, and so it stays out of <code>model_dump()</code> — it describes the HTTP exchange,
+not the resource.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>created</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td><code>list[axonium.models.inference.GeneratedImage]</code></td>
+<td><code>PydanticUndefined</code></td>
+</tr>
+<tr>
+<td><code>output_format</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model_post_init(self: BaseModel, context: Any, /) -&gt; None</code></td>
+<td>This function is meant to behave like a BaseModel method to initialize private attributes.</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>GeneratedImage</code></h3>
+<p>One generated image.</p>
+<p>The gateway returns image bytes inline as base64 rather than a URL, so persisting the result is
+the caller's responsibility.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>b64_json</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>`save(self, path: str</td>
+<td>Path) -&gt; Path`</td>
+</tr>
+<tr>
+<td><code>to_bytes(self) -&gt; bytes</code></td>
+<td>Decode the image to raw bytes.</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>RerankResponse</code></h3>
+<p>Documents scored against a query, best first.</p>
+<p><code>usage.total_tokens</code> equals <code>prompt_tokens</code>: a reranker generates nothing, so there are no
+completion tokens and billing is prompt-only.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>object</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>results</code></td>
+<td><code>list[axonium.models.inference.RerankResult]</code></td>
+<td><code>PydanticUndefined</code></td>
+</tr>
+<tr>
+<td><code>usage</code></td>
+<td><code>axonium.models.common.Usage | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model_post_init(self: BaseModel, context: Any, /) -&gt; None</code></td>
+<td>This function is meant to behave like a BaseModel method to initialize private attributes.</td>
+</tr>
+<tr>
+<td><code>ranking</code></td>
+<td>The indices of your <code>documents</code>, best first.</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>RerankResult</code></h3>
+<p>One document's score against the query.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>index</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>relevance_score</code></td>
+<td><code>float | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>ModelList</code></h3>
+<p>A catalog response.</p>
+<p>Iterating yields :class:<code>Model</code> objects directly, since the <code>object</code>/<code>data</code> envelope is
+rarely what a caller wants to work with.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>object</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td><code>'list'</code></td>
+</tr>
+<tr>
+<td><code>data</code></td>
+<td><code>list[axonium.models.catalog.Model]</code></td>
+<td><code>PydanticUndefined</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>`get(self, model_id: str) -&gt; Model</td>
+<td>None`</td>
+</tr>
+<tr>
+<td><code>ids</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>model_post_init(self: BaseModel, context: Any, /) -&gt; None</code></td>
+<td>This function is meant to behave like a BaseModel method to initialize private attributes.</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>Model</code></h3>
+<p>One deployed model.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td>required</td>
+</tr>
+<tr>
+<td><code>object</code></td>
+<td><code>&lt;class str&gt;</code></td>
+<td><code>'model'</code></td>
+</tr>
+<tr>
+<td><code>owned_by</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>context_length</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>family</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>quantization</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>modality</code></td>
+<td><code>Union[Literal[text, vision, embedding, image], str, NoneType]</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>RequestUsage</code></h3>
+<p>The billing record for one request.</p>
+<p>Every field is optional. The gateway guarantees the row exists for a billed request, not which
+columns a given deployment populates — <code>cost_usd</code> comes back <code>None</code> where no price is
+configured, and new columns are appended over time.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>request_id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>request_kind</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>usage</code></td>
+<td><code>axonium.models.common.Usage | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>image_count</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>interrupted</code></td>
+<td><code>bool | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>termination_reason</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>cost_usd</code></td>
+<td><code>float | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>instance_id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model_post_init(self: BaseModel, context: Any, /) -&gt; None</code></td>
+<td>This function is meant to behave like a BaseModel method to initialize private attributes.</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>Usage</code></h3>
+<p>Token accounting for a request.</p>
+<p>Embedding responses carry no <code>completion_tokens</code> because there is no generation phase.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prompt_tokens</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>completion_tokens</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>total_tokens</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>cache_read_tokens</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>estimated</code></td>
+<td><code>&lt;class bool&gt;</code></td>
+<td><code>False</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>Timings</code></h3>
+<p>Backend timing figures.</p>
+<p>Emitted by llama.cpp-family backends only; MLX, vLLM and SGLang backends do not include it, so
+never depend on its presence.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prompt_n</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>prompt_ms</code></td>
+<td><code>float | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>prompt_per_second</code></td>
+<td><code>float | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>predicted_n</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>predicted_ms</code></td>
+<td><code>float | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>predicted_per_second</code></td>
+<td><code>float | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>predicted_per_token_ms</code></td>
+<td><code>float | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>cache_n</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>APIObject</code></h3>
+<p>A top-level response body, carrying the correlation metadata of the response it came from.</p>
+<p><code>meta</code> is a private attribute rather than a field so that it cannot collide with a payload
+key of the same name, and so it stays out of <code>model_dump()</code> — it describes the HTTP exchange,
+not the resource.</p>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">APIObject</span><span class="p">(</span><span class="o">**</span><span class="n">extra_data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>meta</code></td>
+<td>Request and trace IDs, and the rate-limit budget, as of this response.</td>
+</tr>
+<tr>
+<td><code>model_post_init(self: BaseModel, context: Any, /) -&gt; None</code></td>
+<td>This function is meant to behave like a BaseModel method to initialize private attributes.</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Streaming</h2>
+<p>A separate method from <code>create</code>, so the return type stays honest.</p>
+<h3><code>ChatCompletionStream</code></h3>
+<p>A streaming completion.</p>
+<p>Iterate it inside a <code>with</code> block::</p>
+<pre><code>with client.chat.completions.stream(model=..., messages=...) as stream:
+    for chunk in stream:
+        print(chunk.content or &quot;&quot;, end=&quot;&quot;)
+    print(stream.usage())
+</code></pre>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">ChatCompletionStream</span><span class="p">(</span><span class="n">opener</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">diagnose</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">APIError</span><span class="p">],</span> <span class="kc">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>close(self) -&gt; None</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>AsyncChatCompletionStream</code></h3>
+<p>A streaming completion. See :class:<code>ChatCompletionStream</code>.</p>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">AsyncChatCompletionStream</span><span class="p">(</span><span class="n">opener</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">diagnose</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">APIError</span><span class="p">],</span> <span class="kc">None</span><span class="p">],</span> <span class="n">preflight</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Awaitable</span><span class="p">[</span><span class="kc">None</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>aclose(self) -&gt; None</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>ChatCompletionChunk</code></h3>
+<p>One chunk of a streamed completion.</p>
+<p>Chunks are forwarded from the backend essentially verbatim, so almost everything is optional:
+what a given backend puts in each chunk varies, and a chunk carrying only a <code>finish_reason</code>
+or only <code>timings</code> is normal rather than malformed.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>object</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>created</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>choices</code></td>
+<td><code>list[axonium.models.chat.StreamChoice]</code></td>
+<td><code>[]</code></td>
+</tr>
+<tr>
+<td><code>usage</code></td>
+<td><code>axonium.models.common.Usage | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>timings</code></td>
+<td><code>axonium.models.chat.Timings | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>content</code></td>
+<td>Text carried by this chunk's first choice, if any.</td>
+</tr>
+<tr>
+<td><code>finish_reason</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>reasoning</code></td>
+<td>Reasoning carried by this chunk, if the model is still thinking.</td>
+</tr>
+<tr>
+<td><code>tool_call_fragments</code></td>
+<td>This chunk's raw tool-call fragments, which are <em>not</em> usable on their own.</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>StreamChoice</code></h3>
+<p>Base for backend-shaped payloads: tolerant on input, preserving unknown fields.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>index</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>delta</code></td>
+<td><code>axonium.models.chat.ChoiceDelta | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>finish_reason</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>ChoiceDelta</code></h3>
+<p>The incremental part of a streamed choice.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>role</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>reasoning_content</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>tool_calls</code></td>
+<td><code>list[dict[str, Any]] | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<h2>Correlation and budget</h2>
+<p>On every response, successes included.</p>
+<h3><code>ResponseMeta</code></h3>
+<p>Correlation and budget information attached to every response.</p>
+<p>Carried on successes as well as failures: correlating a slow but successful call with platform
+traces matters as much as correlating a failed one.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>request_id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>trace_id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>rate_limit</code></td>
+<td><code>axonium.models.common.RateLimitSnapshot | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>instance</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>instance_id</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>idempotent_replay</code></td>
+<td><code>&lt;class bool&gt;</code></td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>idempotent_replay_of</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>waited_s</code></td>
+<td><code>&lt;class float&gt;</code></td>
+<td><code>0.0</code></td>
+</tr>
+<tr>
+<td><code>attempts</code></td>
+<td><code>&lt;class int&gt;</code></td>
+<td><code>1</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>RateLimitSnapshot</code></h3>
+<p>Rate-limit budget as of one response, parsed from the <code>X-RateLimit-*</code> headers.</p>
+<p>Present on the inference and catalog endpoints, absent on health and metrics routes — in which
+case every field is <code>None</code>.</p>
+<p>The token figures reflect the gateway's post-hoc accounting rather than a pre-flight
+reservation, so a burst of large requests can still exceed the token budget between header
+updates. Treat them as a strong signal, not a guarantee against ever seeing a 429.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scope</code></td>
+<td><code>str | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>limit_requests</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>remaining_requests</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>reset_requests</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>limit_tokens</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>remaining_tokens</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+<tr>
+<td><code>reset_tokens</code></td>
+<td><code>int | None</code></td>
+<td><code>None</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>is_empty</code></td>
+<td>True when the response carried no rate-limit headers at all.</td>
+</tr>
+<tr>
+<td><code>with_scope_from(self, body: Any) -&gt; RateLimitSnapshot</code></td>
+<td>Fill in :attr:<code>scope</code> from a problem+json body when the header did not carry it.</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Authentication</h2>
+<p>Handled for you. Public for the cases where it is not.</p>
+<h3><code>TokenSet</code></h3>
+<p>A cached access token and everything needed to decide when to replace it.</p>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">TokenSet</span><span class="p">(</span><span class="n">access_token</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">expires_at</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">expires_in</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">scope</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">())</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>`needs_refresh(self, *, ratio: float, min_seconds: float, now: float</td>
+<td>None = None) -&gt; bool`</td>
+</tr>
+<tr>
+<td>`remaining(self, *, now: float</td>
+<td>None = None) -&gt; float`</td>
+</tr>
+</tbody>
+</table></div>
+<h3><code>TokenClaims</code></h3>
+<p>Claims read out of the access token.</p>
+<p>Decoded <strong>without verifying the signature</strong>, which is fine because this is introspection for
+display and diagnostics only. The gateway is the sole authority on what a token may do — never
+make an access-control decision from these values.</p>
+<p>Note that the gateway does not use <code>role</code> for authorization either; only <code>scope</code> governs
+what a token can actually call.</p>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">TokenClaims</span><span class="p">(</span><span class="n">subject</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">client_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">role</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">scope</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span> <span class="n">expires_at</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">issued_at</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">raw</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">factory</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<h3><code>TokenProvider</code></h3>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">TokenProvider</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">],</span> <span class="nb">str</span><span class="p">]</span></code></pre></div>
+<h3><code>AsyncTokenProvider</code></h3>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">AsyncTokenProvider</span> <span class="o">=</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">],</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Awaitable</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span></code></pre></div>
+<h2>Errors</h2>
+<p>One class per row of the gateway's catalog. <code>OAuthError</code> does not inherit from <code>APIError</code>: different envelope, different semantics.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>APIError</code></td>
+<td>An RFC 9457 problem-details error returned by the gateway.</td>
+</tr>
+<tr>
+<td><code>AuthTransportError</code></td>
+<td>The auth-service could not be reached, or answered with something unusable.</td>
+</tr>
+<tr>
+<td><code>AxoniumError</code></td>
+<td>Base class for every error raised by this SDK.</td>
+</tr>
+<tr>
+<td><code>BackendUnavailableError</code></td>
+<td>The gateway's circuit breaker is open for this backend, or the backend was unreachable.</td>
+</tr>
+<tr>
+<td><code>BadRequestError</code></td>
+<td>4xx client error that is not covered by a more specific subclass.</td>
+</tr>
+<tr>
+<td><code>ConfigurationError</code></td>
+<td>A required setting is missing or invalid.</td>
+</tr>
+<tr>
+<td><code>ContextExceededError</code></td>
+<td>The request exceeds the model's context window.</td>
+</tr>
+<tr>
+<td><code>ForbiddenError</code></td>
+<td>The token lacks a scope the request requires.</td>
+</tr>
+<tr>
+<td><code>IdempotencyInProgressError</code></td>
+<td>The first request with this key is still running.</td>
+</tr>
+<tr>
+<td><code>IdempotencyKeyReuseError</code></td>
+<td>The key was already used for a different request.</td>
+</tr>
+<tr>
+<td><code>IdempotencyResponseNotRetainedError</code></td>
+<td>The original succeeded, but its response was too large to store.</td>
+</tr>
+<tr>
+<td><code>InconsistentModelGroupError</code></td>
+<td>The replicas serving one model disagree about their modality.</td>
+</tr>
+<tr>
+<td><code>InvalidClientError</code></td>
+<td>Bad <code>client_id</code> or <code>client_secret</code>.</td>
+</tr>
+<tr>
+<td><code>InvalidDateError</code></td>
+<td>A usage query's <code>start</code> or <code>end</code> is not a <code>YYYY-MM-DD</code> date.</td>
+</tr>
+<tr>
+<td><code>InvalidIdempotencyKeyError</code></td>
+<td>The <code>Idempotency-Key</code> is malformed — today, longer than 255 characters.</td>
+</tr>
+<tr>
+<td><code>InvalidRangeError</code></td>
+<td>A usage export's <code>end</code> is before its <code>start</code>.</td>
+</tr>
+<tr>
+<td><code>InvalidRequestError</code></td>
+<td>A request was rejected by the SDK before it was sent.</td>
+</tr>
+<tr>
+<td><code>InvalidScopeError</code></td>
+<td>An unrecognized scope, or one this account is not allowed to request.</td>
+</tr>
+<tr>
+<td><code>InvalidTokenError</code></td>
+<td>Signature, algorithm, issuer, audience or <code>sub</code> claim validation failed.</td>
+</tr>
+<tr>
+<td><code>MissingCredentialsError</code></td>
+<td>No or malformed <code>Authorization</code> header, or a token passed as a query parameter.</td>
+</tr>
+<tr>
+<td><code>ModalityMismatchError</code></td>
+<td>The model's modality does not match the request.</td>
+</tr>
+<tr>
+<td><code>ModelNotLoadedError</code></td>
+<td>The model is registered but not currently deployed.</td>
+</tr>
+<tr>
+<td><code>NotFoundError</code></td>
+<td>The addressed resource does not exist, or does not belong to this client.</td>
+</tr>
+<tr>
+<td><code>OAuthError</code></td>
+<td>An error from the auth-service token endpoint.</td>
+</tr>
+<tr>
+<td><code>RangeTooLargeError</code></td>
+<td>A usage export's range exceeds 366 days. Split it into several exports.</td>
+</tr>
+<tr>
+<td><code>RateLimitError</code></td>
+<td>The requests-per-minute budget was exceeded.</td>
+</tr>
+<tr>
+<td><code>RateLimitingUnavailableError</code></td>
+<td>The rate limiter's backing store is down and the deployment fails closed.</td>
+</tr>
+<tr>
+<td><code>ServerError</code></td>
+<td>5xx error that is not covered by a more specific subclass.</td>
+</tr>
+<tr>
+<td><code>SpendCapExceededError</code></td>
+<td>The client hit its configured monthly spend cap.</td>
+</tr>
+<tr>
+<td><code>StreamInterruptedError</code></td>
+<td>The stream failed partway through.</td>
+</tr>
+<tr>
+<td><code>TimeoutError</code></td>
+<td>The client gave up waiting for a response.</td>
+</tr>
+<tr>
+<td><code>TokenEndpointNotConfiguredError</code></td>
+<td>This deployment has no token endpoint wired up.</td>
+</tr>
+<tr>
+<td><code>TokenEndpointUnavailableError</code></td>
+<td>The gateway could not reach the auth-service to issue a token.</td>
+</tr>
+<tr>
+<td><code>TokenExpiredError</code></td>
+<td>The token's <code>exp</code> has passed.</td>
+</tr>
+<tr>
+<td><code>TokenRevokedError</code></td>
+<td>The token or client was explicitly revoked by an admin.</td>
+</tr>
+<tr>
+<td><code>ToolCallArgumentsError</code></td>
+<td>A tool call's <code>arguments</code> string could not be decoded.</td>
+</tr>
+<tr>
+<td><code>TransportError</code></td>
+<td>The request never produced an HTTP response (DNS, connection, or TLS failure).</td>
+</tr>
+<tr>
+<td><code>UnauthorizedClientError</code></td>
+<td>The account is deactivated.</td>
+</tr>
+<tr>
+<td><code>UnauthorizedError</code></td>
+<td>401 that is not one of the specific token errors.</td>
+</tr>
+<tr>
+<td><code>UnauthorizedRequestError</code></td>
+<td>The request carried no verified claims.</td>
+</tr>
+<tr>
+<td><code>UnknownInstanceError</code></td>
+<td>The pinned instance does not serve the requested model.</td>
+</tr>
+<tr>
+<td><code>UnknownModelError</code></td>
+<td>The model ID is not registered.</td>
+</tr>
+<tr>
+<td><code>UnsupportedFieldWarning</code></td>
+<td>A request field was dropped because the gateway does not accept it.</td>
+</tr>
+<tr>
+<td><code>UnsupportedGrantTypeError</code></td>
+<td>The grant type is not supported. The SDK always uses <code>client_credentials</code>.</td>
+</tr>
+<tr>
+<td><code>UnusedCredentialWarning</code></td>
+<td>Credentials were found but will not be used, because a token provider takes precedence.</td>
+</tr>
+<tr>
+<td><code>UpstreamError</code></td>
+<td>The backend failed and the gateway's own internal retries were exhausted.</td>
+</tr>
+<tr>
+<td><code>UsageStoreUnavailableError</code></td>
+<td>A usage-endpoint database read failed.</td>
+</tr>
+<tr>
+<td><code>ValidationError</code></td>
+<td>The request body failed schema validation.</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Transport</h2>
+<p>Rarely touched directly.</p>
+<h3><code>CooldownRegistry</code></h3>
+<p>Remembers server-supplied waits so a known-open circuit is not hammered.</p>
+<p>When the gateway reports an open circuit breaker it also says when the backend is expected to
+recover. Ignoring that and sending the next request anyway just buys another <code>503</code>, so the
+wait is recorded and later calls for the same backend fail locally until it elapses.</p>
+<p>Only ever populated from a wait the platform supplied; this never invents a cooldown of its
+own, and never guesses that a backend is unhealthy from local failure counts.</p>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">CooldownRegistry</span><span class="p">(</span><span class="n">_until</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">factory</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">_lock</span><span class="p">:</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">factory</span><span class="o">&gt;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>clear(self, key: str) -&gt; None</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>note(self, key: str, error: APIError) -&gt; None</code></td>
+<td>Record a cooldown if this error came with a server-supplied wait.</td>
+</tr>
+<tr>
+<td><code>record(self, key: str, seconds: float) -&gt; None</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>remaining(self, key: str) -&gt; float</code></td>
+<td>Seconds still to wait for <code>key</code>, or <code>0.0</code> if it is clear.</td>
+</tr>
+</tbody>
+</table></div>
+
+<div class="pager"><a class="prev" href="07-limits.html"><span class="dir">Previous</span>What it does not do</a></div>
+<footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
+</main>
+</div>
+<script>
+(function () {
+  document.querySelectorAll('.code').forEach(function (block) {
+    var button = document.createElement('button');
+    button.className = 'copy';
+    button.type = 'button';
+    button.textContent = 'Copy';
+    button.addEventListener('click', function () {
+      // file:// is not a secure context, so the API is simply absent there. Say so rather than
+      // reporting a copy that did not happen.
+      if (!navigator.clipboard) { button.textContent = 'Unavailable'; return; }
+      navigator.clipboard.writeText(block.querySelector('code').innerText).then(function () {
+        button.textContent = 'Copied';
+        setTimeout(function () { button.textContent = 'Copy'; }, 1200);
+      });
+    });
+    block.appendChild(button);
+  });
+
+  document.querySelectorAll('.tabs').forEach(function (group) {
+    var blocks = Array.prototype.slice.call(group.querySelectorAll('.code'));
+    if (blocks.length < 2) return;
+    var list = document.createElement('div');
+    list.className = 'tablist';
+    list.setAttribute('role', 'tablist');
+
+    function select(index) {
+      blocks.forEach(function (b, i) { b.hidden = i !== index; });
+      Array.prototype.forEach.call(list.children, function (t, i) {
+        t.setAttribute('aria-selected', String(i === index));
+      });
+      try { localStorage.setItem('axonium-lang', blocks[index].dataset.language); } catch (e) {}
+    }
+
+    blocks.forEach(function (block, index) {
+      var tab = document.createElement('button');
+      tab.type = 'button';
+      tab.setAttribute('role', 'tab');
+      tab.textContent = block.dataset.label || block.dataset.language;
+      tab.addEventListener('click', function () { select(index); });
+      list.appendChild(tab);
+    });
+
+    group.insertBefore(list, group.firstChild);
+    group.classList.add('enhanced');
+
+    var remembered = 0;
+    try {
+      var saved = localStorage.getItem('axonium-lang');
+      blocks.forEach(function (b, i) { if (b.dataset.language === saved) remembered = i; });
+    } catch (e) {}
+    select(remembered);
+  });
+})();
+</script>
+</body>
+</html>

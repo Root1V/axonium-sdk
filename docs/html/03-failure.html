@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Failure, retries and idempotency · Axonium</title>
+<meta name="description" content="Client SDKs for the Prometheus Gateway">
+<style>
+:root {
+  --bg: #fbfbfa; --panel: #ffffff; --ink: #1c1d1f; --muted: #6a6d72; --line: #e3e3e0;
+  --accent: #1a5fb4; --accent-soft: #eaf1fb; --warn: #8a5a00; --warn-soft: #fdf4e3;
+  --code-bg: #f6f6f4; --code-ink: #24292f;
+  --c-key: #a3005f; --c-str: #0a6b39; --c-num: #8a4b00; --c-com: #6a6d72;
+  --c-fn: #4b3fbb; --c-type: #0b6a72; --c-punc: #4a4d52;
+  --radius: 7px; --measure: 41rem;
+}
+:root:not([data-theme="light"]) { }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181a; --panel: #1d1f22; --ink: #e7e8ea; --muted: #9ba0a6; --line: #2e3136;
+    --accent: #7eb3ff; --accent-soft: #1b2739; --warn: #e3b566; --warn-soft: #2a2213;
+    --code-bg: #151719; --code-ink: #dfe2e6;
+    --c-key: #ff8fc4; --c-str: #86d9a4; --c-num: #e8b07a; --c-com: #8b9199;
+    --c-fn: #b9aaff; --c-type: #6fd3dd; --c-punc: #aab0b8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181a; --panel: #1d1f22; --ink: #e7e8ea; --muted: #9ba0a6; --line: #2e3136;
+  --accent: #7eb3ff; --accent-soft: #1b2739; --warn: #e3b566; --warn-soft: #2a2213;
+  --code-bg: #151719; --code-ink: #dfe2e6;
+  --c-key: #ff8fc4; --c-str: #86d9a4; --c-num: #e8b07a; --c-com: #8b9199;
+  --c-fn: #b9aaff; --c-type: #6fd3dd; --c-punc: #aab0b8;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.65 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.shell { display: grid; grid-template-columns: 16rem minmax(0, 1fr); gap: 3rem;
+  max-width: 68rem; margin: 0 auto; padding: 0 16px; }
+
+nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+  padding: 2rem 0; border-right: 1px solid var(--line); }
+nav .brand { font-weight: 650; font-size: 1.05rem; letter-spacing: -0.01em; }
+nav .brand a { color: var(--ink); text-decoration: none; }
+nav .tag { color: var(--muted); font-size: 0.82rem; margin: 0.15rem 0 1.4rem; }
+nav ol { list-style: none; margin: 0; padding: 0; }
+nav li { margin: 0.1rem 0; }
+nav a { display: block; padding: 0.3rem 0.6rem; margin-left: -0.6rem; border-radius: var(--radius);
+  color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+nav a:hover { color: var(--ink); background: var(--accent-soft); }
+nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); font-weight: 560; }
+nav .ext { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+nav .ext a { font-size: 0.84rem; }
+
+main { padding: 2.6rem 0 5rem; min-width: 0; }
+main > * { max-width: var(--measure); }
+main > .code, main > .tabs, main > .table-scroll { max-width: min(54rem, 100%); }
+
+h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 1.2rem; }
+h2 { font-size: 1.3rem; letter-spacing: -0.01em; margin: 2.6rem 0 0.8rem;
+  padding-top: 1.2rem; border-top: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 1.8rem 0 0.6rem; }
+p, li { color: var(--ink); }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+blockquote { margin: 1.4rem 0; padding: 0.85rem 1.1rem; border-left: 3px solid var(--warn);
+  background: var(--warn-soft); border-radius: 0 var(--radius) var(--radius) 0; }
+blockquote p { margin: 0.3rem 0; color: var(--warn); }
+blockquote strong { color: var(--warn); }
+
+code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.875em; }
+:not(pre) > code { background: var(--code-bg); padding: 0.12em 0.36em; border-radius: 4px;
+  border: 1px solid var(--line); }
+
+.code { position: relative; margin: 1.1rem 0; }
+.code pre { margin: 0; overflow-x: auto; background: var(--code-bg); color: var(--code-ink);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 0.9rem 1rem; line-height: 1.55; }
+.code .copy { position: absolute; top: 0.5rem; right: 0.5rem; opacity: 0; transition: opacity .12s;
+  font: inherit; font-size: 0.75rem; padding: 0.2rem 0.55rem; cursor: pointer;
+  color: var(--muted); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 5px; }
+.code:hover .copy, .copy:focus-visible { opacity: 1; }
+@media (hover: none) { .code .copy { opacity: 1; } }
+
+.tabs { margin: 1.1rem 0; }
+.tabs .code { margin: 0; }
+.tabs .tablist { display: flex; gap: 0.25rem; margin-bottom: -1px; }
+.tabs .tablist button { font: inherit; font-size: 0.82rem; cursor: pointer;
+  padding: 0.3rem 0.8rem; color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-radius: var(--radius) var(--radius) 0 0; }
+.tabs .tablist button[aria-selected="true"] { color: var(--accent); background: var(--code-bg);
+  border-color: var(--line); border-bottom-color: var(--code-bg); }
+.tabs.enhanced .code pre { border-top-left-radius: 0; }
+
+.table-scroll { overflow-x: auto; margin: 1.2rem 0; border: 1px solid var(--line);
+  border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; background: var(--code-bg); }
+tr:last-child td { border-bottom: none; }
+
+.pager { display: flex; justify-content: space-between; gap: 1rem; margin-top: 3.5rem;
+  padding-top: 1.4rem; border-top: 1px solid var(--line); font-size: 0.9rem; }
+.pager a { display: block; text-decoration: none; }
+.pager .dir { display: block; color: var(--muted); font-size: 0.78rem; }
+.pager .next { text-align: right; margin-left: auto; }
+footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
+
+/* Pygments token classes, exactly as the highlighter emits them. Inventing names here is how a
+   stylesheet ends up styling nothing: the classes in the HTML come from Pygments, not from us. */
+.k, .kc, .kd, .kn, .kp, .kr { color: var(--c-key); }
+.s, .s1, .s2, .sa, .sb, .sc, .dl, .sd, .se, .sh, .si, .sx, .sr, .ss { color: var(--c-str); }
+.m, .mb, .mf, .mh, .mi, .mo, .il { color: var(--c-num); }
+.c, .c1, .cm, .cs, .cp, .cpf, .ch { color: var(--c-com); font-style: italic; }
+.nf, .fm, .nd { color: var(--c-fn); }
+.kt, .nc, .nn, .nb, .ne, .no, .bp { color: var(--c-type); }
+.p, .o, .ow { color: var(--c-punc); }
+.err { color: var(--ink); background: none; }
+/* Deliberately unstyled, inheriting the base colour: .n and .nx are plain identifiers (every Go
+   symbol is .nx), .w is whitespace, .nl/.py/.nv/.vi are names too. Colouring every identifier is
+   how highlighting turns into noise. */
+
+@media (max-width: 62rem) {
+  .shell { grid-template-columns: 1fr; gap: 0; }
+  nav { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line);
+    padding: 1.4rem 0 1rem; }
+  nav ol { columns: 2; column-gap: 1rem; }
+  /* Without this, a two-line entry is split across the column break and reads as two entries. */
+  nav li { break-inside: avoid; page-break-inside: avoid; }
+  main { padding-top: 1.8rem; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+<nav>
+  <div class="brand"><a href="index.html">Axonium</a></div>
+  <div class="tag">Client SDKs for the Prometheus Gateway</div>
+  <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html" aria-current="page">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
+  <div class="ext">
+    <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
+    <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
+    <a href="https://github.com/Root1V/axonium-sdk">Source ↗</a>
+  </div>
+</nav>
+<main>
+<h1>Failure, retries and idempotency</h1>
+<blockquote>
+<p><strong>When is it safe to try again?</strong></p>
+</blockquote>
+<p>This is the page worth reading. Everything else here is convenience; this is the part that is
+expensive to get right and costs real money to get wrong.</p>
+<h2>The rule</h2>
+<p><strong>A retry is attempted only where the platform states that no generation occurred.</strong></p>
+<p>That is a short sentence hiding the whole problem. An inference request that fails after the model
+started producing tokens has already been billed. Retrying it does not resume anything — it queues
+a second generation and you pay twice. So the SDKs do not retry on &quot;it failed&quot;; they retry on a
+specific list of failures the gateway documents as having fast-failed before reaching a model:</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Retried</th>
+<th>Why it is safe</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>429 rate-limit-exceeded-requests</code></td>
+<td>Refused at the door</td>
+</tr>
+<tr>
+<td><code>503 backend-unavailable</code></td>
+<td>The circuit breaker was open; nothing was dispatched</td>
+</tr>
+<tr>
+<td><code>503 rate-limiting-unavailable</code></td>
+<td>The limiter's store was down; refused fail-closed</td>
+</tr>
+<tr>
+<td><code>503 usage-store-unavailable</code></td>
+<td>Refused before dispatch</td>
+</tr>
+</tbody>
+</table></div>
+<p>Everything else raises. A <code>502 upstream-error</code> is <strong>not</strong> retried by default: it means the
+gateway's own attempts already failed, so a client retry is a fourth attempt at something that
+failed three times. You can opt in (<code>retry_upstream_errors</code>), and even then it is capped at one
+extra attempt regardless of <code>max_attempts</code>.</p>
+<p><strong>A client-side timeout is never retried by default either</strong>, and that one surprises people. The
+backend is probably still generating. The error message says so rather than leaving you to work it
+out.</p>
+<h2>Waiting</h2>
+<p>When the gateway sends <code>Retry-After</code>, the SDK uses it. It is server-supplied and authoritative: for
+an open circuit breaker it is the real expected recovery time, which no local heuristic improves
+on.</p>
+<p>With one exception. <strong>A wait longer than <code>max_backoff</code> is handed back rather than slept through</strong>,
+because blocking a caller for minutes inside one call is worse than telling them. The error carries
+<code>retry_after</code>, so you can schedule the work yourself.</p>
+<p>Without a <code>Retry-After</code>, exponential backoff with jitter — jitter so that callers recovering from
+one outage do not resynchronise into a second one.</p>
+<h3>A wait is not a hang</h3>
+<p><code>Retry-After</code> on a <code>429</code> is seconds until the window resets, so it runs 0–60. An SDK that respects
+it looks, from outside, like one slow call among fast ones. That has now been filed as a hang three
+times by three different teams.</p>
+<p>So the wait is reported twice. Once in the log, at <code>INFO</code> when it is long enough for a person to
+notice — sub-second backoff stays at <code>DEBUG</code>, because the noise worry is frequent small retries,
+not the rare long one. And once as <strong>data on the response</strong>:</p>
+<div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span> <span class="n">messages</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">])</span>
+
+<span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">waited_s</span>    <span class="c1"># 36.0</span>
+<span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">attempts</span>    <span class="c1"># 2</span></code></pre></div>
+<p>Use the second. A log line is invisible unless the application configured a handler for it — the
+SDKs install a <code>NullHandler</code> and do not touch your logging — and a latency dashboard cannot read
+one anyway.</p>
+<blockquote>
+<p><strong>Known limit.</strong> A call that waited and then failed <em>anyway</em> reports none of this: the exception
+carries no response metadata. That is the call whose duration most needs explaining, and it is on
+the roadmap rather than done.</p>
+</blockquote>
+<h2>Idempotency</h2>
+<p>An <code>Idempotency-Key</code> changes what is safe, and it is the only thing that makes a timed-out request
+retryable:</p>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
+    <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"..."</span><span class="p">}],</span>
+    <span class="n">idempotency_key</span><span class="o">=</span><span class="s2">"order-4417-summary"</span><span class="p">,</span>
+<span class="p">)</span></code></pre></div>
+<div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="nx">completion</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">Chat</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">axonium</span><span class="p">.</span><span class="nx">ChatRequest</span><span class="p">{</span>
+<span class="w">	</span><span class="nx">Model</span><span class="p">:</span><span class="w">          </span><span class="s">"qwen3-0.6b"</span><span class="p">,</span>
+<span class="w">	</span><span class="nx">Messages</span><span class="p">:</span><span class="w">       </span><span class="p">[]</span><span class="nx">axonium</span><span class="p">.</span><span class="nx">Message</span><span class="p">{</span><span class="nx">axonium</span><span class="p">.</span><span class="nx">TextMessage</span><span class="p">(</span><span class="s">"user"</span><span class="p">,</span><span class="w"> </span><span class="s">"..."</span><span class="p">)},</span>
+<span class="w">	</span><span class="nx">IdempotencyKey</span><span class="p">:</span><span class="w"> </span><span class="s">"order-4417-summary"</span><span class="p">,</span>
+<span class="p">})</span></code></pre></div>
+<div class="code" data-language="rust" data-label="Rust"><pre><code class="language-rust"><span class="kd">let</span><span class="w"> </span><span class="n">completion</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">client</span>
+<span class="w">    </span><span class="p">.</span><span class="n">chat</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ChatRequest</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">model</span><span class="p">:</span><span class="w"> </span><span class="s">"qwen3-0.6b"</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span>
+<span class="w">        </span><span class="n">messages</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="n">Message</span><span class="p">::</span><span class="n">text</span><span class="p">(</span><span class="s">"user"</span><span class="p">,</span><span class="w"> </span><span class="s">"..."</span><span class="p">)],</span>
+<span class="w">        </span><span class="n">idempotency_key</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="s">"order-4417-summary"</span><span class="p">.</span><span class="n">into</span><span class="p">()),</span>
+<span class="w">        </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="w">    </span><span class="p">.</span><span class="k">await</span><span class="o">?</span><span class="p">;</span></code></pre></div>
+</div><p>With a key, a repeat returns the <strong>stored</strong> result: no model is reached, no usage is recorded,
+nothing counts against the spend cap. So the retry costs a round trip instead of a generation, and
+the timeout objection disappears. Without a key the old rule stands, because nothing about the
+danger has changed.</p>
+<p>Keys are capped at 255 characters and the SDK checks that before sending — the gateway reports an
+over-length key as a <em>conflict</em>, which points the investigation in the wrong direction.</p>
+<h3>Telling a replay apart from a generation</h3>
+<div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="k">if</span> <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">idempotent_replay</span><span class="p">:</span>
+    <span class="n">billed</span> <span class="o">=</span> <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">idempotent_replay_of</span></code></pre></div>
+<p>A replay carries its <strong>own</strong> <code>request_id</code>, and that id has no usage row — looking it up returns
+<code>404</code>, correctly, because replaying reached no model and was not billed.
+<code>idempotent_replay_of</code> is the id of the generation that <em>was</em> billed, and the only route from the
+response you received to the charge it corresponds to.</p>
+<p>If you reconcile usage from response ids, you need this field. Without it an audit starting from a
+replay's id finds nothing <strong>and cannot tell why</strong>.</p>
+<h2>Cooldowns</h2>
+<p>The gateway runs its own circuit breaker per backend, so the SDKs do not add a second one — it
+would open on signals the server already counted, with worse information.</p>
+<p>What is left uncovered is what the gateway cannot report: the gateway itself being unreachable. For
+that there is a small cooldown registry keyed by <code>(host, model)</code>. When a <code>503</code> arrives with a
+<code>Retry-After</code>, further calls to that model fail locally until it expires, rather than spending a
+request to be told the same thing. The error says so explicitly, so a fast local failure is not
+mistaken for a real gateway answer.</p>
+<p>The cooldown is scoped to the model, not the host: one unavailable backend does not stop the rest.</p>
+<h2>Catching things</h2>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">RateLimitError</span><span class="p">,</span> <span class="n">SpendCapExceededError</span><span class="p">,</span> <span class="n">APIError</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span> <span class="n">messages</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">])</span>
+<span class="k">except</span> <span class="n">SpendCapExceededError</span><span class="p">:</span>
+    <span class="o">...</span>                      <span class="c1"># not retryable, ever; a human decision</span>
+<span class="k">except</span> <span class="n">RateLimitError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+    <span class="n">schedule_in</span><span class="p">(</span><span class="n">error</span><span class="o">.</span><span class="n">retry_after</span><span class="p">)</span>
+<span class="k">except</span> <span class="n">APIError</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+    <span class="n">log</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"gateway said no"</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="p">{</span><span class="s2">"request_id"</span><span class="p">:</span> <span class="n">error</span><span class="o">.</span><span class="n">request_id</span><span class="p">})</span>
+    <span class="k">raise</span></code></pre></div>
+<div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="kd">var</span><span class="w"> </span><span class="nx">apiErr</span><span class="w"> </span><span class="o">*</span><span class="nx">axonium</span><span class="p">.</span><span class="nx">APIError</span>
+<span class="k">if</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">As</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">apiErr</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">apiErr</span><span class="p">.</span><span class="nx">Retryable</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">	</span><span class="c1">// ...</span>
+<span class="p">}</span>
+<span class="k">if</span><span class="w"> </span><span class="nx">errors</span><span class="p">.</span><span class="nx">Is</span><span class="p">(</span><span class="nx">err</span><span class="p">,</span><span class="w"> </span><span class="nx">axonium</span><span class="p">.</span><span class="nx">ErrRateLimit</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">	</span><span class="c1">// ...</span>
+<span class="p">}</span></code></pre></div>
+<div class="code" data-language="rust" data-label="Rust"><pre><code class="language-rust"><span class="k">match</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">chat</span><span class="p">(</span><span class="o">&amp;</span><span class="n">request</span><span class="p">).</span><span class="k">await</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nb">Err</span><span class="p">(</span><span class="n">Error</span><span class="p">::</span><span class="n">Api</span><span class="p">(</span><span class="n">api</span><span class="p">))</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">api</span><span class="p">.</span><span class="n">kind</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ErrorKind</span><span class="p">::</span><span class="n">SpendCapExceeded</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="nb">Err</span><span class="p">(</span><span class="n">Error</span><span class="p">::</span><span class="n">Api</span><span class="p">(</span><span class="n">api</span><span class="p">))</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">api</span><span class="p">.</span><span class="n">retryable</span><span class="p">()</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="n">other</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">other</span><span class="o">?</span><span class="p">,</span>
+<span class="p">}</span></code></pre></div>
+</div><p>Every error carries <code>request_id</code>, and most carry <code>trace_id</code> — the rate-limit envelope omits the
+latter, which is the platform's documented behaviour rather than an SDK gap. Those two ids are what
+a platform team needs; an error report without them is a description of a feeling.</p>
+<p>Next: <a href="04-configuration.html">Configuration and transport</a>.</p>
+
+<div class="pager"><a class="prev" href="02-calls.html"><span class="dir">Previous</span>Making calls</a><a class="next" href="04-configuration.html"><span class="dir">Next</span>Configuration and transport</a></div>
+<footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
+</main>
+</div>
+<script>
+(function () {
+  document.querySelectorAll('.code').forEach(function (block) {
+    var button = document.createElement('button');
+    button.className = 'copy';
+    button.type = 'button';
+    button.textContent = 'Copy';
+    button.addEventListener('click', function () {
+      // file:// is not a secure context, so the API is simply absent there. Say so rather than
+      // reporting a copy that did not happen.
+      if (!navigator.clipboard) { button.textContent = 'Unavailable'; return; }
+      navigator.clipboard.writeText(block.querySelector('code').innerText).then(function () {
+        button.textContent = 'Copied';
+        setTimeout(function () { button.textContent = 'Copy'; }, 1200);
+      });
+    });
+    block.appendChild(button);
+  });
+
+  document.querySelectorAll('.tabs').forEach(function (group) {
+    var blocks = Array.prototype.slice.call(group.querySelectorAll('.code'));
+    if (blocks.length < 2) return;
+    var list = document.createElement('div');
+    list.className = 'tablist';
+    list.setAttribute('role', 'tablist');
+
+    function select(index) {
+      blocks.forEach(function (b, i) { b.hidden = i !== index; });
+      Array.prototype.forEach.call(list.children, function (t, i) {
+        t.setAttribute('aria-selected', String(i === index));
+      });
+      try { localStorage.setItem('axonium-lang', blocks[index].dataset.language); } catch (e) {}
+    }
+
+    blocks.forEach(function (block, index) {
+      var tab = document.createElement('button');
+      tab.type = 'button';
+      tab.setAttribute('role', 'tab');
+      tab.textContent = block.dataset.label || block.dataset.language;
+      tab.addEventListener('click', function () { select(index); });
+      list.appendChild(tab);
+    });
+
+    group.insertBefore(list, group.firstChild);
+    group.classList.add('enhanced');
+
+    var remembered = 0;
+    try {
+      var saved = localStorage.getItem('axonium-lang');
+      blocks.forEach(function (b, i) { if (b.dataset.language === saved) remembered = i; });
+    } catch (e) {}
+    select(remembered);
+  });
+})();
+</script>
+</body>
+</html>

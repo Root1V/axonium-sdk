@@ -28,6 +28,9 @@ step "python: ruff format"       uv run ruff format --check
 step "python: mypy"              uv run mypy src/
 step "python: pytest"            uv run pytest -q
 
+# --- docs.yml, and the --check python-ci runs ---
+step "docs: html matches markdown" uv run python ../scripts/render_docs.py --check
+
 # --- go-ci.yml ---
 cd "$root/go" || exit 1
 step "go: vet"                   go vet ./...

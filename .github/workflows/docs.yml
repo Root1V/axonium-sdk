@@ -1,0 +1,65 @@
+name: docs
+
+# Publishes docs/ to GitHub Pages.
+#
+# The HTML is generated here rather than served from the commit. If someone edits the Markdown and
+# forgets to regenerate, what is published is still correct -- and python-ci still fails on the
+# stale committed copy, so the repository does not quietly drift.
+#
+# One-time setup by the repository owner:
+#   gh api -X POST repos/Root1V/axonium-sdk/pages -f build_type=workflow
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", "scripts/render_docs.py", "scripts/render_reference.py", ".github/workflows/docs.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A half-finished publish is worse than an old one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Generate the reference from the code, then the HTML from the Markdown
+        working-directory: python
+        run: |
+          uv sync --all-extras
+          uv run python ../scripts/render_reference.py
+          uv run python ../scripts/render_docs.py
+
+      - name: Nothing is loaded from the network
+        # Checked here as well as in the tests: this is the artifact that actually gets served, and
+        # a documentation page that phones out to a CDN is one a third party can change.
+        run: |
+          if grep -rIoE '(<script[^>]+src|<link[^>]+href|@import)[^>]*https?://' docs/html/; then
+            echo "::error::the rendered documentation loads external resources" >&2
+            exit 1
+          fi
+          echo "self-contained"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/html
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

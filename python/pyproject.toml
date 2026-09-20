@@ -30,6 +30,7 @@ otel = ["opentelemetry-api>=1.25"]
 Homepage = "https://github.com/Root1V/axonium-sdk"
 Repository = "https://github.com/Root1V/axonium-sdk"
 Changelog = "https://github.com/Root1V/axonium-sdk/blob/main/CHANGELOG.md"
+Documentation = "https://root1v.github.io/axonium-sdk/"
 
 [dependency-groups]
 dev = [
@@ -40,6 +41,11 @@ dev = [
   "freezegun>=1.5",
   "ruff>=0.6",
   "mypy>=1.11",
+  # Documentation build tools only. Deliberately in the dev group and never in an extra: this SDK
+  # advertises a small dependency footprint, and a consumer should not install a Markdown parser to
+  # use it.
+  "markdown-it-py>=3.0",
+  "pygments>=2.18",
 ]
 
 [build-system]
