@@ -83,7 +83,11 @@ fn kind_of(value: &Value) -> &'static str {
 }
 
 /// One turn of a conversation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// `Default` so that a turn can be written by naming only the fields it uses -- the shape every
+/// other request type in this SDK is built with. A defaulted `role` is empty and not a valid
+/// message on its own; it is a starting point, not a message.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Message {
     pub role: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -94,6 +98,17 @@ pub struct Message {
     pub reasoning_content: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
+    /// The id of the call this message answers, on a `role: "tool"` turn.
+    ///
+    /// Without it a tool result cannot be matched to the call that asked for it, and a tool-use
+    /// loop cannot be closed at all: this SDK could receive a tool call and never send its result
+    /// back. Python and Go have carried it since the beginning; Rust did not, and writing the
+    /// documented loop in all three languages is what noticed.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tool_call_id: String,
+    /// The tool's name on a `role: "tool"` turn, where a backend expects it alongside the id.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
 }
 
 impl Message {
@@ -103,6 +118,8 @@ impl Message {
             content: Some(Value::String(content.into())),
             reasoning_content: None,
             tool_calls: None,
+            tool_call_id: String::new(),
+            name: String::new(),
         }
     }
 }
@@ -376,5 +393,61 @@ impl Client {
             )
             .await?;
         Ok(ChatStream::new(response, meta))
+    }
+}
+
+#[cfg(test)]
+mod tool_results {
+    use super::{Message, ToolCall};
+
+    /// A tool-use loop has to be expressible: receive a call, run it, send the result back.
+    ///
+    /// It was not. `Message` carried no `tool_call_id`, so this SDK could read a tool call and had
+    /// no way to answer it -- the loop AXO-55 described as needing "no conversion in either
+    /// direction" could not be closed in Rust at all. Nothing failed, because nobody had written
+    /// the second half.
+    #[test]
+    fn a_tool_result_can_be_sent_back() {
+        let call = ToolCall {
+            id: "call_1".into(),
+            ..Default::default()
+        };
+
+        let result = Message {
+            role: "tool".into(),
+            tool_call_id: call.id.clone(),
+            content: Some("42".into()),
+            ..Default::default()
+        };
+
+        let wire = serde_json::to_value(&result).expect("serialises");
+        assert_eq!(wire["role"], "tool");
+        assert_eq!(wire["tool_call_id"], "call_1");
+    }
+
+    /// The two new fields are absent from an ordinary turn rather than sent empty: a backend that
+    /// validates `tool_call_id` should not see one on a user message.
+    #[test]
+    fn an_ordinary_turn_carries_neither_field() {
+        let wire = serde_json::to_value(Message::text("user", "hi")).expect("serialises");
+        assert!(wire.get("tool_call_id").is_none(), "{wire}");
+        assert!(wire.get("name").is_none(), "{wire}");
+    }
+
+    #[test]
+    fn a_tool_turn_survives_a_whole_conversation() {
+        let conversation = vec![
+            Message::text("user", "weather?"),
+            Message {
+                role: "tool".into(),
+                tool_call_id: "call_1".into(),
+                content: Some("sunny".into()),
+                ..Default::default()
+            },
+        ];
+
+        let wire = serde_json::to_value(&conversation).expect("serialises");
+        assert_eq!(wire[1]["tool_call_id"], "call_1");
+        assert!(wire[0].get("tool_call_id").is_none());
     }
 }
