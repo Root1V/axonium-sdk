@@ -152,6 +152,16 @@ client.models.list()    # everything the deployment serves; no token needed
 client.models.mine()    # the subset your token is scoped to, cached
 ```
 
+```go
+client.Models.List(ctx)   // everything the deployment serves; no token needed
+client.Models.Mine(ctx)   // the subset your token is scoped to, cached
+```
+
+```rust
+client.models().await?;        // everything the deployment serves; no token needed
+client.models_mine().await?;   // the subset your token is scoped to, cached
+```
+
 Access is deny-by-default and granted per model, and streaming needs a different scope from
 non-streaming: holding `inference:read` does not grant `inference:stream`. When a `403` arrives and
 `models.mine()` has been read, the SDK says which of the two you are missing rather than only that
@@ -164,6 +174,20 @@ row = client.usage.retrieve(completion.meta.request_id)
 row.usage.total_tokens
 row.cost_usd            # None where no price is configured — not 0.0
 row.termination_reason
+```
+
+```go
+row, err := client.Usage.Retrieve(ctx, completion.Meta.RequestID)
+row.Usage.TotalTokens
+row.CostUSD             // nil where no price is configured — not 0
+row.TerminationReason
+```
+
+```rust
+let row = client.usage(&completion.meta.request_id).await?;
+row.usage.total_tokens;
+row.cost_usd;           // None where no price is configured -- not 0.0
+row.termination_reason;
 ```
 
 This needs no `admin:read`. `cost_usd` is nullable on purpose: "nobody priced this" and "it cost

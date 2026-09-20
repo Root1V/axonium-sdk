@@ -95,6 +95,16 @@ client.last_rate_limit          # what the most recent call reported
 client.rate_limits["embeddings"]  # the most recent reading for that budget
 ```
 
+```go
+client.LastRateLimit()               // what the most recent call reported
+client.RateLimits()["embeddings"]    // the most recent reading for that budget
+```
+
+```rust
+client.last_rate_limit();                  // what the most recent call reported
+client.rate_limits().get("embeddings");    // the most recent reading for that budget
+```
+
 Read `client.rate_limits`, not `last_rate_limit`, when the question is "how much of budget X is
 left". The distinction is not pedantry: before `scope` existed, a suggestion pipeline touching
 three endpoints in a row left `last_rate_limit` describing whichever answered last, with nothing in

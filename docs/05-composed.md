@@ -57,6 +57,34 @@ for {
 }
 ```
 
+```rust
+loop {
+    let completion = client
+        .chat(&ChatRequest {
+            model: "qwen3-0.6b".into(),
+            messages: messages.clone(),
+            tools: tools.clone(),
+            ..Default::default()
+        })
+        .await?;
+
+    let calls = completion.tool_calls();
+    if calls.is_empty() {
+        break;
+    }
+    messages.push(completion.choices[0].message.clone());
+    for call in calls {
+        let result = run(call.name(), call.parse_arguments()?);
+        messages.push(Message {
+            role: "tool".into(),
+            tool_call_id: call.id.clone(),
+            content: Some(result.into()),
+            ..Default::default()
+        });
+    }
+}
+```
+
 Two things to know:
 
 **`arguments` stays the model's JSON string.** Decoding it eagerly would mean a response model that
@@ -89,6 +117,52 @@ answer = client.chat.completions.create(
 )
 ```
 
+```go
+vector, err := client.Embeddings.Create(ctx, axonium.EmbeddingRequest{
+	Model: "qwen3-embedding", Input: []string{query},
+})
+candidates := store.Nearest(vector.Data[0].Embedding, 50)
+
+ranked, err := client.Rerank.Create(ctx, axonium.RerankRequest{
+	Model: "qwen3-reranker", Query: query, Documents: texts(candidates),
+})
+best := pick(candidates, ranked.Ranking()[:5])
+
+answer, err := client.Chat.Create(ctx, axonium.ChatRequest{
+	Model:    "qwen3-0.6b",
+	Messages: []axonium.Message{axonium.TextMessage("user", promptWith(best, query))},
+})
+```
+
+```rust
+let vector = client
+    .embeddings(&EmbeddingRequest {
+        model: "qwen3-embedding".into(),
+        input: vec![query.clone()],
+        ..Default::default()
+    })
+    .await?;
+let candidates = store.nearest(&vector.data[0].embedding, 50);
+
+let ranked = client
+    .rerank(&RerankRequest {
+        model: "qwen3-reranker".into(),
+        query: query.clone(),
+        documents: texts(&candidates),
+        ..Default::default()
+    })
+    .await?;
+let best = pick(&candidates, &ranked.ranking()[..5]);
+
+let answer = client
+    .chat(&ChatRequest {
+        model: "qwen3-0.6b".into(),
+        messages: vec![Message::text("user", &prompt_with(&best, &query))],
+        ..Default::default()
+    })
+    .await?;
+```
+
 Three calls, three **separate** rate-limit budgets — `embeddings`, `rerank` and `chat_completions`
 each hold their own. So this pipeline costs one unit from each, not three from one, and the budget
 you need to watch is the one for the endpoint you are about to call:
@@ -97,6 +171,21 @@ you need to watch is the one for the endpoint you are about to call:
 budget = client.rate_limits.get("embeddings")
 if budget and budget.remaining_requests == 0:
     ...
+```
+
+```go
+if budget := client.RateLimits()["embeddings"]; budget != nil &&
+	budget.RemainingRequests != nil && *budget.RemainingRequests == 0 {
+	// ...
+}
+```
+
+```rust
+if let Some(budget) = client.rate_limits().get("embeddings") {
+    if budget.remaining_requests == Some(0) {
+        // ...
+    }
+}
 ```
 
 Do not read `client.last_rate_limit` here. After the chat call it describes the **chat** budget,
@@ -113,6 +202,24 @@ row = client.usage.retrieve(completion.meta.request_id)
 row.usage.total_tokens
 row.cost_usd
 row.termination_reason      # "complete", or why it stopped early
+```
+
+```go
+completion, err := client.Chat.Create(ctx, request)
+
+row, err := client.Usage.Retrieve(ctx, completion.Meta.RequestID)
+row.Usage.TotalTokens
+row.CostUSD
+row.TerminationReason       // "complete", or why it stopped early
+```
+
+```rust
+let completion = client.chat(&request).await?;
+
+let row = client.usage(&completion.meta.request_id).await?;
+row.usage.total_tokens;
+row.cost_usd;
+row.termination_reason;     // "complete", or why it stopped early
 ```
 
 No `admin:read` needed — this is per-request, and it is your request.
@@ -143,6 +250,34 @@ async def main():
                                            messages=[{"role": "user", "content": q}])
             for q in questions
         ))
+```
+
+```go
+var wg sync.WaitGroup
+results := make([]*axonium.ChatCompletion, len(questions))
+
+for i, q := range questions {
+	wg.Add(1)
+	go func(i int, q string) {
+		defer wg.Done()
+		results[i], _ = client.Chat.Create(ctx, axonium.ChatRequest{
+			Model:    "qwen3-0.6b",
+			Messages: []axonium.Message{axonium.TextMessage("user", q)},
+		})
+	}(i, q)
+}
+wg.Wait()
+```
+
+```rust
+let results = futures::future::join_all(questions.iter().map(|q| {
+    client.chat(&ChatRequest {
+        model: "qwen3-0.6b".into(),
+        messages: vec![Message::text("user", q)],
+        ..Default::default()
+    })
+}))
+.await;
 ```
 
 Concurrency is bounded by your rate-limit budget, not by the client. Sixty requests a minute
