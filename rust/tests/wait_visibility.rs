@@ -56,23 +56,19 @@ fn client_for(server: &MockServer, retry: axonium::RetryPolicy) -> Client {
 #[tokio::test(flavor = "multi_thread")]
 async fn meta_reports_the_total_waited_and_how_many_attempts() {
     let server = server_failing(2).await;
-    // Two different delays, deliberately: an implementation that overwrote instead of accumulating
-    // would still agree with a single retry, or with two equal ones.
+    // initial_backoff == max_backoff, so both delays are exactly WAIT: the policy caps every
+    // backoff at max_backoff, which is documented behaviour rather than this test reproducing the
+    // doubling formula. Two retries then have to total exactly 2 * WAIT -- an implementation that
+    // overwrote instead of accumulating would report WAIT, and one that recorded nothing would
+    // report zero. All three are distinguishable by equality, with no tolerance to tune.
+    const WAIT: Duration = Duration::from_millis(60);
     let retry = axonium::RetryPolicy {
         max_attempts: 3,
-        initial_backoff: Duration::from_millis(60),
-        max_backoff: Duration::from_secs(1),
+        initial_backoff: WAIT,
+        max_backoff: WAIT,
         jitter: false,
         ..Default::default()
     };
-    // `backoff` is crate-private, so this cannot ask the policy what it would return. The oracle
-    // is the wall clock instead: the mock server is local, so nearly all of a retried call's
-    // elapsed time is the sleeping, and `waited_for` has to account for it. That is a measurement,
-    // not this test reproducing the backoff arithmetic and then agreeing with itself.
-    //
-    // With 60ms doubling once, the sum is ~180ms and the last delay alone is ~120ms -- 60ms apart,
-    // well outside the tolerance below. So an implementation that overwrote instead of
-    // accumulating fails here rather than passing by coincidence.
     let client = client_for(&server, retry);
     let started = std::time::Instant::now();
     let result = client
@@ -82,20 +78,17 @@ async fn meta_reports_the_total_waited_and_how_many_attempts() {
     let elapsed = started.elapsed();
 
     assert_eq!(result.meta.attempts, 3);
-    assert!(
-        result.meta.waited_for > Duration::ZERO,
-        "two retries slept, so this cannot be zero"
+    assert_eq!(
+        result.meta.waited_for,
+        WAIT * 2,
+        "must be the sum of both waits, not the last one and not nothing"
     );
-    let gap = elapsed.saturating_sub(result.meta.waited_for);
+    // The wall clock is a sanity check, not the oracle. An earlier version of this test made it
+    // the oracle -- asserting that elapsed and waited_for were within 40ms -- and it failed on a
+    // loaded machine where the mock server and three round trips cost 128ms. It was right about
+    // the code and wrong about the machine, which is the worst way for a test to fail.
     assert!(
-        gap < Duration::from_millis(40),
-        "the call took {elapsed:?} but only accounts for {:?} of it. The unexplained {gap:?} is \
-         the size of a delay that went unrecorded -- the sum of the waits is what belongs here, \
-         not the last one",
-        result.meta.waited_for
-    );
-    assert!(
-        result.meta.waited_for <= elapsed,
+        elapsed >= result.meta.waited_for,
         "cannot have slept {:?} inside a call that took {elapsed:?}",
         result.meta.waited_for
     );
