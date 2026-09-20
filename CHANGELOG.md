@@ -5,6 +5,25 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ## Python
 
+### Unreleased
+
+A retried call can now explain its own duration without anyone reading a log.
+
+A `Retry-After` of 0–60s, respected as it should be, looks from outside like one slow call among
+fast ones. Three separate teams have reported that as a hang. `1.0.0rc4` began logging the wait at
+INFO, which was necessary and not sufficient: this SDK does not configure the host application's
+logging, so the line is invisible until somebody opts in — at every entry point, and again at the
+next one added. A latency metric cannot read a log line at all, and a latency metric is where this
+keeps being seen.
+
+`meta.waited_s` and `meta.attempts` on every response now carry it as data.
+
+Subtract it from a wall-clock reading to get what the platform actually spent: the wait is
+deliberately excluded from every duration this SDK reports, because sleeping is not service time.
+
+Not covered: a call that waited and then failed anyway, which is the one whose duration most needs
+explaining. Errors carry no response metadata today.
+
 ### 1.0.0rc4 — 2026-09-16
 
 Five error types the platform ships and nobody had mapped: `inconsistent-model-group`,
@@ -277,6 +296,25 @@ which spoke to a platform generation that no longer exists.
 
 ## Go
 
+### Unreleased
+
+A retried call can now explain its own duration without anyone reading a log.
+
+A `Retry-After` of 0–60s, respected as it should be, looks from outside like one slow call among
+fast ones. Three separate teams have reported that as a hang. `v0.3.0` began logging the wait at
+INFO, which was necessary and not sufficient: this SDK does not configure the host application's
+logging, so the line is invisible until somebody opts in — at every entry point, and again at the
+next one added. A latency metric cannot read a log line at all, and a latency metric is where this
+keeps being seen.
+
+`Meta.WaitedFor` and `Meta.Attempts` on every response now carry it as data.
+
+Subtract it from a wall-clock reading to get what the platform actually spent: the wait is
+deliberately excluded from every duration this SDK reports, because sleeping is not service time.
+
+Not covered: a call that waited and then failed anyway, which is the one whose duration most needs
+explaining. Errors carry no response metadata today.
+
 ### 0.3.0 — 2026-09-16
 
 Five error types the platform ships and nobody had mapped: `inconsistent-model-group`,
@@ -441,6 +479,25 @@ dependency. All 24 shared contract cases replay the same recorded wire bytes as 
 No third-party dependencies: standard library only.
 
 ## Rust
+
+### Unreleased
+
+A retried call can now explain its own duration without anyone reading a log.
+
+A `Retry-After` of 0–60s, respected as it should be, looks from outside like one slow call among
+fast ones. Three separate teams have reported that as a hang. `0.3.0` began logging the wait at
+INFO, which was necessary and not sufficient: this SDK does not configure the host application's
+logging, so the line is invisible until somebody opts in — at every entry point, and again at the
+next one added. A latency metric cannot read a log line at all, and a latency metric is where this
+keeps being seen.
+
+`meta.waited_for` and `meta.attempts` on every response now carry it as data.
+
+Subtract it from a wall-clock reading to get what the platform actually spent: the wait is
+deliberately excluded from every duration this SDK reports, because sleeping is not service time.
+
+Not covered: a call that waited and then failed anyway, which is the one whose duration most needs
+explaining. Errors carry no response metadata today.
 
 ### 0.3.0 — 2026-09-16
 
