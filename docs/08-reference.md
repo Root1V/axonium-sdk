@@ -14,7 +14,7 @@ The one object you construct.
 
 ### `Axonium`
 
-Synchronous client for the Prometheus Gateway.
+Synchronous client for the Prometheus inference platform.
 
 Usable as a context manager, which closes the underlying connection pools::
 
@@ -35,7 +35,7 @@ Axonium(*, retry: RetryPolicy | None = None, token_provider: TokenProvider | Non
 
 ### `AsyncAxonium`
 
-Asynchronous client for the Prometheus Gateway. See :class:`Axonium`.
+Asynchronous client for the Prometheus inference platform. See :class:`Axonium`.
 
 ```python
 AsyncAxonium(*, retry: RetryPolicy | None = None, token_provider: AsyncTokenProvider | None = None, **settings: Any) -> None

@@ -377,7 +377,7 @@ class _BaseAxonium:
 
 
 class Axonium(_BaseAxonium):
-    """Synchronous client for the Prometheus Gateway.
+    """Synchronous client for the Prometheus inference platform.
 
     Usable as a context manager, which closes the underlying connection pools::
 
@@ -548,7 +548,7 @@ class Axonium(_BaseAxonium):
 
 
 class AsyncAxonium(_BaseAxonium):
-    """Asynchronous client for the Prometheus Gateway. See :class:`Axonium`."""
+    """Asynchronous client for the Prometheus inference platform. See :class:`Axonium`."""
 
     def __init__(
         self,

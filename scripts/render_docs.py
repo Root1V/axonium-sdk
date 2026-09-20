@@ -28,7 +28,7 @@ SOURCE = REPO / "docs"
 OUTPUT = SOURCE / "html"
 
 SITE = "Axonium"
-TAGLINE = "Client SDKs for the Prometheus Gateway"
+TAGLINE = "Client SDKs for the Prometheus inference platform"
 REPO_URL = "https://github.com/Root1V/axonium-sdk"
 
 # Languages a tab group can contain. Shell is deliberately absent: tabs exist for one operation
