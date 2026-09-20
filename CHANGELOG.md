@@ -310,6 +310,17 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+`Version` reported `0.2.0` from the module published as `v0.3.0`.
+
+It feeds the `User-Agent`, so every request this SDK made identified itself as `axonium-go/0.2.0`
+to the platform — a field used to correlate client versions during an incident. Nothing failed; the
+answer was simply wrong.
+
+Python and Rust check the tag against the packaged version inside the job that publishes, and
+refuse to publish on a mismatch. Go has no such job: pushing the tag *is* the release. So the check
+now runs on every push instead, and refuses a constant that has fallen behind the newest `go/v*`
+tag — which is the state that produced this.
+
 `RateLimitSnapshot.Scope`, and `Client.RateLimits()` keyed by it.
 
 The platform gave `/v1/embeddings`, `/v1/rerank` and `/v1/chat/completions` separate rate-limit

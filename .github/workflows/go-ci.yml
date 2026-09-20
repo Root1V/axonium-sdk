@@ -16,6 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        # Full history: the version guard below compares against the go/v* tags, and the default
+        # single-commit fetch brings none of them -- which would make the check pass by seeing
+        # nothing.
+        with:
+          fetch-depth: 0
+
+      - name: The Version constant has not fallen behind the newest tag
+        working-directory: .
+        run: ./scripts/check_go_version.sh
+
       - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
