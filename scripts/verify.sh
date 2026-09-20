@@ -32,6 +32,8 @@ step "python: pytest"            uv run pytest -q
 step "docs: html matches markdown" uv run python ../scripts/render_docs.py --check
 
 # --- go-ci.yml ---
+cd "$root" || exit 1
+step "go: version not behind tag" ./scripts/check_go_version.sh
 cd "$root/go" || exit 1
 step "go: vet"                   go vet ./...
 step "go: build"                 go build ./...

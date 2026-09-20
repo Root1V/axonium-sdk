@@ -1,0 +1,45 @@
+name: go-release
+
+# Go has no publishing step to guard. Pushing a go/vX.Y.Z tag *is* the release: the module proxy
+# fetches it on first request and serves it from then on, so by the time this runs the version is
+# already public and this job cannot refuse it.
+#
+# It runs anyway, because detecting immediately is worth a great deal more than detecting in a
+# month. go/v0.3.0 shipped with Version = "0.2.0" and nobody noticed until someone read the package
+# documentation for an unrelated reason.
+#
+# The check that actually PREVENTS this is in go-ci.yml, on every push: the constant may not fall
+# behind the newest tag. This one closes the remaining gap, which is a tag cut from a branch whose
+# constant was never bumped.
+
+on:
+  push:
+    tags: ["go/v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tag-matches-the-constant:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: The tag and the Version constant agree
+        run: |
+          tagged="${GITHUB_REF_NAME#go/v}"
+          constant="$(grep -m1 '^const Version = ' go/axonium/client.go | cut -d'"' -f2)"
+          if [ "$tagged" != "$constant" ]; then
+            cat >&2 <<MSG
+          ::error::Tag go/v$tagged was published with Version = "$constant".
+
+          The module proxy already serves this tag, so it cannot be corrected in place. Every
+          request from it will report "axonium-go/$constant" as its User-Agent.
+
+          To fix: bump the constant, add a retract directive for v$tagged in go/go.mod, and tag the
+          next patch version.
+          MSG
+            exit 1
+          fi
+          echo "go/v$tagged matches Version = $constant"
