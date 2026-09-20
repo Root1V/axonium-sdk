@@ -7,6 +7,14 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+No change to the public surface beyond the additions above. Verified rather than asserted: the
+release rehearsal now compares this tree against the wheel PyPI actually served, and reports every
+symbol and field that was added, removed, or changed type.
+
+`1.0.0rc5` is additive — three new fields, nothing removed, **nothing re-typed**. That last part is
+the one that matters to a consumer reading through a tolerant accessor, since a type change there
+neither fails nor warns.
+
 `RateLimitSnapshot.scope`, and `client.rate_limits` keyed by it.
 
 The platform gave `/v1/embeddings`, `/v1/rerank` and `/v1/chat/completions` separate rate-limit

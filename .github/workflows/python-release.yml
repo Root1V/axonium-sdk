@@ -25,6 +25,11 @@ on:
         default: testpypi
         type: choice
         options: [testpypi, pypi]
+      acknowledge_breaking:
+        description: "This release removes or re-types public surface, and that has been announced"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -58,8 +63,24 @@ jobs:
           name: dist
           path: python/dist/
 
+  # The public surface is compared here and nowhere else, on purpose. The testpypi-gate makes this
+  # rehearsal mandatory before any tag can publish, so putting the comparison inside it makes
+  # *seeing* the diff mandatory too -- without a second gate to remember. One chain: no tag without
+  # a rehearsal, no rehearsal without looking at what changed shape.
+  surface:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - name: What changed shape since the last release
+        run: |
+          python scripts/surface_diff.py \
+            ${{ inputs.acknowledge_breaking && '--acknowledge-breaking' || '' }} \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
   testpypi:
-    needs: build
+    needs: [build, surface]
     if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
     runs-on: ubuntu-latest
     environment: testpypi
