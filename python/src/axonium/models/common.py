@@ -143,6 +143,13 @@ class RateLimitSnapshot(BaseModel):
         )
 
 
+#: Keys under which the retry loop leaves its record on an ``httpx.Response``. In ``extensions``
+#: because httpx provides that dict for exactly this purpose, and because an attribute set on the
+#: response would be a private arrangement between two modules with nothing naming it.
+WAITED_EXTENSION = "axonium_waited_s"
+ATTEMPTS_EXTENSION = "axonium_attempts"
+
+
 class ResponseMeta(BaseModel):
     """Correlation and budget information attached to every response.
 
@@ -180,6 +187,22 @@ class ResponseMeta(BaseModel):
     #: caller received to the charge it corresponds to. ``None`` on anything that is not a replay.
     idempotent_replay_of: str | None = None
 
+    #: Seconds this SDK spent deliberately asleep before the response arrived -- in practice a
+    #: ``Retry-After`` it was asked to honour, which the gateway sets anywhere from 0 to 60s.
+    #:
+    #: Here because a wait that exists only as a log line is invisible by default: the SDK ships
+    #: with a ``NullHandler`` and does not configure the host application's logging, so a caller
+    #: whose root logger drops INFO sees a 36-second call and nothing explaining it. Three
+    #: separate teams reported exactly that as a hang. A latency metric cannot read a log line,
+    #: but it can read this.
+    #:
+    #: Deliberately not folded into any duration the SDK reports: sleeping is not service time.
+    #: Subtract it to get what the platform actually spent. ``0.0`` when nothing was retried.
+    waited_s: float = 0.0
+    #: How many HTTP attempts produced this response, counting the one that succeeded. ``1`` when
+    #: it worked first time, so ``attempts > 1`` is the test for "this was retried".
+    attempts: int = 1
+
     @classmethod
     def from_headers(cls, headers: Any) -> ResponseMeta:
         rate_limit = RateLimitSnapshot.from_headers(headers)
@@ -191,4 +214,20 @@ class ResponseMeta(BaseModel):
             idempotent_replay=headers.get("Idempotent-Replay", "").lower() == "true",
             idempotent_replay_of=headers.get("X-Idempotent-Replay-Of"),
             rate_limit=None if rate_limit.is_empty else rate_limit,
+        )
+
+    @classmethod
+    def from_response(cls, response: Any) -> ResponseMeta:
+        """Build from a response, including what the retry loop recorded on it.
+
+        Prefer this to :meth:`from_headers`, which cannot see the wait: it is client-side state,
+        not something the gateway sends. ``from_headers`` remains for a caller holding only
+        headers, and reports the honest default of a first attempt that waited for nothing.
+        """
+        extensions = getattr(response, "extensions", None) or {}
+        return cls.from_headers(response.headers).model_copy(
+            update={
+                "waited_s": float(extensions.get(WAITED_EXTENSION, 0.0)),
+                "attempts": int(extensions.get(ATTEMPTS_EXTENSION, 1)),
+            }
         )

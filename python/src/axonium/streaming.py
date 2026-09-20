@@ -92,7 +92,7 @@ class _StreamBase:
 
     def _begin(self, response: httpx.Response) -> None:
         self._response = response
-        self._meta = ResponseMeta.from_headers(response.headers)
+        self._meta = ResponseMeta.from_response(response)
         self._state.request_id = self._meta.request_id
         self._state.trace_id = self._meta.trace_id
 

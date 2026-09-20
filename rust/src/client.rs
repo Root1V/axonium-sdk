@@ -187,14 +187,19 @@ impl Client {
         let method = if body.is_some() { "POST" } else { "GET" };
 
         let mut attempt = 1u32;
+        let mut waited = std::time::Duration::ZERO;
         loop {
             let started = std::time::Instant::now();
             let outcome = self.attempt(path, body, opts).await;
             record(&op, method, path, opts, attempt, started, &outcome);
 
             match outcome {
-                Ok(pair) => {
+                Ok(mut pair) => {
                     self.cooldowns.clear(&key);
+                    // What the caller needs to explain their own wall clock, carried on the answer
+                    // rather than left in a trace event they may never have subscribed to.
+                    pair.1.waited_for = waited;
+                    pair.1.attempts = attempt;
                     op.record_response(&pair.1);
                     return Ok(pair);
                 }
@@ -210,6 +215,7 @@ impl Client {
                                 delay,
                             );
                             tokio::time::sleep(delay).await;
+                            waited += delay;
                             attempt += 1;
                         }
                         None => return Err(Error::Api(api)),
@@ -226,6 +232,7 @@ impl Client {
                     let backoff = self.config.retry.backoff(attempt);
                     op.record_retry_wait(&opts.model, 0, attempt, "", backoff);
                     tokio::time::sleep(backoff).await;
+                    waited += backoff;
                     attempt += 1;
                 }
                 Err(other) => return Err(other),

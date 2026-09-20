@@ -351,6 +351,33 @@ class TestSyncStreaming:
         assert meta.request_id == "req-7"
 
     @respx.mock
+    def test_a_stream_reports_one_attempt_and_no_wait(
+        self, config_kwargs: dict[str, str], wire: Any
+    ) -> None:
+        """A stream is never retried, and its meta has to say so rather than say nothing.
+
+        Streams bypass the retry loop entirely -- deliberately, since a retry after partial output
+        is a fresh billable generation -- so nothing stamps these two fields on the way out and
+        they fall back to their declared defaults. That fallback is the whole behaviour under test:
+        an ``attempts`` of 0 here would be a count nothing can be true of, on a response something
+        plainly served.
+        """
+        respx.post(CHAT_URL).mock(return_value=sse_response(wire("chat_stream_ok")))
+
+        with (
+            Axonium(**config_kwargs) as client,
+            client.chat.completions.stream(
+                model="m", messages=[{"role": "user", "content": "Hi"}]
+            ) as stream,
+        ):
+            list(stream)
+            meta = stream.meta
+
+        assert meta is not None
+        assert meta.waited_s == 0.0
+        assert meta.attempts == 1
+
+    @respx.mock
     def test_a_stream_cut_short_without_the_sentinel_yields_what_arrived(
         self, config_kwargs: dict[str, str]
     ) -> None:
