@@ -7,6 +7,18 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+`RateLimitSnapshot.scope`, and `client.rate_limits` keyed by it.
+
+The platform gave `/v1/embeddings`, `/v1/rerank` and `/v1/chat/completions` separate rate-limit
+budgets. That made `client.last_rate_limit` a number from whichever endpoint answered last, with
+nothing in the numbers saying so — a dashboard drawing "requests remaining" kept drawing a
+plausible figure from another bucket. Ask about a particular budget by scope instead.
+
+Measured against a deployment rather than taken from the announcement: `X-RateLimit-Scope` is on
+successful responses and **absent on the 429**, where the body carries `"scope"` instead. So the
+one response whose budget most needs attributing — the one telling you a bucket is exhausted — is
+read from the body when the header is missing. The header wins when both are present.
+
 A retried call can now explain its own duration without anyone reading a log.
 
 A `Retry-After` of 0–60s, respected as it should be, looks from outside like one slow call among
@@ -298,6 +310,18 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+`RateLimitSnapshot.Scope`, and `Client.RateLimits()` keyed by it.
+
+The platform gave `/v1/embeddings`, `/v1/rerank` and `/v1/chat/completions` separate rate-limit
+budgets. That made `Client.LastRateLimit()` a number from whichever endpoint answered last, with
+nothing in the numbers saying so — a dashboard drawing "requests remaining" kept drawing a
+plausible figure from another bucket. Ask about a particular budget by scope instead.
+
+Measured against a deployment rather than taken from the announcement: `X-RateLimit-Scope` is on
+successful responses and **absent on the 429**, where the body carries `"scope"` instead. So the
+one response whose budget most needs attributing — the one telling you a bucket is exhausted — is
+read from the body when the header is missing. The header wins when both are present.
+
 A retried call can now explain its own duration without anyone reading a log.
 
 A `Retry-After` of 0–60s, respected as it should be, looks from outside like one slow call among
@@ -481,6 +505,18 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+`RateLimit::scope`, and `Client::rate_limits()` keyed by it. `ApiError` also gains `rate_limit`, which Python and Go have always carried and this SDK did not.
+
+The platform gave `/v1/embeddings`, `/v1/rerank` and `/v1/chat/completions` separate rate-limit
+budgets. That made `Client::last_rate_limit()` a number from whichever endpoint answered last, with
+nothing in the numbers saying so — a dashboard drawing "requests remaining" kept drawing a
+plausible figure from another bucket. Ask about a particular budget by scope instead.
+
+Measured against a deployment rather than taken from the announcement: `X-RateLimit-Scope` is on
+successful responses and **absent on the 429**, where the body carries `"scope"` instead. So the
+one response whose budget most needs attributing — the one telling you a bucket is exhausted — is
+read from the body when the header is missing. The header wins when both are present.
 
 A retried call can now explain its own duration without anyone reading a log.
 

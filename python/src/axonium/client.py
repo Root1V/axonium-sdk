@@ -191,6 +191,7 @@ class _BaseAxonium:
         self._retry = retry or RetryPolicy()
         self._cooldowns = CooldownRegistry()
         self._last_rate_limit: RateLimitSnapshot | None = None
+        self._rate_limits: dict[str, RateLimitSnapshot] = {}
         self._catalog: ModelList | None = None
 
     @property
@@ -210,6 +211,20 @@ class _BaseAxonium:
         treat them as a strong signal rather than a guarantee.
         """
         return self._last_rate_limit
+
+    @property
+    def rate_limits(self) -> dict[str, RateLimitSnapshot]:
+        """The most recent budget seen for each scope, keyed by :attr:`RateLimitSnapshot.scope`.
+
+        :attr:`last_rate_limit` answers "what did the call I just made report", which stopped being
+        the same question as "how much of my embeddings budget is left" once the endpoints gained
+        separate budgets: a chat call overwrites it with a number from another bucket, and the
+        numbers themselves do not say so. Use this to ask about a particular budget.
+
+        A snapshot whose scope the gateway did not report is not indexed here, because it cannot be
+        attributed to a bucket. It is still visible through :attr:`last_rate_limit`.
+        """
+        return dict(self._rate_limits)
 
     def token_claims(self) -> TokenClaims | None:
         """Claims of the cached access token, for diagnostics.
@@ -266,6 +281,8 @@ class _BaseAxonium:
         snapshot = RateLimitSnapshot.from_headers(response.headers)
         if not snapshot.is_empty:
             self._last_rate_limit = snapshot
+            if snapshot.scope is not None:
+                self._rate_limits[snapshot.scope] = snapshot
 
     def _after_failure(
         self,

@@ -25,6 +25,7 @@ pub struct Client {
     pub(crate) auth: Auth,
     pub(crate) cooldowns: CooldownRegistry,
     last_rate_limit: Mutex<Option<RateLimit>>,
+    rate_limits: Mutex<std::collections::HashMap<String, RateLimit>>,
     pub(crate) catalog: tokio::sync::OnceCell<crate::catalog::ModelList>,
 }
 
@@ -118,6 +119,7 @@ impl Client {
             auth,
             cooldowns: CooldownRegistry::default(),
             last_rate_limit: Mutex::new(None),
+            rate_limits: Mutex::new(std::collections::HashMap::new()),
             catalog: tokio::sync::OnceCell::new(),
         })
     }
@@ -138,6 +140,20 @@ impl Client {
     /// down before a 429 rather than only react to one.
     pub fn last_rate_limit(&self) -> Option<RateLimit> {
         self.last_rate_limit.lock().unwrap().clone()
+    }
+
+    /// The most recent budget seen for each scope, keyed by [`RateLimit::scope`].
+    ///
+    /// [`Self::last_rate_limit`] answers "what did the call I just made report", which stopped
+    /// being the same question as "how much of my embeddings budget is left" once the endpoints
+    /// gained separate budgets: a chat call overwrites it with a number from another bucket, and
+    /// the numbers themselves do not say so. Use this to ask about a particular budget.
+    ///
+    /// A snapshot whose scope the gateway did not report is not indexed here, because it cannot be
+    /// attributed to a bucket. It is still visible through [`Self::last_rate_limit`].
+    #[must_use]
+    pub fn rate_limits(&self) -> std::collections::HashMap<String, RateLimit> {
+        self.rate_limits.lock().unwrap().clone()
     }
 
     pub(crate) fn cooldown_key(&self, model: &str) -> String {
@@ -263,6 +279,9 @@ impl Client {
 
         let meta = ResponseMeta::from_headers(response.headers());
         if let Some(rl) = meta.rate_limit.clone() {
+            if let Some(scope) = rl.scope.clone() {
+                self.rate_limits.lock().unwrap().insert(scope, rl.clone());
+            }
             *self.last_rate_limit.lock().unwrap() = Some(rl);
         }
 
@@ -270,7 +289,13 @@ impl Client {
             let status = response.status().as_u16();
             let retry_after = retry_after_seconds(response.headers());
             let parsed: Option<Value> = response.json().await.ok();
-            let mut api = api_error_from_body(status, parsed.as_ref(), retry_after);
+            // The 429 omits X-RateLimit-Scope and puts it in the body instead, so the headers alone
+            // would leave the one error that names a budget unable to say which.
+            let rate_limit = meta
+                .rate_limit
+                .clone()
+                .map(|rl| rl.with_scope_from(parsed.as_ref()));
+            let mut api = api_error_from_body(status, parsed.as_ref(), retry_after, rate_limit);
             self.explain_forbidden(&mut api);
             return Err(Error::Api(Box::new(api)));
         }
@@ -407,6 +432,7 @@ impl Default for ApiError {
             trace_id: String::new(),
             retry_after: None,
             hint: String::new(),
+            rate_limit: None,
             raw: Default::default(),
         }
     }

@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 16,
+  "version": 17,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -94,7 +94,7 @@
     },
     {
       "id": "chat-rate-limit-headers-on-success",
-      "$comment": "Headers observed on a live response 2026-09-12. The token figures are the gateway's post-hoc accounting, not a reservation.",
+      "$comment": "Headers observed on a live response 2026-09-12; X-RateLimit-Scope added from a re-observation 2026-09-19, when the endpoints gained separate budgets. The token figures are the gateway's post-hoc accounting, not a reservation.",
       "operation": "chat.completions.create",
       "request": {
         "model": "qwen3-0.6b",
@@ -116,7 +116,8 @@
           "X-RateLimit-Reset-Requests": "1789257120",
           "X-RateLimit-Limit-Tokens": "40000",
           "X-RateLimit-Remaining-Tokens": "40000",
-          "X-RateLimit-Reset-Tokens": "1789257120"
+          "X-RateLimit-Reset-Tokens": "1789257120",
+          "X-RateLimit-Scope": "chat_completions"
         }
       },
       "expect": {
@@ -126,7 +127,8 @@
           "meta.trace_id": "b04044d6-0000-4000-8000-000000000000",
           "meta.rate_limit.limit_requests": 60,
           "meta.rate_limit.remaining_requests": 59,
-          "meta.rate_limit.remaining_tokens": 40000
+          "meta.rate_limit.remaining_tokens": 40000,
+          "meta.rate_limit.scope": "chat_completions"
         }
       }
     },
@@ -942,6 +944,39 @@
           "model": "qwen3-reranker",
           "usage.prompt_tokens": 275,
           "usage.total_tokens": 275
+        }
+      }
+    },
+    {
+      "id": "error-rate-limit-scope-comes-from-the-body",
+      "$comment": "Recorded against a deployment 2026-09-19, by exhausting the embeddings budget. Two edits, both declared: the client uuid and request_id are sanitised as elsewhere in this corpus, and retry_after was reduced from the observed 49 to 1 so three test suites do not sleep through a real rate-limit window -- the number is not what this case is about. What it is about is that X-RateLimit-Scope is present on successful responses and ABSENT here, while the body carries \"scope\". This is the one response whose budget most needs attributing: knowing which bucket you exhausted is the difference between backing off the right endpoint and backing off all of them. Same shape as this envelope's documented omission of trace_id -- the rate-limiting middleware writes its own, and what it writes differs.",
+      "operation": "embeddings.create",
+      "request": {
+        "model": "qwen3-embedding",
+        "input": "x"
+      },
+      "response": {
+        "status": 429,
+        "body_file": "err_rate_limit_scope.json",
+        "headers": {
+          "Retry-After": "1",
+          "X-RateLimit-Limit-Requests": "60",
+          "X-RateLimit-Remaining-Requests": "0",
+          "X-RateLimit-Reset-Requests": "1789867620",
+          "X-RateLimit-Limit-Tokens": "40000",
+          "X-RateLimit-Remaining-Tokens": "40000",
+          "X-RateLimit-Reset-Tokens": "1789867620"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": "rate-limit-exceeded-requests",
+        "retryable": true,
+        "has_request_id": true,
+        "has_trace_id": false,
+        "fields": {
+          "rate_limit.scope": "embeddings",
+          "rate_limit.remaining_requests": 0
         }
       }
     }

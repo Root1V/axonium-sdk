@@ -76,7 +76,9 @@ def raise_for_status(response: httpx.Response) -> None:
         parsed = None
     body = parsed if isinstance(parsed, dict) else None
 
-    rate_limit = RateLimitSnapshot.from_headers(response.headers)
+    # The 429 omits X-RateLimit-Scope and puts it in the body instead, so the header alone would
+    # leave the one error that names a budget unable to say which.
+    rate_limit = RateLimitSnapshot.from_headers(response.headers).with_scope_from(body)
     error = error_from_response(
         status=response.status_code,
         body=body,

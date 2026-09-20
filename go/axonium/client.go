@@ -55,6 +55,7 @@ type Client struct {
 
 	mu            sync.RWMutex
 	lastRateLimit *RateLimitSnapshot
+	rateLimits    map[string]*RateLimitSnapshot
 }
 
 // New builds a client, resolving unset fields from AXONIUM_* environment variables.
@@ -174,12 +175,37 @@ func (c *Client) LastRateLimit() *RateLimitSnapshot {
 	return c.lastRateLimit
 }
 
+// RateLimits returns the most recent budget seen for each scope, keyed by RateLimitSnapshot.Scope.
+//
+// LastRateLimit answers "what did the call I just made report", which stopped being the same
+// question as "how much of my embeddings budget is left" once the endpoints gained separate
+// budgets: a chat call overwrites it with a number from another bucket, and the numbers themselves
+// do not say so. Use this to ask about a particular budget.
+//
+// A snapshot whose scope the gateway did not report is not indexed here, because it cannot be
+// attributed to a bucket. It is still visible through LastRateLimit.
+func (c *Client) RateLimits() map[string]*RateLimitSnapshot {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make(map[string]*RateLimitSnapshot, len(c.rateLimits))
+	for scope, snapshot := range c.rateLimits {
+		out[scope] = snapshot
+	}
+	return out
+}
+
 func (c *Client) rememberRateLimit(rl *RateLimitSnapshot) {
 	if rl == nil {
 		return
 	}
 	c.mu.Lock()
 	c.lastRateLimit = rl
+	if rl.Scope != "" {
+		if c.rateLimits == nil {
+			c.rateLimits = make(map[string]*RateLimitSnapshot)
+		}
+		c.rateLimits[rl.Scope] = rl
+	}
 	c.mu.Unlock()
 }
 

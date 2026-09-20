@@ -95,6 +95,17 @@ class RateLimitSnapshot(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    #: Which budget these numbers describe -- ``"embeddings"``, ``"rerank"``,
+    #: ``"chat_completions"``, or ``"default"`` for everything sharing the general bucket.
+    #:
+    #: Without it these counters cannot be attributed: the endpoints hold separate budgets, so a
+    #: ``remaining_requests`` read after a chat call says nothing about the embeddings budget, and
+    #: nothing in the numbers themselves reveals which one answered.
+    #:
+    #: ``None`` on a deployment predating per-endpoint budgets, and on a ``429`` from a gateway
+    #: that omits the header there -- see :meth:`from_headers`.
+    scope: str | None = None
+
     limit_requests: int | None = None
     remaining_requests: int | None = None
     #: Unix timestamp at which the request window resets.
@@ -108,6 +119,8 @@ class RateLimitSnapshot(BaseModel):
     @property
     def is_empty(self) -> bool:
         """True when the response carried no rate-limit headers at all."""
+        # scope is excluded deliberately: it labels a budget rather than being one, so a response
+        # carrying only a scope has still reported no numbers.
         return all(
             value is None
             for value in (
@@ -119,6 +132,23 @@ class RateLimitSnapshot(BaseModel):
                 self.reset_tokens,
             )
         )
+
+    def with_scope_from(self, body: Any) -> RateLimitSnapshot:
+        """Fill in :attr:`scope` from a problem+json body when the header did not carry it.
+
+        Measured against a deployment on 2026-09-19: ``X-RateLimit-Scope`` is present on successful
+        responses and **absent on the 429**, where the body carries ``"scope"`` instead. That is the
+        one response whose budget a caller most needs to attribute -- knowing which bucket you just
+        exhausted is the difference between backing off the right endpoint and backing off all of
+        them. Same shape as the documented omission of ``trace_id`` from this envelope: the
+        rate-limiting middleware writes its own, and what it writes is not what the others write.
+
+        The header wins when both are present, matching the rule already used for ``Retry-After``.
+        """
+        if self.scope is not None or not isinstance(body, dict):
+            return self
+        scope = body.get("scope")
+        return self if not isinstance(scope, str) else self.model_copy(update={"scope": scope})
 
     @classmethod
     def from_headers(cls, headers: Any) -> RateLimitSnapshot:
@@ -134,6 +164,7 @@ class RateLimitSnapshot(BaseModel):
                 return None
 
         return cls(
+            scope=headers.get("X-RateLimit-Scope"),
             limit_requests=read("X-RateLimit-Limit-Requests"),
             remaining_requests=read("X-RateLimit-Remaining-Requests"),
             reset_requests=read("X-RateLimit-Reset-Requests"),

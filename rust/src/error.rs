@@ -159,6 +159,13 @@ pub struct ApiError {
     /// A client-side diagnosis added where the SDK can say something `detail` does not, such as
     /// exactly which scope a token is missing.
     pub hint: String,
+    /// The rate-limit budget as of this failure, when the response reported one.
+    ///
+    /// Present so a `429` can say *which* budget it exhausted, which is the difference between
+    /// backing off the right endpoint and backing off all of them. Python and Go have carried this
+    /// on their errors since the beginning; Rust did not, and the shared contract corpus is what
+    /// noticed.
+    pub rate_limit: Option<crate::types::RateLimit>,
     /// The decoded body, so a field this SDK does not model stays reachable.
     pub raw: BTreeMap<String, Value>,
 }
@@ -314,6 +321,7 @@ pub(crate) fn api_error_from_body(
     status: u16,
     body: Option<&Value>,
     retry_after: Option<f64>,
+    rate_limit: Option<crate::types::RateLimit>,
 ) -> ApiError {
     let map: BTreeMap<String, Value> = body
         .and_then(Value::as_object)
@@ -352,6 +360,7 @@ pub(crate) fn api_error_from_body(
         trace_id: string("trace_id"),
         retry_after,
         hint: String::new(),
+        rate_limit,
         raw: map,
     }
 }
@@ -423,7 +432,7 @@ mod catalog_parity {
                 "title": suffix,
                 "detail": "something went wrong",
             });
-            let error = api_error_from_body(status, Some(&body), None);
+            let error = api_error_from_body(status, Some(&body), None, None);
 
             // A suffix this build does not know falls back to a status-keyed kind, which is right
             // for an unknown error and wrong for a catalogued one.

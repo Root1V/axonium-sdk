@@ -87,7 +87,9 @@ func errorFromResponse(resp *http.Response) *APIError {
 		resp.StatusCode,
 		body,
 		retryAfterSeconds(resp.Header),
-		rateLimitFromHeaders(resp.Header),
+		// The 429 omits X-RateLimit-Scope and puts it in the body instead, so the header alone
+		// would leave the one error that names a budget unable to say which.
+		rateLimitFromHeaders(resp.Header).withScopeFrom(body),
 	)
 }
 

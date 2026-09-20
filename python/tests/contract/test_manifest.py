@@ -163,6 +163,10 @@ def assert_error(error: APIError, case: dict[str, Any]) -> None:
         assert error.request_id, f"{cid}: no request_id, so a caller cannot correlate this"
     if expect.get("has_trace_id"):
         assert error.trace_id, f"{cid}: no trace_id, so a caller cannot correlate this"
+    # Errors carry fields worth pinning too -- which budget a 429 exhausted, for one. Until this
+    # existed, twelve error cases could assert a suffix and nothing about the envelope's contents.
+    if "fields" in expect:
+        assert_fields(error, expect["fields"], cid)
 
 
 def assert_usage(usage: Any, expected: dict[str, Any] | None, case_id: str) -> None:
