@@ -7,7 +7,7 @@ and image models across managed instances, behind one authenticated API with per
 control, rate limits, spend caps and usage accounting. This SDK talks to one of its components, the
 **gateway**, which serves inference and issues tokens at a single address.
 
-> **Status: v0.3.0.** Streaming with real cancellation, both credential modes, idempotency keys,
+> **Status: v0.4.0.** Streaming with real cancellation, both credential modes, idempotency keys,
 > instance pinning, the full error taxonomy and the shared contract corpus — all implemented and
 > tested, with 25 of 25 contract cases replaying the same recorded wire bytes the Python SDK does.
 >

@@ -7,7 +7,7 @@ and image models across managed instances, behind one authenticated API with per
 control, rate limits, spend caps and usage accounting. This SDK talks to one of its components, the
 **gateway**, which serves inference and issues tokens at a single address.
 
-> **Status: 0.3.0, published to crates.io.** Chat, streaming with cancellation, embeddings,
+> **Status: 0.4.0, published to crates.io.** Chat, streaming with cancellation, embeddings,
 > images, both credential modes, idempotency keys, instance pinning and the full error taxonomy are
 > implemented, and all 25 shared contract cases replay against the same recorded wire bytes the
 > Python and Go SDKs use. Structured logging and an optional tracing hook are in.

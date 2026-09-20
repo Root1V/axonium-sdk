@@ -118,7 +118,7 @@ DEFAULT_GATEWAY_BASE_URL = 'http://127.0.0.1:8020'
 ### `__version__`
 
 ```python
-__version__ = '1.0.0rc4'
+__version__ = '1.0.0rc5'
 ```
 
 ## Requests
