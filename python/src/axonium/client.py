@@ -31,7 +31,12 @@ from axonium.errors import (
     UnusedCredentialWarning,
 )
 from axonium.models.catalog import ModelList
-from axonium.models.common import RateLimitSnapshot, ResponseMeta
+from axonium.models.common import (
+    ATTEMPTS_EXTENSION,
+    WAITED_EXTENSION,
+    RateLimitSnapshot,
+    ResponseMeta,
+)
 from axonium.observability.logging import request_fields
 from axonium.observability.otel import record_response, span
 from axonium.observability.scopes import explain_forbidden
@@ -338,7 +343,7 @@ class _BaseAxonium:
         model: str | None,
         started: float,
     ) -> None:
-        meta = ResponseMeta.from_headers(response.headers)
+        meta = ResponseMeta.from_response(response)
         record_response(active, request_id=meta.request_id, trace_id=meta.trace_id)
         logger.debug(
             "Request completed",
@@ -437,6 +442,7 @@ class Axonium(_BaseAxonium):
         self._check_cooldown(key)
 
         attempt = 1
+        waited = 0.0
         with self._observe(method, path, model) as active:
             while True:
                 started = time.monotonic()
@@ -457,6 +463,7 @@ class Axonium(_BaseAxonium):
                     if delay is None:
                         raise failure from exc
                     time.sleep(delay)
+                    waited += delay
                     attempt += 1
                     continue
 
@@ -468,10 +475,15 @@ class Axonium(_BaseAxonium):
                     if delay is None:
                         raise
                     time.sleep(delay)
+                    waited += delay
                     attempt += 1
                     continue
 
                 self._cooldowns.clear(key)
+                # Recorded on the response so it survives out to whoever builds the ResponseMeta,
+                # without that code having to know a retry loop exists.
+                response.extensions[WAITED_EXTENSION] = waited
+                response.extensions[ATTEMPTS_EXTENSION] = attempt
                 self._succeeded(
                     active, response, method=method, path=path, model=model, started=started
                 )
@@ -581,6 +593,7 @@ class AsyncAxonium(_BaseAxonium):
         self._check_cooldown(key)
 
         attempt = 1
+        waited = 0.0
         with self._observe(method, path, model) as active:
             while True:
                 started = time.monotonic()
@@ -601,6 +614,7 @@ class AsyncAxonium(_BaseAxonium):
                     if delay is None:
                         raise failure from exc
                     await asyncio.sleep(delay)
+                    waited += delay
                     attempt += 1
                     continue
 
@@ -612,10 +626,15 @@ class AsyncAxonium(_BaseAxonium):
                     if delay is None:
                         raise
                     await asyncio.sleep(delay)
+                    waited += delay
                     attempt += 1
                     continue
 
                 self._cooldowns.clear(key)
+                # Recorded on the response so it survives out to whoever builds the ResponseMeta,
+                # without that code having to know a retry loop exists.
+                response.extensions[WAITED_EXTENSION] = waited
+                response.extensions[ATTEMPTS_EXTENSION] = attempt
                 self._succeeded(
                     active, response, method=method, path=path, model=model, started=started
                 )

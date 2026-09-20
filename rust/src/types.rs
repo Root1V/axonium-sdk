@@ -97,6 +97,22 @@ pub struct ResponseMeta {
     /// received to the charge it corresponds to. Empty on anything that is not a replay.
     pub idempotent_replay_of: String,
     pub rate_limit: Option<RateLimit>,
+
+    /// How long this SDK spent deliberately asleep before the response arrived -- in practice a
+    /// `Retry-After` it was asked to honour, which the gateway sets anywhere from 0 to 60s.
+    ///
+    /// Here because a wait that exists only as a log line is invisible by default: this SDK emits
+    /// through `tracing` and does not install a subscriber, so a caller who never set one up sees
+    /// a 36-second call and nothing explaining it. Three separate teams reported exactly that as a
+    /// hang. A latency metric cannot read a log line, but it can read this.
+    ///
+    /// Deliberately excluded from any duration this SDK reports: sleeping is not service time.
+    /// Subtract it from a wall-clock reading to get what the platform actually spent. Zero when
+    /// nothing was retried.
+    pub waited_for: std::time::Duration,
+    /// How many HTTP attempts produced this response, counting the one that succeeded. `1` when it
+    /// worked first time, so `attempts > 1` is the test for "this was retried".
+    pub attempts: u32,
 }
 
 impl ResponseMeta {
@@ -132,6 +148,11 @@ impl ResponseMeta {
             idempotent_replay: text("idempotent-replay").eq_ignore_ascii_case("true"),
             idempotent_replay_of: text("x-idempotent-replay-of"),
             rate_limit: (!rate_limit.is_empty()).then_some(rate_limit),
+            // Headers cannot know either: the wait is client-side state. The retry loop overwrites
+            // both before the caller sees this. One attempt is the honest default -- zero would be
+            // a count nothing can be true of.
+            waited_for: std::time::Duration::ZERO,
+            attempts: 1,
         }
     }
 }

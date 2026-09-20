@@ -473,3 +473,137 @@ class TestCooldown:
 
         assert time.monotonic() - started < 5.0
         assert caught.value.retry_after == 3600.0
+
+
+class _RecordingLogger:
+    """Stands in for the module logger to read what the SDK reported, not what a handler printed."""
+
+    def __init__(self) -> None:
+        self.records: list[dict[str, Any]] = []
+
+    def log(self, *args: Any, **kwargs: Any) -> None:
+        self.records.append(kwargs)
+
+    def debug(self, _message: str, **kwargs: Any) -> None:
+        self.records.append(kwargs)
+
+
+class TestTheWaitIsVisibleFromTheResponse:
+    """A retried call must be able to explain its own duration without anyone reading a log.
+
+    The SDK ships with a ``NullHandler`` and does not configure the host's logging, so the INFO
+    line announcing a wait is invisible unless the application opted in. Three teams reported a
+    respected ``Retry-After`` as a hang because of exactly that. ``meta`` is the copy of the
+    answer that needs no configuration and cannot be missed.
+    """
+
+    @staticmethod
+    def _record_sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+        """Capture the delays the retry loop actually asks for, without serving them.
+
+        The list is the oracle: it is observed from the SDK's own behaviour rather than
+        recomputed from the backoff formula, so a test written against it cannot agree with a
+        broken implementation by sharing its arithmetic.
+        """
+        import asyncio as _asyncio
+
+        seen: list[float] = []
+        real_sleep, real_async_sleep = time.sleep, _asyncio.sleep
+
+        def sync_sleep(delay: float) -> None:
+            seen.append(delay)
+            real_sleep(0)
+
+        async def async_sleep(delay: float) -> None:
+            seen.append(delay)
+            await real_async_sleep(0)
+
+        monkeypatch.setattr("axonium.client.time.sleep", sync_sleep)
+        monkeypatch.setattr("axonium.client.asyncio.sleep", async_sleep)
+        return seen
+
+    @respx.mock
+    async def test_reports_the_total_waited_and_how_many_attempts_it_took(
+        self, caller: Caller, config_kwargs: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        waits = self._record_sleeps(monkeypatch)
+        respx.post(CHAT_URL).mock(
+            side_effect=[
+                httpx.Response(429, json=problem("rate-limit-exceeded-requests", 429)),
+                httpx.Response(429, json=problem("rate-limit-exceeded-requests", 429)),
+                httpx.Response(200, json=COMPLETION),
+            ]
+        )
+
+        completion = await caller.chat(
+            config_kwargs,
+            model="m",
+            messages=[{"role": "user", "content": "hi"}],
+            # No Retry-After on the responses above, so these are the delays in play. Two
+            # different values, deliberately: a `waited = delay` that overwrote instead of
+            # accumulating would still pass against one retry, or against two equal ones.
+            retry=RetryPolicy(initial_backoff=0.05, max_backoff=1.0, jitter=False),
+        )
+
+        # Guards the oracle before trusting it. A run where nothing slept would make the
+        # comparison below 0 == 0, which passes while proving nothing.
+        assert len(waits) == 2, f"expected two retries to have waited, saw {waits}"
+        assert len(set(waits)) == 2, f"the two delays must differ for this to have teeth: {waits}"
+
+        assert completion.meta is not None
+        assert completion.meta.attempts == 3
+        assert completion.meta.waited_s == pytest.approx(sum(waits))
+
+    @respx.mock
+    async def test_a_first_time_success_waited_for_nothing(
+        self, caller: Caller, config_kwargs: dict[str, str]
+    ) -> None:
+        respx.post(CHAT_URL).mock(return_value=httpx.Response(200, json=COMPLETION))
+
+        completion = await caller.chat(
+            config_kwargs, model="m", messages=[{"role": "user", "content": "hi"}]
+        )
+
+        assert completion.meta is not None
+        assert completion.meta.waited_s == 0.0
+        assert completion.meta.attempts == 1
+
+    @respx.mock
+    async def test_the_wait_is_not_counted_as_latency(
+        self, caller: Caller, config_kwargs: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``duration_ms`` measures the attempt that succeeded, and excludes the sleeping.
+
+        This is the whole point of reporting them apart: a caller subtracting ``waited_s`` from
+        their own wall-clock reading gets what the platform spent. If the wait leaked into the
+        SDK's own duration it would be double-counted.
+        """
+        waits = self._record_sleeps(monkeypatch)
+        recorder = _RecordingLogger()
+        monkeypatch.setattr("axonium.client.logger", recorder)
+        respx.post(CHAT_URL).mock(
+            side_effect=[
+                httpx.Response(429, json=problem("rate-limit-exceeded-requests", 429)),
+                httpx.Response(200, json=COMPLETION),
+            ]
+        )
+
+        completion = await caller.chat(
+            config_kwargs,
+            model="m",
+            messages=[{"role": "user", "content": "hi"}],
+            retry=RetryPolicy(initial_backoff=0.05, max_backoff=1.0, jitter=False),
+        )
+
+        assert waits, "nothing slept, so there is no wait to have leaked"
+        assert completion.meta is not None
+        assert completion.meta.waited_s == pytest.approx(sum(waits))
+        durations = [
+            r["extra"]["duration_ms"]
+            for r in recorder.records
+            if "duration_ms" in r.get("extra", {})
+        ]
+        assert durations, "the completion log line carrying duration_ms was not emitted"
+        assert durations[-1] < sum(waits) * 1000, (
+            f"duration_ms {durations[-1]:.1f}ms includes the {sum(waits) * 1000:.1f}ms of sleeping"
+        )

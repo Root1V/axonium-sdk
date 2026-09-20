@@ -202,9 +202,16 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 	ctx, span := c.startSpan(ctx, spanName(path), model)
 	defer span.End()
 
+	var waited time.Duration
 	for attempt := 1; ; attempt++ {
 		started := time.Now()
 		resp, meta, err := c.attempt(ctx, method, path, body, streaming, instance, idemKey)
+		// Stamped here rather than on the success path, so that every return below carries it.
+		// A call that failed after three attempts and ninety seconds of waiting is precisely the
+		// one whose duration needs explaining, and meta travels out with the error too -- a field
+		// that were accurate on success and silently zero on failure would be worse than absent.
+		meta.WaitedFor = waited
+		meta.Attempts = attempt
 		c.logRequest(method, path, model, statusOf(resp, err), attempt, started, meta, err)
 		if err == nil {
 			recordResponse(span, meta)
@@ -225,6 +232,7 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 				if !sleepFor(ctx, backoff) {
 					return nil, meta, ctx.Err()
 				}
+				waited += backoff
 				continue
 			}
 			return nil, meta, err
@@ -241,6 +249,7 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 		if !sleepFor(ctx, delay) {
 			return nil, meta, ctx.Err()
 		}
+		waited += delay
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // RateLimitSnapshot is the rate-limit budget as of one response, parsed from the X-RateLimit-*
@@ -92,10 +93,30 @@ type ResponseMeta struct {
 	// the id that does resolve, so it is the only way from the response a caller received to the
 	// charge it corresponds to. Empty on anything that is not a replay.
 	IdempotentReplayOf string
+
+	// WaitedFor is how long this SDK spent deliberately asleep before the response arrived -- in
+	// practice a Retry-After it was asked to honour, which the gateway sets anywhere from 0 to 60s.
+	//
+	// Here because a wait that exists only as a log line is invisible by default: this SDK does not
+	// configure the host application's logging, so a caller whose logger drops INFO sees a
+	// 36-second call and nothing explaining it. Three separate teams reported exactly that as a
+	// hang. A latency metric cannot read a log line, but it can read this.
+	//
+	// Deliberately excluded from any duration this SDK reports: sleeping is not service time.
+	// Subtract it from a wall-clock reading to get what the platform actually spent. Zero when
+	// nothing was retried.
+	WaitedFor time.Duration
+	// Attempts is how many HTTP attempts produced this response, counting the one that succeeded.
+	// 1 when it worked first time, so Attempts > 1 is the test for "this was retried".
+	Attempts int
 }
 
 func metaFromHeaders(h http.Header) ResponseMeta {
 	return ResponseMeta{
+		// The retry loop overwrites this before any caller sees it -- it is the only thing that can
+		// count. One is the honest answer if a future call site ever bypasses it: zero would be a
+		// count nothing can be true of. Unreachable today, so no test can tell 1 from 0.
+		Attempts:           1,
 		RequestID:          h.Get("X-Request-ID"),
 		TraceID:            h.Get("X-Trace-ID"),
 		Instance:           h.Get("X-Prometheus-Instance"),

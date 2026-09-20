@@ -122,7 +122,7 @@ def parse(response: httpx.Response, model: type[ModelT]) -> ModelT:
             trace_id=response.headers.get("X-Trace-ID"),
         ) from exc
 
-    parsed._attach(ResponseMeta.from_headers(response.headers))
+    parsed._attach(ResponseMeta.from_response(response))
     return parsed
 
 
