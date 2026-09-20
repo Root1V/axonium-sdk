@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testing against Axonium · Axonium</title>
+<meta name="description" content="Client SDKs for the Prometheus Gateway">
+<style>
+:root {
+  --bg: #fbfbfa; --panel: #ffffff; --ink: #1c1d1f; --muted: #6a6d72; --line: #e3e3e0;
+  --accent: #1a5fb4; --accent-soft: #eaf1fb; --warn: #8a5a00; --warn-soft: #fdf4e3;
+  --code-bg: #f6f6f4; --code-ink: #24292f;
+  --c-key: #a3005f; --c-str: #0a6b39; --c-num: #8a4b00; --c-com: #6a6d72;
+  --c-fn: #4b3fbb; --c-type: #0b6a72; --c-punc: #4a4d52;
+  --radius: 7px; --measure: 41rem;
+}
+:root:not([data-theme="light"]) { }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181a; --panel: #1d1f22; --ink: #e7e8ea; --muted: #9ba0a6; --line: #2e3136;
+    --accent: #7eb3ff; --accent-soft: #1b2739; --warn: #e3b566; --warn-soft: #2a2213;
+    --code-bg: #151719; --code-ink: #dfe2e6;
+    --c-key: #ff8fc4; --c-str: #86d9a4; --c-num: #e8b07a; --c-com: #8b9199;
+    --c-fn: #b9aaff; --c-type: #6fd3dd; --c-punc: #aab0b8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181a; --panel: #1d1f22; --ink: #e7e8ea; --muted: #9ba0a6; --line: #2e3136;
+  --accent: #7eb3ff; --accent-soft: #1b2739; --warn: #e3b566; --warn-soft: #2a2213;
+  --code-bg: #151719; --code-ink: #dfe2e6;
+  --c-key: #ff8fc4; --c-str: #86d9a4; --c-num: #e8b07a; --c-com: #8b9199;
+  --c-fn: #b9aaff; --c-type: #6fd3dd; --c-punc: #aab0b8;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.65 ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.shell { display: grid; grid-template-columns: 16rem minmax(0, 1fr); gap: 3rem;
+  max-width: 68rem; margin: 0 auto; padding: 0 16px; }
+
+nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+  padding: 2rem 0; border-right: 1px solid var(--line); }
+nav .brand { font-weight: 650; font-size: 1.05rem; letter-spacing: -0.01em; }
+nav .brand a { color: var(--ink); text-decoration: none; }
+nav .tag { color: var(--muted); font-size: 0.82rem; margin: 0.15rem 0 1.4rem; }
+nav ol { list-style: none; margin: 0; padding: 0; }
+nav li { margin: 0.1rem 0; }
+nav a { display: block; padding: 0.3rem 0.6rem; margin-left: -0.6rem; border-radius: var(--radius);
+  color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+nav a:hover { color: var(--ink); background: var(--accent-soft); }
+nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); font-weight: 560; }
+nav .ext { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+nav .ext a { font-size: 0.84rem; }
+
+main { padding: 2.6rem 0 5rem; min-width: 0; }
+main > * { max-width: var(--measure); }
+main > .code, main > .tabs, main > .table-scroll { max-width: min(54rem, 100%); }
+
+h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -0.02em; margin: 0 0 1.2rem; }
+h2 { font-size: 1.3rem; letter-spacing: -0.01em; margin: 2.6rem 0 0.8rem;
+  padding-top: 1.2rem; border-top: 1px solid var(--line); }
+h3 { font-size: 1.05rem; margin: 1.8rem 0 0.6rem; }
+p, li { color: var(--ink); }
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+
+blockquote { margin: 1.4rem 0; padding: 0.85rem 1.1rem; border-left: 3px solid var(--warn);
+  background: var(--warn-soft); border-radius: 0 var(--radius) var(--radius) 0; }
+blockquote p { margin: 0.3rem 0; color: var(--warn); }
+blockquote strong { color: var(--warn); }
+
+code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.875em; }
+:not(pre) > code { background: var(--code-bg); padding: 0.12em 0.36em; border-radius: 4px;
+  border: 1px solid var(--line); }
+
+.code { position: relative; margin: 1.1rem 0; }
+.code pre { margin: 0; overflow-x: auto; background: var(--code-bg); color: var(--code-ink);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 0.9rem 1rem; line-height: 1.55; }
+.code .copy { position: absolute; top: 0.5rem; right: 0.5rem; opacity: 0; transition: opacity .12s;
+  font: inherit; font-size: 0.75rem; padding: 0.2rem 0.55rem; cursor: pointer;
+  color: var(--muted); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 5px; }
+.code:hover .copy, .copy:focus-visible { opacity: 1; }
+@media (hover: none) { .code .copy { opacity: 1; } }
+
+.tabs { margin: 1.1rem 0; }
+.tabs .code { margin: 0; }
+.tabs .tablist { display: flex; gap: 0.25rem; margin-bottom: -1px; }
+.tabs .tablist button { font: inherit; font-size: 0.82rem; cursor: pointer;
+  padding: 0.3rem 0.8rem; color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-radius: var(--radius) var(--radius) 0 0; }
+.tabs .tablist button[aria-selected="true"] { color: var(--accent); background: var(--code-bg);
+  border-color: var(--line); border-bottom-color: var(--code-bg); }
+.tabs.enhanced .code pre { border-top-left-radius: 0; }
+
+.table-scroll { overflow-x: auto; margin: 1.2rem 0; border: 1px solid var(--line);
+  border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; background: var(--code-bg); }
+tr:last-child td { border-bottom: none; }
+
+.pager { display: flex; justify-content: space-between; gap: 1rem; margin-top: 3.5rem;
+  padding-top: 1.4rem; border-top: 1px solid var(--line); font-size: 0.9rem; }
+.pager a { display: block; text-decoration: none; }
+.pager .dir { display: block; color: var(--muted); font-size: 0.78rem; }
+.pager .next { text-align: right; margin-left: auto; }
+footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
+
+/* Pygments token classes, exactly as the highlighter emits them. Inventing names here is how a
+   stylesheet ends up styling nothing: the classes in the HTML come from Pygments, not from us. */
+.k, .kc, .kd, .kn, .kp, .kr { color: var(--c-key); }
+.s, .s1, .s2, .sa, .sb, .sc, .dl, .sd, .se, .sh, .si, .sx, .sr, .ss { color: var(--c-str); }
+.m, .mb, .mf, .mh, .mi, .mo, .il { color: var(--c-num); }
+.c, .c1, .cm, .cs, .cp, .cpf, .ch { color: var(--c-com); font-style: italic; }
+.nf, .fm, .nd { color: var(--c-fn); }
+.kt, .nc, .nn, .nb, .ne, .no, .bp { color: var(--c-type); }
+.p, .o, .ow { color: var(--c-punc); }
+.err { color: var(--ink); background: none; }
+/* Deliberately unstyled, inheriting the base colour: .n and .nx are plain identifiers (every Go
+   symbol is .nx), .w is whitespace, .nl/.py/.nv/.vi are names too. Colouring every identifier is
+   how highlighting turns into noise. */
+
+@media (max-width: 62rem) {
+  .shell { grid-template-columns: 1fr; gap: 0; }
+  nav { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line);
+    padding: 1.4rem 0 1rem; }
+  nav ol { columns: 2; column-gap: 1rem; }
+  /* Without this, a two-line entry is split across the column break and reads as two entries. */
+  nav li { break-inside: avoid; page-break-inside: avoid; }
+  main { padding-top: 1.8rem; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+<nav>
+  <div class="brand"><a href="index.html">Axonium</a></div>
+  <div class="tag">Client SDKs for the Prometheus Gateway</div>
+  <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html" aria-current="page">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
+  <div class="ext">
+    <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
+    <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
+    <a href="https://github.com/Root1V/axonium-sdk">Source ↗</a>
+  </div>
+</nav>
+<main>
+<h1>Testing against Axonium</h1>
+<blockquote>
+<p><strong>How do I build on this without spending anything or depending on a live deployment?</strong></p>
+</blockquote>
+<h2>Do not mock the SDK</h2>
+<p>Mocking <code>client.chat.completions.create</code> tests that you called a function. It cannot tell you
+whether you handled a <code>429</code>, whether your tool loop survives a truncated <code>arguments</code> string, or
+whether your reconciliation copes with a replay that has no usage row.</p>
+<p>Mock the <strong>transport</strong> instead. Every SDK here is an HTTP client and nothing more, so a fake gateway
+exercises your code against the real parsing, the real error typing and the real retry logic.</p>
+<div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">import</span><span class="w"> </span><span class="nn">httpx</span><span class="o">,</span><span class="w"> </span><span class="nn">respx</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">Axonium</span>
+
+<span class="nd">@respx</span><span class="o">.</span><span class="n">mock</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">test_summariser_handles_a_rate_limit</span><span class="p">():</span>
+    <span class="n">respx</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"https://gw.test/oauth2/token"</span><span class="p">)</span><span class="o">.</span><span class="n">mock</span><span class="p">(</span><span class="n">return_value</span><span class="o">=</span><span class="n">httpx</span><span class="o">.</span><span class="n">Response</span><span class="p">(</span>
+        <span class="mi">200</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="p">{</span><span class="s2">"access_token"</span><span class="p">:</span> <span class="s2">"t"</span><span class="p">,</span> <span class="s2">"token_type"</span><span class="p">:</span> <span class="s2">"bearer"</span><span class="p">,</span> <span class="s2">"expires_in"</span><span class="p">:</span> <span class="mi">300</span><span class="p">}))</span>
+    <span class="n">respx</span><span class="o">.</span><span class="n">post</span><span class="p">(</span><span class="s2">"https://gw.test/v1/chat/completions"</span><span class="p">)</span><span class="o">.</span><span class="n">mock</span><span class="p">(</span><span class="n">side_effect</span><span class="o">=</span><span class="p">[</span>
+        <span class="n">httpx</span><span class="o">.</span><span class="n">Response</span><span class="p">(</span><span class="mi">429</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="p">{</span><span class="s2">"Retry-After"</span><span class="p">:</span> <span class="s2">"0"</span><span class="p">},</span>
+                       <span class="n">json</span><span class="o">=</span><span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"https://prometheus.internal/errors/rate-limit-exceeded-requests"</span><span class="p">,</span>
+                             <span class="s2">"status"</span><span class="p">:</span> <span class="mi">429</span><span class="p">}),</span>
+        <span class="n">httpx</span><span class="o">.</span><span class="n">Response</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="n">json</span><span class="o">=</span><span class="n">COMPLETION</span><span class="p">),</span>
+    <span class="p">])</span>
+
+    <span class="k">with</span> <span class="n">Axonium</span><span class="p">(</span><span class="n">gateway_base_url</span><span class="o">=</span><span class="s2">"https://gw.test"</span><span class="p">,</span> <span class="n">client_id</span><span class="o">=</span><span class="s2">"i"</span><span class="p">,</span> <span class="n">client_secret</span><span class="o">=</span><span class="s2">"s"</span><span class="p">)</span> <span class="k">as</span> <span class="n">client</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">summarise</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="s2">"..."</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"..."</span></code></pre></div>
+<div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="nx">srv</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">httptest</span><span class="p">.</span><span class="nx">NewServer</span><span class="p">(</span><span class="nx">http</span><span class="p">.</span><span class="nx">HandlerFunc</span><span class="p">(</span><span class="kd">func</span><span class="p">(</span><span class="nx">w</span><span class="w"> </span><span class="nx">http</span><span class="p">.</span><span class="nx">ResponseWriter</span><span class="p">,</span><span class="w"> </span><span class="nx">r</span><span class="w"> </span><span class="o">*</span><span class="nx">http</span><span class="p">.</span><span class="nx">Request</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">	</span><span class="k">if</span><span class="w"> </span><span class="nx">r</span><span class="p">.</span><span class="nx">URL</span><span class="p">.</span><span class="nx">Path</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s">"/oauth2/token"</span><span class="w"> </span><span class="p">{</span>
+<span class="w">		</span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">w</span><span class="p">.</span><span class="nx">Write</span><span class="p">([]</span><span class="kt">byte</span><span class="p">(</span><span class="s">`{"access_token":"t","token_type":"bearer","expires_in":300}`</span><span class="p">))</span>
+<span class="w">		</span><span class="k">return</span>
+<span class="w">	</span><span class="p">}</span>
+<span class="w">	</span><span class="nx">w</span><span class="p">.</span><span class="nx">Header</span><span class="p">().</span><span class="nx">Set</span><span class="p">(</span><span class="s">"Content-Type"</span><span class="p">,</span><span class="w"> </span><span class="s">"application/json"</span><span class="p">)</span>
+<span class="w">	</span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">w</span><span class="p">.</span><span class="nx">Write</span><span class="p">(</span><span class="nx">completionJSON</span><span class="p">)</span>
+<span class="p">}))</span>
+<span class="k">defer</span><span class="w"> </span><span class="nx">srv</span><span class="p">.</span><span class="nx">Close</span><span class="p">()</span>
+
+<span class="nx">client</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">axonium</span><span class="p">.</span><span class="nx">New</span><span class="p">(</span><span class="nx">axonium</span><span class="p">.</span><span class="nx">Config</span><span class="p">{</span>
+<span class="w">	</span><span class="nx">GatewayBaseURL</span><span class="p">:</span><span class="w"> </span><span class="nx">srv</span><span class="p">.</span><span class="nx">URL</span><span class="p">,</span><span class="w"> </span><span class="nx">ClientID</span><span class="p">:</span><span class="w"> </span><span class="s">"i"</span><span class="p">,</span><span class="w"> </span><span class="nx">ClientSecret</span><span class="p">:</span><span class="w"> </span><span class="s">"s"</span><span class="p">,</span>
+<span class="p">})</span></code></pre></div>
+</div><p>Rust: <code>wiremock</code> works the same way.</p>
+<h2>Make the waits stop costing wall-clock</h2>
+<p>A retry test that honours a real <code>Retry-After</code> takes as long as the wait. Set the policy to remove
+it:</p>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">RetryPolicy</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">Axonium</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">retry</span><span class="o">=</span><span class="n">RetryPolicy</span><span class="p">(</span><span class="n">initial_backoff</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">max_backoff</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">jitter</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span></code></pre></div>
+<p><code>max_backoff=0</code> has a second effect worth knowing: any server-supplied <code>Retry-After</code> above zero is
+then <strong>surfaced as an error rather than slept through</strong>, which is the same rule that keeps a long
+wait from blocking a real caller. If your test asserts that a long wait is handed back, this is how
+you produce one.</p>
+<h2>Use the recorded envelopes</h2>
+<p>The repository carries the error bodies and SSE streams these SDKs are tested against, in
+<a href="https://github.com/Root1V/axonium-sdk/tree/main/spec/fixtures"><code>spec/fixtures/</code></a>, indexed by
+<a href="https://github.com/Root1V/axonium-sdk/blob/main/spec/cases/manifest.json"><code>spec/cases/manifest.json</code></a>.
+They are literal wire captures — blank-line record separators included — not hand-written
+approximations.</p>
+<p>Using them means your fake gateway answers the way the real one does, including the parts nobody
+remembers: that the rate-limit envelope omits <code>trace_id</code>, that a <code>429</code> puts its <code>scope</code> in the body
+rather than the header, that a stream's error event is <code>{&quot;error&quot;: &quot;...&quot;}</code> at the top level.</p>
+<p>Point your fixtures at that directory rather than copying the JSON into your test file, where it
+will stop matching and nobody will notice.</p>
+<h2>What the SDKs' own tests do</h2>
+<p>Worth knowing, because it tells you what is already covered and what is not:</p>
+<ul>
+<li><strong>One corpus, three runners.</strong> Python, Go and Rust replay the same manifest against the same
+bytes. They share no code, so matching behaviour is verified rather than intended.</li>
+<li><strong>Every test is written twice</strong> in Python, sync and async, from one parametrised fixture. The
+previous generation of this SDK had zero async tests.</li>
+<li><strong>Mutation testing is the acceptance bar.</strong> A test that passes when the implementation is broken
+did not test anything, and the only way to find those is to break the implementation on purpose.</li>
+</ul>
+<p>Run the whole thing exactly as CI does:</p>
+<div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">./scripts/verify.sh</code></pre></div>
+<h2>Integration tests</h2>
+<p>Marked and skipped by default. They need <code>AXONIUM_INTEGRATION=1</code> plus real credentials, and they
+never run in CI — a test suite that depends on a deployment being up reports red for reasons that
+have nothing to do with the change under review.</p>
+<p>Next: <a href="07-limits.html">What it does not do</a>.</p>
+
+<div class="pager"><a class="prev" href="05-composed.html"><span class="dir">Previous</span>Composed operations</a><a class="next" href="07-limits.html"><span class="dir">Next</span>What it does not do</a></div>
+<footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
+</main>
+</div>
+<script>
+(function () {
+  document.querySelectorAll('.code').forEach(function (block) {
+    var button = document.createElement('button');
+    button.className = 'copy';
+    button.type = 'button';
+    button.textContent = 'Copy';
+    button.addEventListener('click', function () {
+      // file:// is not a secure context, so the API is simply absent there. Say so rather than
+      // reporting a copy that did not happen.
+      if (!navigator.clipboard) { button.textContent = 'Unavailable'; return; }
+      navigator.clipboard.writeText(block.querySelector('code').innerText).then(function () {
+        button.textContent = 'Copied';
+        setTimeout(function () { button.textContent = 'Copy'; }, 1200);
+      });
+    });
+    block.appendChild(button);
+  });
+
+  document.querySelectorAll('.tabs').forEach(function (group) {
+    var blocks = Array.prototype.slice.call(group.querySelectorAll('.code'));
+    if (blocks.length < 2) return;
+    var list = document.createElement('div');
+    list.className = 'tablist';
+    list.setAttribute('role', 'tablist');
+
+    function select(index) {
+      blocks.forEach(function (b, i) { b.hidden = i !== index; });
+      Array.prototype.forEach.call(list.children, function (t, i) {
+        t.setAttribute('aria-selected', String(i === index));
+      });
+      try { localStorage.setItem('axonium-lang', blocks[index].dataset.language); } catch (e) {}
+    }
+
+    blocks.forEach(function (block, index) {
+      var tab = document.createElement('button');
+      tab.type = 'button';
+      tab.setAttribute('role', 'tab');
+      tab.textContent = block.dataset.label || block.dataset.language;
+      tab.addEventListener('click', function () { select(index); });
+      list.appendChild(tab);
+    });
+
+    group.insertBefore(list, group.firstChild);
+    group.classList.add('enhanced');
+
+    var remembered = 0;
+    try {
+      var saved = localStorage.getItem('axonium-lang');
+      blocks.forEach(function (b, i) { if (b.dataset.language === saved) remembered = i; });
+    } catch (e) {}
+    select(remembered);
+  });
+})();
+</script>
+</body>
+</html>

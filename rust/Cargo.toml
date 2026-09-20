@@ -6,6 +6,7 @@ rust-version = "1.75"
 description = "Rust SDK for the Prometheus Gateway inference API"
 license = "MIT"
 repository = "https://github.com/Root1V/axonium-sdk"
+documentation = "https://root1v.github.io/axonium-sdk/"
 keywords = ["llm", "inference", "sdk", "openai"]
 categories = ["api-bindings"]
 publish = true
