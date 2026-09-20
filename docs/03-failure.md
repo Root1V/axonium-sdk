@@ -60,6 +60,20 @@ completion.meta.waited_s    # 36.0
 completion.meta.attempts    # 2
 ```
 
+```go
+completion, err := client.Chat.Create(ctx, request)
+
+completion.Meta.WaitedFor   // 36s
+completion.Meta.Attempts    // 2
+```
+
+```rust
+let completion = client.chat(&request).await?;
+
+completion.meta.waited_for; // 36s
+completion.meta.attempts;   // 2
+```
+
 Use the second. A log line is invisible unless the application configured a handler for it — the
 SDKs install a `NullHandler` and do not touch your logging — and a latency dashboard cannot read
 one anyway.
@@ -94,7 +108,7 @@ let completion = client
     .chat(&ChatRequest {
         model: "qwen3-0.6b".into(),
         messages: vec![Message::text("user", "...")],
-        idempotency_key: Some("order-4417-summary".into()),
+        idempotency_key: "order-4417-summary".into(),
         ..Default::default()
     })
     .await?;
@@ -113,6 +127,19 @@ over-length key as a *conflict*, which points the investigation in the wrong dir
 ```python
 if completion.meta.idempotent_replay:
     billed = completion.meta.idempotent_replay_of
+```
+
+```go
+if completion.Meta.IdempotentReplay {
+	billed := completion.Meta.IdempotentReplayOf
+	_ = billed
+}
+```
+
+```rust
+if completion.meta.idempotent_replay {
+    let billed = &completion.meta.idempotent_replay_of;
+}
 ```
 
 A replay carries its **own** `request_id`, and that id has no usage row — looking it up returns

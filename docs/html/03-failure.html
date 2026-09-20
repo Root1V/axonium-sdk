@@ -213,7 +213,15 @@ not the rare long one. And once as <strong>data on the response</strong>:</p>
 
 <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">waited_s</span>    <span class="c1"># 36.0</span>
 <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">attempts</span>    <span class="c1"># 2</span></code></pre></div>
-<p>Use the second. A log line is invisible unless the application configured a handler for it — the
+<div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="nx">completion</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">Chat</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">request</span><span class="p">)</span>
+
+<span class="nx">completion</span><span class="p">.</span><span class="nx">Meta</span><span class="p">.</span><span class="nx">WaitedFor</span><span class="w">   </span><span class="c1">// 36s</span>
+<span class="nx">completion</span><span class="p">.</span><span class="nx">Meta</span><span class="p">.</span><span class="nx">Attempts</span><span class="w">    </span><span class="c1">// 2</span></code></pre></div>
+<div class="code" data-language="rust" data-label="Rust"><pre><code class="language-rust"><span class="kd">let</span><span class="w"> </span><span class="n">completion</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">chat</span><span class="p">(</span><span class="o">&amp;</span><span class="n">request</span><span class="p">).</span><span class="k">await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">waited_for</span><span class="p">;</span><span class="w"> </span><span class="c1">// 36s</span>
+<span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">attempts</span><span class="p">;</span><span class="w">   </span><span class="c1">// 2</span></code></pre></div>
+</div><p>Use the second. A log line is invisible unless the application configured a handler for it — the
 SDKs install a <code>NullHandler</code> and do not touch your logging — and a latency dashboard cannot read
 one anyway.</p>
 <blockquote>
@@ -224,7 +232,7 @@ the roadmap rather than done.</p>
 <h2>Idempotency</h2>
 <p>An <code>Idempotency-Key</code> changes what is safe, and it is the only thing that makes a timed-out request
 retryable:</p>
-<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+<div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
     <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"..."</span><span class="p">}],</span>
     <span class="n">idempotency_key</span><span class="o">=</span><span class="s2">"order-4417-summary"</span><span class="p">,</span>
@@ -238,7 +246,7 @@ retryable:</p>
 <span class="w">    </span><span class="p">.</span><span class="n">chat</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ChatRequest</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="n">model</span><span class="p">:</span><span class="w"> </span><span class="s">"qwen3-0.6b"</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span>
 <span class="w">        </span><span class="n">messages</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="n">Message</span><span class="p">::</span><span class="n">text</span><span class="p">(</span><span class="s">"user"</span><span class="p">,</span><span class="w"> </span><span class="s">"..."</span><span class="p">)],</span>
-<span class="w">        </span><span class="n">idempotency_key</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="s">"order-4417-summary"</span><span class="p">.</span><span class="n">into</span><span class="p">()),</span>
+<span class="w">        </span><span class="n">idempotency_key</span><span class="p">:</span><span class="w"> </span><span class="s">"order-4417-summary"</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span>
 <span class="w">        </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
 <span class="w">    </span><span class="p">})</span>
 <span class="w">    </span><span class="p">.</span><span class="k">await</span><span class="o">?</span><span class="p">;</span></code></pre></div>
@@ -251,7 +259,14 @@ over-length key as a <em>conflict</em>, which points the investigation in the wr
 <h3>Telling a replay apart from a generation</h3>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="k">if</span> <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">idempotent_replay</span><span class="p">:</span>
     <span class="n">billed</span> <span class="o">=</span> <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">idempotent_replay_of</span></code></pre></div>
-<p>A replay carries its <strong>own</strong> <code>request_id</code>, and that id has no usage row — looking it up returns
+<div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="k">if</span><span class="w"> </span><span class="nx">completion</span><span class="p">.</span><span class="nx">Meta</span><span class="p">.</span><span class="nx">IdempotentReplay</span><span class="w"> </span><span class="p">{</span>
+<span class="w">	</span><span class="nx">billed</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">completion</span><span class="p">.</span><span class="nx">Meta</span><span class="p">.</span><span class="nx">IdempotentReplayOf</span>
+<span class="w">	</span><span class="nx">_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">billed</span>
+<span class="p">}</span></code></pre></div>
+<div class="code" data-language="rust" data-label="Rust"><pre><code class="language-rust"><span class="k">if</span><span class="w"> </span><span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">idempotent_replay</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">billed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">&amp;</span><span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">idempotent_replay_of</span><span class="p">;</span>
+<span class="p">}</span></code></pre></div>
+</div><p>A replay carries its <strong>own</strong> <code>request_id</code>, and that id has no usage row — looking it up returns
 <code>404</code>, correctly, because replaying reached no model and was not billed.
 <code>idempotent_replay_of</code> is the id of the generation that <em>was</em> billed, and the only route from the
 response you received to the charge it corresponds to.</p>
@@ -267,7 +282,7 @@ request to be told the same thing. The error says so explicitly, so a fast local
 mistaken for a real gateway answer.</p>
 <p>The cooldown is scoped to the model, not the host: one unavailable backend does not stop the rest.</p>
 <h2>Catching things</h2>
-<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">RateLimitError</span><span class="p">,</span> <span class="n">SpendCapExceededError</span><span class="p">,</span> <span class="n">APIError</span>
+<div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">RateLimitError</span><span class="p">,</span> <span class="n">SpendCapExceededError</span><span class="p">,</span> <span class="n">APIError</span>
 
 <span class="k">try</span><span class="p">:</span>
     <span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span> <span class="n">messages</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">])</span>

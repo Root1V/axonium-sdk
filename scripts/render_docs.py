@@ -95,10 +95,16 @@ def group_code_tabs(body: str) -> str:
     what an agent reads, and it is also what the HTML falls back to when JavaScript is unavailable,
     since the wrapper is inert without it.
     """
-    pattern = re.compile(
-        r'(?:<div class="code" data-language="(?:python|go|rust)"[^>]*>.*?</div>\s*){2,}',
-        re.S,
+    # The inner part is forbidden from containing a block terminator. Written as `.*?</div>` it
+    # looks equivalent and is not: `.*?` backtracks, so one "repetition" could swallow the prose
+    # between two blocks and end at a later `</div>`. That put a paragraph, a warning and an `<h2>`
+    # inside a tabset, and rendered four tabs reading "Python, Python, Go, Rust".
+    end = r"</code></pre></div>"
+    one_block = (
+        r'<div class="code" data-language="(?:python|go|rust)"[^>]*>'
+        r"<pre><code[^>]*>(?:(?!" + end + r").)*?" + end
     )
+    pattern = re.compile(r"(?:" + one_block + r"\s*){2,}", re.S)
 
     def wrap(match: re.Match[str]) -> str:
         return f'<div class="tabs">{match.group(0)}</div>'

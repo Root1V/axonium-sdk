@@ -7,10 +7,12 @@ public symbol has to be documented, or something ends up usable only by reading 
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -21,6 +23,16 @@ DOCS = REPO / "docs"
 HTML = DOCS / "html"
 SCRIPTS = REPO / "scripts"
 REFERENCE = DOCS / "08-reference.md"
+
+
+def _load_renderer() -> Any:
+    """Import the renderer by path: scripts/ is a directory of tools, not an importable package."""
+    spec = importlib.util.spec_from_file_location("render_docs", SCRIPTS / "render_docs.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 # Names cited in prose that are deliberately not ours: standard library, test tools, and the
 # gateway's own vocabulary. Anything not here has to exist in one of the three SDKs.
@@ -209,6 +221,133 @@ class TestWhatIsCalledPendingIsStillPending:
         # failure mode of that flag is that it gets set during an incident and never unset.
         fields = set(axonium.AxoniumConfig.model_fields)
         assert not {"verify", "verify_ssl", "insecure", "skip_verify"} & fields
+
+
+def code_groups(page: Path) -> list[list[str]]:
+    """Runs of fenced blocks separated by nothing but blank lines -- what the renderer tabs."""
+    lines = page.read_text(encoding="utf-8").splitlines()
+    fences, index = [], 0
+    while index < len(lines):
+        opening = re.match(r"^```(\w*)", lines[index])
+        if opening:
+            start, language = index, opening.group(1)
+            index += 1
+            while index < len(lines) and not lines[index].startswith("```"):
+                index += 1
+            fences.append((start, language, index))
+        index += 1
+
+    groups: list[list[tuple[int, str, int]]] = []
+    current: list[tuple[int, str, int]] = []
+    for fence in fences:
+        if current and all(not line.strip() for line in lines[current[-1][2] + 1 : fence[0]]):
+            current.append(fence)
+        else:
+            if current:
+                groups.append(current)
+            current = [fence]
+    if current:
+        groups.append(current)
+    return [[language for _, language, _ in group] for group in groups]
+
+
+class TestEveryExampleSpeaksAllThreeLanguages:
+    """Three SDKs documented on one site, so an example in one language is an example missing two.
+
+    Both of these come from real defects. A group rendered as four tabs reading
+    "Python, Python, Go, Rust" with two of them empty, and most groups showed Python alone.
+    """
+
+    @pytest.mark.parametrize("page", narrative_pages(), ids=lambda p: p.name)
+    def test_a_group_showing_one_sdk_language_shows_all_three(self, page: Path) -> None:
+        languages = {"python", "go", "rust"}
+        incomplete = [
+            group
+            for group in code_groups(page)
+            if set(group) & languages and not set(group) >= languages
+        ]
+        assert not incomplete, f"{page.name}: groups missing a language: {incomplete}"
+
+    @pytest.mark.parametrize("page", narrative_pages(), ids=lambda p: p.name)
+    def test_no_group_repeats_a_language(self, page: Path) -> None:
+        languages = {"python", "go", "rust"}
+        repeated = [
+            group
+            for group in code_groups(page)
+            if set(group) & languages and len(group) != len(set(group))
+        ]
+        assert not repeated, f"{page.name}: a tabset would show duplicate tabs: {repeated}"
+
+
+class TestTabsWrapCodeAndNothingElse:
+    """The wrapper must contain code blocks only.
+
+    Written as `.*?</div>` the grouping regex looked right and was not: `.*?` backtracks, so one
+    repetition could swallow the prose between two blocks and close at a later `</div>`. A
+    paragraph, a warning and an `<h2>` ended up inside a tabset, hidden along with the tabs.
+    """
+
+    @pytest.mark.parametrize("page", sorted(HTML.glob("*.html")), ids=lambda p: p.name)
+    def test_no_prose_is_swallowed_into_a_tabset(self, page: Path) -> None:
+        html_text = page.read_text(encoding="utf-8")
+        for start in (m.start() for m in re.finditer(r'<div class="tabs">', html_text)):
+            depth = 0
+            for token in re.finditer(r"<div\b[^>]*>|</div>", html_text[start:]):
+                depth += 1 if token.group(0) != "</div>" else -1
+                if depth == 0:
+                    group = html_text[start : start + token.end()]
+                    break
+            else:
+                pytest.fail(f"{page.name}: unbalanced tabs wrapper")
+            prose = re.findall(r"<(p|h1|h2|h3|blockquote|ul|ol|table)\b", group)
+            assert not prose, f"{page.name}: prose inside a tabset: {sorted(set(prose))}"
+
+
+class TestTheGroupingFunctionItself:
+    """Tested directly, because the corpus can stop being able to trigger the bug.
+
+    The page test above checks the rendered output, which is the invariant that matters. But it can
+    only catch a grouping bug that today's pages happen to provoke: once every group is a run of
+    adjacent blocks, a regex that backtracks across prose never needs to, and the fault sits latent
+    until someone writes a lone block followed by prose and another block. Verified by restoring
+    the greedy version -- the page tests stayed green and this one does not.
+    """
+
+    @staticmethod
+    def block(language: str) -> str:
+        return (
+            f'<div class="code" data-language="{language}" data-label="{language}">'
+            f"<pre><code>x</code></pre></div>"
+        )
+
+    def test_prose_between_blocks_ends_the_group(self) -> None:
+        render_docs = _load_renderer()
+        html_in = (
+            self.block("python")
+            + "\n<p>prose</p>\n<h2>A heading</h2>\n"
+            + self.block("python")
+            + "\n"
+            + self.block("go")
+        )
+
+        grouped = render_docs.group_code_tabs(html_in)
+
+        opened = grouped.index('<div class="tabs">')
+        assert "<p>prose</p>" not in grouped[opened:], (
+            "the tabset swallowed the prose that separates two groups"
+        )
+        assert grouped.count('<div class="tabs">') == 1, (
+            "only the adjacent pair is a tabset; the lone block before the prose is not"
+        )
+
+    def test_adjacent_blocks_are_grouped(self) -> None:
+        render_docs = _load_renderer()
+        html_in = self.block("python") + "\n" + self.block("go") + "\n" + self.block("rust")
+
+        grouped = render_docs.group_code_tabs(html_in)
+
+        assert grouped.startswith('<div class="tabs">')
+        assert grouped.count('<div class="tabs">') == 1
 
 
 class TestTheRenderedOutputIsSelfContained:

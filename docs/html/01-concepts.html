@@ -241,9 +241,13 @@ it from your own wall clock to get what the platform actually spent.</p>
 <strong>which budget</strong> they describe. The endpoints hold separate budgets — <code>embeddings</code>, <code>rerank</code>,
 <code>chat_completions</code> — so a <code>remaining_requests</code> read after a chat call says nothing about your
 embeddings budget.</p>
-<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">client</span><span class="o">.</span><span class="n">last_rate_limit</span>          <span class="c1"># what the most recent call reported</span>
+<div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">client</span><span class="o">.</span><span class="n">last_rate_limit</span>          <span class="c1"># what the most recent call reported</span>
 <span class="n">client</span><span class="o">.</span><span class="n">rate_limits</span><span class="p">[</span><span class="s2">"embeddings"</span><span class="p">]</span>  <span class="c1"># the most recent reading for that budget</span></code></pre></div>
-<p>Read <code>client.rate_limits</code>, not <code>last_rate_limit</code>, when the question is &quot;how much of budget X is
+<div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="nx">client</span><span class="p">.</span><span class="nx">LastRateLimit</span><span class="p">()</span><span class="w">               </span><span class="c1">// what the most recent call reported</span>
+<span class="nx">client</span><span class="p">.</span><span class="nx">RateLimits</span><span class="p">()[</span><span class="s">"embeddings"</span><span class="p">]</span><span class="w">    </span><span class="c1">// the most recent reading for that budget</span></code></pre></div>
+<div class="code" data-language="rust" data-label="Rust"><pre><code class="language-rust"><span class="n">client</span><span class="p">.</span><span class="n">last_rate_limit</span><span class="p">();</span><span class="w">                  </span><span class="c1">// what the most recent call reported</span>
+<span class="n">client</span><span class="p">.</span><span class="n">rate_limits</span><span class="p">().</span><span class="n">get</span><span class="p">(</span><span class="s">"embeddings"</span><span class="p">);</span><span class="w">    </span><span class="c1">// the most recent reading for that budget</span></code></pre></div>
+</div><p>Read <code>client.rate_limits</code>, not <code>last_rate_limit</code>, when the question is &quot;how much of budget X is
 left&quot;. The distinction is not pedantry: before <code>scope</code> existed, a suggestion pipeline touching
 three endpoints in a row left <code>last_rate_limit</code> describing whichever answered last, with nothing in
 the numbers saying so.</p>

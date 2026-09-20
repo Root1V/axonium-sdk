@@ -46,7 +46,26 @@ client, err := axonium.New(axonium.Config{
 })
 ```
 
-Rust: `wiremock` works the same way.
+```rust
+let server = MockServer::start().await;
+Mock::given(path("/oauth2/token"))
+    .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+        "access_token": "t", "token_type": "bearer", "expires_in": 300
+    })))
+    .mount(&server)
+    .await;
+Mock::given(any())
+    .respond_with(ResponseTemplate::new(200).set_body_json(completion))
+    .mount(&server)
+    .await;
+
+let client = Client::new(Config {
+    gateway_base_url: server.uri(),
+    client_id: "i".into(),
+    client_secret: "s".into(),
+    ..Default::default()
+})?;
+```
 
 ## Make the waits stop costing wall-clock
 
@@ -57,6 +76,29 @@ it:
 from axonium import RetryPolicy
 
 client = Axonium(..., retry=RetryPolicy(initial_backoff=0.0, max_backoff=0.0, jitter=False))
+```
+
+```go
+client, err := axonium.New(axonium.Config{
+	GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s",
+	Retry: &axonium.RetryPolicy{MaxAttempts: 3, InitialBackoff: 0, MaxBackoff: 0},
+})
+```
+
+```rust
+let client = Client::new(Config {
+    gateway_base_url: server.uri(),
+    client_id: "i".into(),
+    client_secret: "s".into(),
+    retry: RetryPolicy {
+        max_attempts: 3,
+        initial_backoff: Duration::ZERO,
+        max_backoff: Duration::ZERO,
+        jitter: false,
+        ..Default::default()
+    },
+    ..Default::default()
+})?;
 ```
 
 `max_backoff=0` has a second effect worth knowing: any server-supplied `Retry-After` above zero is

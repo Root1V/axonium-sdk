@@ -64,6 +64,38 @@ client = Axonium(
 )
 ```
 
+```go
+client, err := axonium.New(axonium.Config{
+	ClientID:     "...",
+	ClientSecret: "...",
+	Timeouts: axonium.Timeouts{
+		Connect: 10 * time.Second,
+		Request: 600 * time.Second,
+		Stream:  180 * time.Second,
+		Auth:    15 * time.Second,
+	},
+})
+```
+
+```rust
+let client = Client::new(Config {
+    client_id: "...".into(),
+    client_secret: "...".into(),
+    timeouts: Timeouts {
+        connect: Duration::from_secs(10),
+        request: Duration::from_secs(600),
+        stream: Duration::from_secs(180),
+        auth: Duration::from_secs(15),
+    },
+    ..Default::default()
+})?;
+```
+
+The three do not carve the budget up identically, and the docs will not pretend they do. Python
+exposes httpx's four phases (`connect`, `read`, `write`, `pool`); Go and Rust bound the whole call
+with `Request`. What matters is the same everywhere: the read budget is generous because generation
+is slow, and `Stream`/`stream_read` is separate and shorter.
+
 Read timeouts are generous because generation is slow. The streaming read timeout is separate and
 shorter: it bounds the gap **between chunks**, not the length of the whole stream, so a stalled
 stream is detected without capping a long one.
@@ -73,6 +105,24 @@ Any call can override:
 ```python
 client.chat.completions.create(model="qwen3-0.6b", messages=[...], timeout=30)
 ```
+
+```go
+ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+defer cancel()
+
+completion, err := client.Chat.Create(ctx, request)
+```
+
+```rust
+let completion = tokio::time::timeout(
+    Duration::from_secs(30),
+    client.chat(&request),
+).await??;
+```
+
+Only Python takes a per-call `timeout`. Go and Rust deliberately do not add one: a deadline on a
+single call is what `context.Context` and `tokio::time::timeout` already are, and a second
+mechanism beside them is one more place for the two to disagree.
 
 **A client-side timeout is not retried**, and the error says why — see [Failure](03-failure.md).
 
