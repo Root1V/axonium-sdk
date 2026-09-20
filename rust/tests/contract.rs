@@ -117,8 +117,12 @@ fn chat_request(request: &Value) -> ChatRequest {
                     .map(|m| Message {
                         role: m["role"].as_str().unwrap_or_default().into(),
                         content: m.get("content").cloned(),
-                        reasoning_content: None,
-                        tool_calls: None,
+                        tool_call_id: m
+                            .get("tool_call_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .into(),
+                        ..Default::default()
                     })
                     .collect()
             })

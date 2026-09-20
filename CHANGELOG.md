@@ -517,6 +517,17 @@ No third-party dependencies: standard library only.
 
 ### Unreleased
 
+`Message` gains `tool_call_id` and `name`, and derives `Default`.
+
+Without `tool_call_id` a tool result cannot be matched to the call that asked for it, which means a
+tool-use loop could not be closed in this SDK at all: it could read a tool call and had no way to
+send the answer back. Python and Go have carried the field since the beginning.
+
+Both fields are omitted from the wire when empty, so an ordinary turn is unchanged.
+
+**Source-breaking, not behaviour-breaking**: a `Message { .. }` literal that names every field now
+misses two. Add `..Default::default()`.
+
 `RateLimit::scope`, and `Client::rate_limits()` keyed by it. `ApiError` also gains `rate_limit`, which Python and Go have always carried and this SDK did not.
 
 The platform gave `/v1/embeddings`, `/v1/rerank` and `/v1/chat/completions` separate rate-limit
