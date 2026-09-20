@@ -10,7 +10,9 @@ name: python-release
 #   3. Create both environments in this repository's settings. A required reviewer on `pypi` is
 #      worth having: a release cannot be unpublished, only yanked.
 #
-# A tag publishes to PyPI. Use the manual dispatch for a TestPyPI dry run first.
+# A tag publishes to PyPI, but only if that exact version already exists on TestPyPI. Use the
+# manual dispatch to rehearse there first -- it is enforced, not advised. See the `testpypi-gate`
+# job for why.
 
 on:
   push:
@@ -72,8 +74,49 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
 
+  # Refuses to publish a version that has not been rehearsed on TestPyPI. This exists because the
+  # rehearsal was a comment in this file asking the releaser to remember, and on 2026-09-16 the
+  # releaser did not: 1.0.0rc4 went to PyPI having never been to TestPyPI. The rehearsal is the
+  # step that caught the rc2 packaging defect, and a PyPI version can never be reused, so the
+  # failure it prevents is permanent. A control that depends on someone remembering is not a
+  # control.
+  testpypi-gate:
+    if: github.event_name == 'push' || inputs.target == 'pypi'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: This version has been rehearsed on TestPyPI
+        working-directory: python
+        run: |
+          version="$(grep -oE '"[^"]+"' src/axonium/_version.py | tr -d '"')"
+          url="https://test.pypi.org/pypi/axonium/${version}/json"
+          # --retry covers a blip; it must not turn an outage into a pass. The `|| true` is not
+          # laziness: Actions runs this under `bash -e`, so an unreachable index would abort here
+          # and the operator would read curl's error instead of the one below -- failing for a
+          # reason that is not the reason. curl writes 000 when it never got a response.
+          code="$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 5 "$url" || true)"
+
+          case "$code" in
+            200)
+              echo "$version is on TestPyPI. Proceeding."
+              ;;
+            404)
+              echo "::error::$version has never been published to TestPyPI." >&2
+              echo "Rehearse it first: Actions -> python-release -> Run workflow -> testpypi," >&2
+              echo "then re-run this release. Nothing has been published to PyPI." >&2
+              exit 1
+              ;;
+            *)
+              # Deliberately a different message from the 404. A check that reports the wrong
+              # reason for failing is one people learn to override.
+              echo "::error::Could not reach TestPyPI (HTTP $code). This is not a verdict on" >&2
+              echo "whether $version was rehearsed -- it means the gate could not tell." >&2
+              exit 1
+              ;;
+          esac
+
   pypi:
-    needs: build
+    needs: [build, testpypi-gate]
     if: github.event_name == 'push' || inputs.target == 'pypi'
     runs-on: ubuntu-latest
     environment: pypi
