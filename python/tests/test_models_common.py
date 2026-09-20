@@ -103,3 +103,51 @@ def test_stream_interrupted_error_retains_partial_output() -> None:
     assert exc.request_id == "req-1"
     assert exc.trace_id == "trace-1"
     assert exc.raw == {"error": "stream interrupted"}
+
+
+class TestRateLimitScope:
+    """Which budget a set of counters describes, once the endpoints hold separate budgets."""
+
+    def test_the_header_names_the_budget(self) -> None:
+        snapshot = RateLimitSnapshot.from_headers(
+            httpx.Headers({"X-RateLimit-Scope": "rerank", "X-RateLimit-Remaining-Requests": "59"})
+        )
+
+        assert snapshot.scope == "rerank"
+
+    def test_a_scope_alone_is_not_a_budget(self) -> None:
+        # is_empty decides whether a snapshot is worth remembering. A scope labels a budget rather
+        # than being one, so a response carrying only a scope has still reported no numbers.
+        assert RateLimitSnapshot.from_headers(
+            httpx.Headers({"X-RateLimit-Scope": "rerank"})
+        ).is_empty
+
+    def test_the_body_supplies_the_scope_when_the_header_does_not(self) -> None:
+        # Measured 2026-09-19: the 429 omits the header and carries "scope" in the body instead.
+        headerless = RateLimitSnapshot.from_headers(
+            httpx.Headers({"X-RateLimit-Remaining-Requests": "0"})
+        )
+
+        assert headerless.with_scope_from({"scope": "embeddings"}).scope == "embeddings"
+
+    def test_the_header_wins_over_a_body_that_disagrees(self) -> None:
+        """A defensive rule, not an observed response: nothing seen so far carries both.
+
+        It is pinned anyway because it is the same precedence already documented for
+        ``Retry-After``, and an unstated tie-break is one somebody re-decides differently later.
+        Deliberately not a contract case -- the corpus holds recorded bytes, and inventing a
+        response nobody has seen is how a fixture ends up describing a gateway that does not exist.
+        """
+        from_header = RateLimitSnapshot.from_headers(
+            httpx.Headers({"X-RateLimit-Scope": "rerank", "X-RateLimit-Remaining-Requests": "0"})
+        )
+
+        assert from_header.with_scope_from({"scope": "embeddings"}).scope == "rerank"
+
+    def test_a_body_without_a_scope_leaves_it_unset(self) -> None:
+        headerless = RateLimitSnapshot.from_headers(
+            httpx.Headers({"X-RateLimit-Remaining-Requests": "0"})
+        )
+
+        assert headerless.with_scope_from({"detail": "no scope here"}).scope is None
+        assert headerless.with_scope_from(None).scope is None

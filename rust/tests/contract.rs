@@ -154,6 +154,22 @@ fn resolve<'a>(root: &'a Value, path: &str) -> Option<&'a Value> {
     Some(node)
 }
 
+/// Exposes an `ApiError` under the same field names the manifest uses, so one case describes all
+/// three SDKs rather than each runner inventing its own spelling.
+fn error_view(api: &axonium::ApiError) -> Value {
+    serde_json::json!({
+        "status": api.status,
+        "request_id": api.request_id,
+        "trace_id": api.trace_id,
+        "retry_after": api.retry_after,
+        "rate_limit": api.rate_limit.as_ref().map(|r| serde_json::json!({
+            "scope": r.scope,
+            "limit_requests": r.limit_requests,
+            "remaining_requests": r.remaining_requests,
+        })),
+    })
+}
+
 fn expect_fields(result: &Value, case: &Value) {
     let Some(fields) = case["expect"].get("fields").and_then(Value::as_object) else {
         return;
@@ -176,6 +192,7 @@ fn kind_for(suffix: &str) -> ErrorKind {
         "idempotency-in-progress" => ErrorKind::IdempotencyInProgress,
         "idempotency-response-not-retained" => ErrorKind::IdempotencyResponseNotRetained,
         "not-found" => ErrorKind::NotFound,
+        "rate-limit-exceeded-requests" => ErrorKind::RateLimitExceeded,
         "upstream-unavailable" => ErrorKind::TokenEndpointUnavailable,
         "not-configured" => ErrorKind::TokenEndpointNotConfigured,
         other => panic!("the manifest names an error this SDK does not map: {other}"),
@@ -240,6 +257,10 @@ async fn contract_corpus() {
                             if case["expect"]["has_trace_id"].as_bool() == Some(true) {
                                 assert!(!api.trace_id.is_empty(), "{id}: trace_id");
                             }
+                            // Errors carry fields worth pinning too -- which budget a 429
+                            // exhausted, for one. Until this existed, every error case could
+                            // assert a suffix and nothing about the envelope's contents.
+                            expect_fields(&error_view(&api), case);
                         }
                         other => panic!("{id}: a gateway failure typed as {other:?}"),
                     }
@@ -301,7 +322,13 @@ async fn contract_corpus() {
                     "instance_id": completion.meta.instance_id,
                     "idempotent_replay": completion.meta.idempotent_replay,
                     "idempotent_replay_of": completion.meta.idempotent_replay_of,
+                    // Named for the manifest's vocabulary rather than Rust's: one case describes
+                    // all three SDKs, so the path is the same everywhere even where the field
+                    // spelling is not.
+                    "waited_s": completion.meta.waited_for.as_secs_f64(),
+                    "attempts": completion.meta.attempts,
                     "rate_limit": completion.meta.rate_limit.as_ref().map(|r| serde_json::json!({
+                        "scope": r.scope,
                         "limit_requests": r.limit_requests,
                         "remaining_requests": r.remaining_requests,
                         "remaining_tokens": r.remaining_tokens,
@@ -495,6 +522,10 @@ async fn contract_corpus() {
                         "{id}: no trace_id to correlate with"
                     );
                 }
+                // Errors carry fields worth pinning too -- which budget a 429 exhausted, for one.
+                // Until this existed, every error case could assert a suffix and nothing about the
+                // envelope's contents.
+                expect_fields(&error_view(&api), case);
             }
             (k, op) => panic!("{id}: unhandled kind {k} / operation {op}"),
         }

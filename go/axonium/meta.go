@@ -18,6 +18,17 @@ import (
 // reservation, so a burst of large requests can still exceed the token budget between header
 // updates. Treat them as a strong signal, not a guarantee against ever seeing a 429.
 type RateLimitSnapshot struct {
+	// Scope names which budget these numbers describe -- "embeddings", "rerank",
+	// "chat_completions", or "default" for everything sharing the general bucket.
+	//
+	// Without it these counters cannot be attributed: the endpoints hold separate budgets, so a
+	// RemainingRequests read after a chat call says nothing about the embeddings budget, and
+	// nothing in the numbers themselves reveals which one answered.
+	//
+	// Empty on a deployment predating per-endpoint budgets, and on a 429 from a gateway that omits
+	// the header there -- see WithScopeFrom.
+	Scope string
+
 	LimitRequests     *int
 	RemainingRequests *int
 	// ResetRequests is the Unix timestamp at which the request window resets.
@@ -30,6 +41,9 @@ type RateLimitSnapshot struct {
 }
 
 // IsEmpty reports whether the response carried no rate-limit headers at all.
+//
+// Scope is excluded deliberately: it labels a budget rather than being one, so a response carrying
+// only a scope has still reported no numbers.
 func (s *RateLimitSnapshot) IsEmpty() bool {
 	return s.LimitRequests == nil && s.RemainingRequests == nil && s.ResetRequests == nil &&
 		s.LimitTokens == nil && s.RemainingTokens == nil && s.ResetTokens == nil
@@ -49,6 +63,7 @@ func rateLimitFromHeaders(h http.Header) *RateLimitSnapshot {
 	}
 
 	s := &RateLimitSnapshot{
+		Scope:             h.Get("X-RateLimit-Scope"),
 		LimitRequests:     read("X-RateLimit-Limit-Requests"),
 		RemainingRequests: read("X-RateLimit-Remaining-Requests"),
 		ResetRequests:     read("X-RateLimit-Reset-Requests"),
@@ -58,6 +73,26 @@ func rateLimitFromHeaders(h http.Header) *RateLimitSnapshot {
 	}
 	if s.IsEmpty() {
 		return nil
+	}
+	return s
+}
+
+// withScopeFrom fills in Scope from a problem+json body when the header did not carry it.
+//
+// Measured against a deployment 2026-09-19: X-RateLimit-Scope is present on successful responses
+// and ABSENT on the 429, where the body carries "scope" instead. That is the one response whose
+// budget a caller most needs to attribute -- knowing which bucket you just exhausted is the
+// difference between backing off the right endpoint and backing off all of them. Same shape as
+// this envelope's documented omission of trace_id: the rate-limiting middleware writes its own,
+// and what it writes is not what the others write.
+//
+// The header wins when both are present, matching the rule already used for Retry-After.
+func (s *RateLimitSnapshot) withScopeFrom(body map[string]any) *RateLimitSnapshot {
+	if s == nil || s.Scope != "" {
+		return s
+	}
+	if scope, ok := body["scope"].(string); ok {
+		s.Scope = scope
 	}
 	return s
 }

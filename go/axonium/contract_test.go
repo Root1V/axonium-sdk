@@ -286,6 +286,32 @@ func runErrorCase(t *testing.T, client *Client, c contractCase) {
 	if c.Expect.HasTraceID != nil && (apiErr.TraceID != "") != *c.Expect.HasTraceID {
 		t.Errorf("trace_id present: got %v, want %v", apiErr.TraceID != "", *c.Expect.HasTraceID)
 	}
+	// Errors carry fields worth pinning too -- which budget a 429 exhausted, for one. Until this
+	// existed, every error case could assert a suffix and nothing about the envelope's contents.
+	for path, want := range c.Expect.Fields {
+		if got := resolvePath(t, errorView(apiErr), path); !equalJSON(got, want) {
+			t.Errorf("%s: got %#v, want %#v", path, got, want)
+		}
+	}
+}
+
+// errorView exposes an *APIError under the same field names the manifest uses, so one case
+// describes all three SDKs rather than each runner inventing its own spelling.
+func errorView(e *APIError) map[string]any {
+	view := map[string]any{
+		"status":      e.Status,
+		"request_id":  e.RequestID,
+		"trace_id":    e.TraceID,
+		"retry_after": e.RetryAfter,
+	}
+	if e.RateLimit != nil {
+		view["rate_limit"] = map[string]any{
+			"scope":              e.RateLimit.Scope,
+			"limit_requests":     e.RateLimit.LimitRequests,
+			"remaining_requests": e.RateLimit.RemainingRequests,
+		}
+	}
+	return view
 }
 
 func invokeExpectingError(t *testing.T, client *Client, c contractCase) error {
@@ -445,9 +471,14 @@ func metaAsMap(m ResponseMeta) map[string]any {
 		"instance_id":          m.InstanceID,
 		"idempotent_replay":    m.IdempotentReplay,
 		"idempotent_replay_of": m.IdempotentReplayOf,
+		// Named for the manifest's vocabulary rather than Go's: one case describes all three SDKs,
+		// so the path is the same everywhere even where the field spelling is not.
+		"waited_s": m.WaitedFor.Seconds(),
+		"attempts": m.Attempts,
 	}
 	if m.RateLimit != nil {
 		out["rate_limit"] = map[string]any{
+			"scope":              m.RateLimit.Scope,
 			"limit_requests":     derefInt(m.RateLimit.LimitRequests),
 			"remaining_requests": derefInt(m.RateLimit.RemainingRequests),
 			"reset_requests":     derefInt(m.RateLimit.ResetRequests),

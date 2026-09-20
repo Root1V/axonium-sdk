@@ -59,6 +59,17 @@ impl Usage {
 /// a guarantee against ever seeing a 429.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RateLimit {
+    /// Which budget these numbers describe -- `"embeddings"`, `"rerank"`, `"chat_completions"`, or
+    /// `"default"` for everything sharing the general bucket.
+    ///
+    /// Without it these counters cannot be attributed: the endpoints hold separate budgets, so a
+    /// `remaining_requests` read after a chat call says nothing about the embeddings budget, and
+    /// nothing in the numbers themselves reveals which one answered.
+    ///
+    /// `None` on a deployment predating per-endpoint budgets, and on a 429 from a gateway that
+    /// omits the header there -- see [`RateLimit::with_scope_from`].
+    pub scope: Option<String>,
+
     pub limit_requests: Option<u64>,
     pub remaining_requests: Option<u64>,
     pub reset_requests: Option<u64>,
@@ -68,8 +79,38 @@ pub struct RateLimit {
 }
 
 impl RateLimit {
+    /// Whether the response carried no rate-limit headers at all.
+    ///
+    /// `scope` is excluded deliberately: it labels a budget rather than being one, so a response
+    /// carrying only a scope has still reported no numbers. Written out rather than compared
+    /// against `Self::default()`, which would quietly start counting the label as a budget.
     fn is_empty(&self) -> bool {
-        *self == Self::default()
+        self.limit_requests.is_none()
+            && self.remaining_requests.is_none()
+            && self.reset_requests.is_none()
+            && self.limit_tokens.is_none()
+            && self.remaining_tokens.is_none()
+            && self.reset_tokens.is_none()
+    }
+
+    /// Fills in [`scope`](Self::scope) from a problem+json body when the header did not carry it.
+    ///
+    /// Measured against a deployment 2026-09-19: `X-RateLimit-Scope` is present on successful
+    /// responses and **absent on the 429**, where the body carries `"scope"` instead. That is the
+    /// one response whose budget a caller most needs to attribute -- knowing which bucket you just
+    /// exhausted is the difference between backing off the right endpoint and backing off all of
+    /// them. Same shape as this envelope's documented omission of `trace_id`: the rate-limiting
+    /// middleware writes its own, and what it writes is not what the others write.
+    ///
+    /// The header wins when both are present, matching the rule already used for `Retry-After`.
+    #[must_use]
+    pub fn with_scope_from(mut self, body: Option<&serde_json::Value>) -> Self {
+        if self.scope.is_none() {
+            if let Some(scope) = body.and_then(|b| b.get("scope")).and_then(|v| v.as_str()) {
+                self.scope = Some(scope.to_string());
+            }
+        }
+        self
     }
 }
 
@@ -132,6 +173,10 @@ impl ResponseMeta {
         };
 
         let rate_limit = RateLimit {
+            scope: headers
+                .get("x-ratelimit-scope")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string),
             limit_requests: number("x-ratelimit-limit-requests"),
             remaining_requests: number("x-ratelimit-remaining-requests"),
             reset_requests: number("x-ratelimit-reset-requests"),
@@ -154,5 +199,81 @@ impl ResponseMeta {
             waited_for: std::time::Duration::ZERO,
             attempts: 1,
         }
+    }
+}
+
+#[cfg(test)]
+mod rate_limit_scope {
+    use super::RateLimit;
+
+    fn headers(pairs: &[(&str, &str)]) -> reqwest::header::HeaderMap {
+        let mut map = reqwest::header::HeaderMap::new();
+        for (name, value) in pairs {
+            map.insert(
+                reqwest::header::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                value.parse().unwrap(),
+            );
+        }
+        map
+    }
+
+    fn snapshot(pairs: &[(&str, &str)]) -> RateLimit {
+        crate::types::ResponseMeta::from_headers(&headers(pairs))
+            .rate_limit
+            .expect("the headers carried a budget")
+    }
+
+    #[test]
+    fn a_scope_alone_is_not_a_budget() {
+        // is_empty decides whether a snapshot is worth reporting. A scope labels a budget rather
+        // than being one, so a response carrying only a scope has still reported no numbers.
+        assert!(crate::types::ResponseMeta::from_headers(&headers(&[(
+            "x-ratelimit-scope",
+            "rerank"
+        )]))
+        .rate_limit
+        .is_none());
+    }
+
+    #[test]
+    fn the_body_supplies_the_scope_when_the_header_does_not() {
+        // Measured 2026-09-19: the 429 omits the header and carries "scope" in the body instead.
+        let headerless = snapshot(&[("x-ratelimit-remaining-requests", "0")]);
+        assert_eq!(headerless.scope, None);
+
+        let filled = headerless.with_scope_from(Some(&serde_json::json!({"scope": "embeddings"})));
+        assert_eq!(filled.scope.as_deref(), Some("embeddings"));
+    }
+
+    /// A defensive rule, not an observed response: nothing seen so far carries both.
+    ///
+    /// Pinned anyway because it is the same precedence already documented for `Retry-After`, and an
+    /// unstated tie-break is one somebody re-decides differently later. Deliberately not a contract
+    /// case -- the corpus holds recorded bytes, and inventing a response nobody has seen is how a
+    /// fixture ends up describing a gateway that does not exist.
+    #[test]
+    fn the_header_wins_over_a_body_that_disagrees() {
+        let from_header = snapshot(&[
+            ("x-ratelimit-scope", "rerank"),
+            ("x-ratelimit-remaining-requests", "0"),
+        ]);
+
+        let unchanged =
+            from_header.with_scope_from(Some(&serde_json::json!({"scope": "embeddings"})));
+        assert_eq!(unchanged.scope.as_deref(), Some("rerank"));
+    }
+
+    #[test]
+    fn a_body_without_a_scope_leaves_it_unset() {
+        let headerless = snapshot(&[("x-ratelimit-remaining-requests", "0")]);
+
+        assert_eq!(
+            headerless
+                .clone()
+                .with_scope_from(Some(&serde_json::json!({"detail": "none here"})))
+                .scope,
+            None
+        );
+        assert_eq!(headerless.with_scope_from(None).scope, None);
     }
 }
