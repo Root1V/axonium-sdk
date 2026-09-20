@@ -37,7 +37,7 @@ import (
 const userAgent = "axonium-go/" + Version
 
 // Version is this SDK's version.
-const Version = "0.3.0"
+const Version = "0.4.0"
 
 // Client is a client for the Prometheus inference platform. Safe for concurrent use.
 type Client struct {

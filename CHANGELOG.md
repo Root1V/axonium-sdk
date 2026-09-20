@@ -5,7 +5,7 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ## Python
 
-### Unreleased
+### 1.0.0rc5 — 2026-09-20
 
 No change to the public surface beyond the additions above. Verified rather than asserted: the
 release rehearsal now compares this tree against the wheel PyPI actually served, and reports every
@@ -316,7 +316,7 @@ which spoke to a platform generation that no longer exists.
 
 ## Go
 
-### Unreleased
+### 0.4.0 — 2026-09-20
 
 `Version` reported `0.2.0` from the module published as `v0.3.0`.
 
@@ -523,7 +523,7 @@ No third-party dependencies: standard library only.
 
 ## Rust
 
-### Unreleased
+### 0.4.0 — 2026-09-20
 
 `Message` gains `tool_call_id` and `name`, and derives `Default`.
 

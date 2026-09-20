@@ -7,7 +7,7 @@ and image models across managed instances, behind one authenticated API with per
 control, rate limits, spend caps and usage accounting. This SDK talks to one of its components, the
 **gateway**, which serves inference and issues tokens at a single address.
 
-> **Status: `1.0.0rc4`, published to PyPI.** The client is feature-complete against the current
+> **Status: `1.0.0rc5`, published to PyPI.** The client is feature-complete against the current
 > gateway contract. A release candidate rather than `1.0.0` on purpose: the stability commitment
 > starts at `1.0.0`, and the surface is still growing.
 
