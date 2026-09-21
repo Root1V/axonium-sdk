@@ -100,7 +100,9 @@ that is the one thing that makes the repeat free.
 
 **Idempotency keys**, on every endpoint including streaming. On a stream a key replays one the
 gateway *finished* and whose delivery your connection dropped; one the model itself broke has
-nothing complete to replay.
+nothing complete to replay. What happens to a key whose request *failed* is **not
+specified** — that is the gateway's decision, not this SDK's, and assuming a failure frees the key
+has already cost one consumer a day of confusing retries.
 
 **Instance pinning** through `instance`, by label (`#2`) or full id — never through `model`, since
 a grant covers a model and billing attributes to a model. A pin opts out of load balancing *and*

@@ -79,6 +79,11 @@ type ChatRequest struct {
 	// broke -- that needs resuming rather than replaying, which nobody has built. Within that
 	// boundary a streamed replay is as reliable as a non-streaming one, including with no wait
 	// between calls. Read Meta().IdempotentReplay to know which you got.
+	//
+	// What happens to a key whose request FAILED is not specified, and is the gateway's decision
+	// rather than this SDK's. A consumer with derived keys found a failed step returning its stored
+	// error for the whole window; we could not reproduce it with the failures we can produce. Do
+	// not assume a failure frees the key.
 	IdempotencyKey string `json:"-"`
 }
 
