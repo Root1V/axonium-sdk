@@ -62,7 +62,13 @@ _NOTICEABLE_WAIT = 1.0
 
 
 def _validate_idempotency_key(key: str | None) -> None:
-    """Reject a key the gateway would reject, without spending a round trip on it."""
+    """Reject a key the gateway would reject, without spending a round trip on it.
+
+    What happens to a key whose request *failed* is not specified, and is the gateway's decision
+    rather than this SDK's -- which holds no store, cache or TTL for one. A consumer with derived
+    keys found a failed step returning its stored error for the whole window; we could not
+    reproduce it with the failures we can produce. Do not assume a failure frees the key.
+    """
     if key is not None and len(key) > MAX_IDEMPOTENCY_KEY_LENGTH:
         raise InvalidRequestError(
             f"idempotency_key is {len(key)} characters; the gateway accepts at most "

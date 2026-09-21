@@ -151,6 +151,11 @@ pub struct ChatRequest {
     ///
     /// On a stream it replays one the gateway **finished** and whose delivery your connection
     /// dropped, never one the model itself broke -- that needs resuming rather than replaying.
+    ///
+    /// What happens to a key whose request *failed* is not specified, and is the gateway's
+    /// decision rather than this SDK's. A consumer with derived keys found a failed step returning
+    /// its stored error for the whole window; we could not reproduce it with the failures we can
+    /// produce. Do not assume a failure frees the key.
     pub idempotency_key: String,
 }
 

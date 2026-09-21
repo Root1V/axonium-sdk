@@ -150,6 +150,24 @@ response you received to the charge it corresponds to.
 If you reconcile usage from response ids, you need this field. Without it an audit starting from a
 replay's id finds nothing **and cannot tell why**.
 
+### A key is not known to be released by a failure
+
+Everything above describes what a key can **replay**. It deliberately says nothing about what
+happens to the key when the first request *fails*, because we do not know, and the difference
+matters to anyone whose key is derived rather than random.
+
+A consumer running deterministic keys — `(run_id, step_id, body-fingerprint)`, so that resuming
+reproduces instead of paying twice — reported that a step which failed once kept returning the
+stored error for the whole 24-hour window, in milliseconds, so their retries never reached a model
+again. We could not reproduce it against our deployment with the failures we can produce
+(`400 unknown-instance`): the key was still usable afterwards, and a second call with a different
+body succeeded rather than being refused. Their case was a `5xx`, which we cannot force.
+
+So the honest statement is: **whether a failed request holds its key is undefined here**, it is
+decided by the gateway and not by this SDK, and it is being asked. Until it is answered, treat a
+derived key whose request failed as possibly unusable for the rest of the window, and note that a
+stored error arrives without `Idempotent-Replay`, so it is indistinguishable from a fresh one.
+
 ## Cooldowns
 
 The gateway runs its own circuit breaker per backend, so the SDKs do not add a second one — it
