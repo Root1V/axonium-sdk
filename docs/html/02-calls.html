@@ -186,6 +186,45 @@ before it produced any.</p>
 set <code>frequency_penalty</code>, nothing complains, and nothing applies it. The SDKs check the request
 against an allowlist and emit a <strong>warning</strong> naming each dropped field — a warning rather than an
 error, so a gateway that later adds a field does not break callers who were ahead of it.</p>
+<p>That allowlist is the SDK's <em>model</em> of what the gateway accepts, and a model can go stale: when the
+platform started honouring <code>response_format</code>, this SDK kept warning that it would be dropped for
+five days. The gateway also reports its own verdict, in <code>X-Prometheus-Ignored-Parameters</code> on the
+response, which is the authoritative answer — the SDKs do not surface it yet.</p>
+<h3>Structured output</h3>
+<div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">schema</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"json_schema"</span><span class="p">,</span> <span class="s2">"json_schema"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"capital"</span><span class="p">,</span> <span class="s2">"schema"</span><span class="p">:</span> <span class="p">{</span>
+    <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span> <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"capital"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span> <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"capital"</span><span class="p">]}}}</span>
+
+<span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
+    <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"Capital of Peru?"</span><span class="p">}],</span>
+    <span class="n">response_format</span><span class="o">=</span><span class="n">schema</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">answer</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">completion</span><span class="o">.</span><span class="n">content</span><span class="p">)</span>      <span class="c1"># a JSON string, not a nested object</span></code></pre></div>
+<div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="nx">completion</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">Chat</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">axonium</span><span class="p">.</span><span class="nx">ChatRequest</span><span class="p">{</span>
+<span class="w">	</span><span class="nx">Model</span><span class="p">:</span><span class="w">          </span><span class="s">"qwen3-0.6b"</span><span class="p">,</span>
+<span class="w">	</span><span class="nx">Messages</span><span class="p">:</span><span class="w">       </span><span class="p">[]</span><span class="nx">axonium</span><span class="p">.</span><span class="nx">Message</span><span class="p">{</span><span class="nx">axonium</span><span class="p">.</span><span class="nx">TextMessage</span><span class="p">(</span><span class="s">"user"</span><span class="p">,</span><span class="w"> </span><span class="s">"Capital of Peru?"</span><span class="p">)},</span>
+<span class="w">	</span><span class="nx">ResponseFormat</span><span class="p">:</span><span class="w"> </span><span class="nx">schema</span><span class="p">,</span>
+<span class="p">})</span>
+
+<span class="kd">var</span><span class="w"> </span><span class="nx">answer</span><span class="w"> </span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span>
+<span class="nx">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">json</span><span class="p">.</span><span class="nx">Unmarshal</span><span class="p">([]</span><span class="kt">byte</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">Content</span><span class="p">()),</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">answer</span><span class="p">)</span></code></pre></div>
+<div class="code" data-language="rust" data-label="Rust"><pre><code class="language-rust"><span class="kd">let</span><span class="w"> </span><span class="n">completion</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">client</span>
+<span class="w">    </span><span class="p">.</span><span class="n">chat</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ChatRequest</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">model</span><span class="p">:</span><span class="w"> </span><span class="s">"qwen3-0.6b"</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span>
+<span class="w">        </span><span class="n">messages</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="n">Message</span><span class="p">::</span><span class="n">text</span><span class="p">(</span><span class="s">"user"</span><span class="p">,</span><span class="w"> </span><span class="s">"Capital of Peru?"</span><span class="p">)],</span>
+<span class="w">        </span><span class="n">response_format</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">schema</span><span class="p">),</span>
+<span class="w">        </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="w">    </span><span class="p">.</span><span class="k">await</span><span class="o">?</span><span class="p">;</span>
+
+<span class="kd">let</span><span class="w"> </span><span class="n">answer</span><span class="p">:</span><span class="w"> </span><span class="nc">serde_json</span><span class="p">::</span><span class="n">Value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">serde_json</span><span class="p">::</span><span class="n">from_str</span><span class="p">(</span><span class="o">&amp;</span><span class="n">completion</span><span class="p">.</span><span class="n">content</span><span class="p">())</span><span class="o">?</span><span class="p">;</span></code></pre></div>
+</div><p>The grammar is the engine's, and the schema is forwarded verbatim — validating it here would be a
+second copy of the engine's rules, drifting from the first.</p>
+<p><strong>The answer arrives as a JSON string in the content, not as a nested object</strong>, and the SDKs do not
+parse it for you. Same reason tool-call <code>arguments</code> stays a string: a generation stopped by
+<code>max_tokens</code> leaves it truncated, and a response model that raises from the inside is worse than
+one that hands you what arrived. That is not hypothetical — the first structured response measured
+while writing this came back as <code>{\n  &quot;capital&quot;: &quot;Lima&quot;\n</code> with <code>finish_reason: length</code>.</p>
 <h2>Streaming</h2>
 <p>A separate method, not a flag. That keeps the return type honest, makes the <code>inference:stream</code>
 scope check explicit, and gives one place to say that <strong>streams are never retried</strong>.</p>

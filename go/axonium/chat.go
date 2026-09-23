@@ -53,6 +53,15 @@ type ChatRequest struct {
 	Tools       []any    `json:"tools,omitempty"`
 	ToolChoice  any      `json:"tool_choice,omitempty"`
 
+	// ResponseFormat requests structured output. Forwarded verbatim, like Tools: the grammar is
+	// the engine's, and validating the schema here would be a second copy of its rules that
+	// drifts.
+	//
+	// The answer arrives as a JSON STRING in the message content, not as a nested object -- parse
+	// it yourself. This SDK deliberately does not, for the same reason tool-call Arguments stays a
+	// string: a generation stopped by MaxTokens leaves it truncated.
+	ResponseFormat any `json:"response_format,omitempty"`
+
 	Extra map[string]any `json:"-"`
 
 	// Instance pins this request to one instance, by label ("#2") or by full instance id. It is

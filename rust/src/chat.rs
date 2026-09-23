@@ -139,6 +139,13 @@ pub struct ChatRequest {
     pub stop: Vec<String>,
     pub tools: Vec<Value>,
     pub tool_choice: Option<Value>,
+    /// Structured outputs. Forwarded verbatim, like `tools`: the grammar is the engine's, and
+    /// validating the schema here would be a second copy of its rules that drifts.
+    ///
+    /// The answer arrives as a JSON **string** in the message content, not as a nested object --
+    /// parse it yourself. This SDK deliberately does not, for the same reason tool-call
+    /// `arguments` stays a string: a generation stopped by `max_tokens` leaves it truncated.
+    pub response_format: Option<Value>,
     pub extra: serde_json::Map<String, Value>,
     /// Pins the request to one instance, by label (`#2`) or full id. Sent as a header, never in
     /// `model`: a grant covers a model, billing attributes to a model, and the catalog lists
@@ -222,6 +229,9 @@ impl ChatRequest {
         }
         if let Some(v) = &self.tool_choice {
             map.insert("tool_choice".into(), v.clone());
+        }
+        if let Some(v) = &self.response_format {
+            map.insert("response_format".into(), v.clone());
         }
         for (k, v) in &self.extra {
             map.insert(k.clone(), v.clone());
@@ -454,5 +464,40 @@ mod tool_results {
         let wire = serde_json::to_value(&conversation).expect("serialises");
         assert_eq!(wire[1]["tool_call_id"], "call_1");
         assert!(wire[0].get("tool_call_id").is_none());
+    }
+}
+
+#[cfg(test)]
+mod response_format {
+    use super::{ChatRequest, Message};
+
+    /// The platform enabled structured outputs on 2026-09-18 (PRM-126). Rust could always smuggle
+    /// the field through `extra`, but an untyped escape hatch is not a capability a caller can
+    /// find -- and Python, which strips unknown fields, could not send it at all.
+    #[test]
+    fn it_reaches_the_wire() {
+        let request = ChatRequest {
+            model: "m".into(),
+            messages: vec![Message::text("user", "hi")],
+            response_format: Some(serde_json::json!({"type": "json_schema"})),
+            ..Default::default()
+        };
+
+        let body = request.payload(false);
+
+        assert_eq!(body["response_format"]["type"], "json_schema");
+    }
+
+    /// The gateway treats the field's presence as a request for constrained output, so a caller
+    /// who never mentions it must send nothing rather than a null.
+    #[test]
+    fn it_is_absent_when_not_asked_for() {
+        let request = ChatRequest {
+            model: "m".into(),
+            messages: vec![Message::text("user", "hi")],
+            ..Default::default()
+        };
+
+        assert!(request.payload(false).get("response_format").is_none());
     }
 }

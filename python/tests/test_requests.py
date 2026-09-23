@@ -165,3 +165,100 @@ class TestVisionContent:
                     }
                 ],
             )
+
+
+class TestResponseFormatReachesTheWire:
+    """The field the SDK used to strip while telling the caller the gateway did not support it.
+
+    The platform enabled structured outputs on 2026-09-18 (PRM-126) and said so. Our allowlist was
+    not updated, so for five days this SDK answered a caller asking for structured output with
+
+        The gateway does not support response_format; it was not sent.
+
+    which was false in both halves. Measured against a deployment after the fix: the field goes out
+    and the answer comes back constrained by the schema.
+    """
+
+    def test_it_is_sent_rather_than_stripped(self) -> None:
+        schema = {"type": "json_schema", "json_schema": {"name": "x", "schema": {}}}
+
+        payload = ChatCompletionRequest.build(
+            {
+                "model": "m",
+                "messages": [{"role": "user", "content": "hi"}],
+                "response_format": schema,
+            }
+        ).to_payload()
+
+        assert payload["response_format"] == schema
+
+    def test_it_no_longer_warns(self, recwarn: pytest.WarningsRecorder) -> None:
+        ChatCompletionRequest.build(
+            {
+                "model": "m",
+                "messages": [{"role": "user", "content": "hi"}],
+                "response_format": {"type": "text"},
+            }
+        )
+
+        assert not [w for w in recwarn if issubclass(w.category, UnsupportedFieldWarning)]
+
+    def test_it_is_absent_when_not_asked_for(self) -> None:
+        # to_payload drops unset optionals, so a caller who never mentions it sends nothing --
+        # which matters because the gateway treats its presence as a request for constrained output.
+        payload = ChatCompletionRequest.build(
+            {"model": "m", "messages": [{"role": "user", "content": "hi"}]}
+        ).to_payload()
+
+        assert "response_format" not in payload
+
+    def test_the_fields_the_gateway_really_drops_still_warn(
+        self, recwarn: pytest.WarningsRecorder
+    ) -> None:
+        # Measured 2026-09-23 from X-Prometheus-Ignored-Parameters on a live response, so this list
+        # is the gateway's own answer rather than our recollection of it.
+        ChatCompletionRequest.build(
+            {
+                "model": "m",
+                "messages": [{"role": "user", "content": "hi"}],
+                "n": 1,
+                "seed": 7,
+                "logit_bias": {},
+                "user": "u",
+                "presence_penalty": 0.1,
+                "frequency_penalty": 0.1,
+            }
+        )
+
+        warned = " ".join(str(w.message) for w in recwarn)
+        for field in ("n", "seed", "logit_bias", "user", "presence_penalty", "frequency_penalty"):
+            assert field in warned, f"{field} is dropped by the gateway and was not reported"
+
+
+class TestTheUnsupportedListCannotGoStale:
+    """`KNOWN_UNSUPPORTED` may not name a field the model also declares.
+
+    Such an entry is dead: a declared field is assigned by pydantic and never reaches
+    ``__pydantic_extra__``, which is the only thing the warning inspects. Nothing fails, the entry
+    simply stops meaning anything, and the next reader believes the field is dropped.
+
+    Written after exactly that: `response_format` sat in this set for five days after the platform
+    started honouring it, and removing it from the set was not enough -- the field had to be
+    declared for it to reach the wire at all. A mutation putting it back changes nothing
+    observable, which is why this guard exists instead of a test that would pass either way.
+    """
+
+    @pytest.mark.parametrize(
+        "request_type",
+        [ChatCompletionRequest, EmbeddingsRequest, ImageGenerationRequest],
+        ids=lambda cls: cls.__name__,
+    )
+    def test_no_declared_field_is_also_listed_as_unsupported(self, request_type: type) -> None:
+        declared = set(request_type.model_fields)
+
+        overlap = sorted(declared & request_type.KNOWN_UNSUPPORTED)
+
+        assert not overlap, (
+            f"{request_type.__name__} declares {overlap} and also lists them as unsupported; "
+            f"the list entry is dead and says the opposite of what the field does"
+        )

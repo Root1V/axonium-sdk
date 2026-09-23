@@ -50,6 +50,58 @@ set `frequency_penalty`, nothing complains, and nothing applies it. The SDKs che
 against an allowlist and emit a **warning** naming each dropped field — a warning rather than an
 error, so a gateway that later adds a field does not break callers who were ahead of it.
 
+That allowlist is the SDK's *model* of what the gateway accepts, and a model can go stale: when the
+platform started honouring `response_format`, this SDK kept warning that it would be dropped for
+five days. The gateway also reports its own verdict, in `X-Prometheus-Ignored-Parameters` on the
+response, which is the authoritative answer — the SDKs do not surface it yet.
+
+### Structured output
+
+```python
+schema = {"type": "json_schema", "json_schema": {"name": "capital", "schema": {
+    "type": "object", "properties": {"capital": {"type": "string"}}, "required": ["capital"]}}}
+
+completion = client.chat.completions.create(
+    model="qwen3-0.6b",
+    messages=[{"role": "user", "content": "Capital of Peru?"}],
+    response_format=schema,
+)
+answer = json.loads(completion.content)      # a JSON string, not a nested object
+```
+
+```go
+completion, err := client.Chat.Create(ctx, axonium.ChatRequest{
+	Model:          "qwen3-0.6b",
+	Messages:       []axonium.Message{axonium.TextMessage("user", "Capital of Peru?")},
+	ResponseFormat: schema,
+})
+
+var answer map[string]any
+err = json.Unmarshal([]byte(completion.Content()), &answer)
+```
+
+```rust
+let completion = client
+    .chat(&ChatRequest {
+        model: "qwen3-0.6b".into(),
+        messages: vec![Message::text("user", "Capital of Peru?")],
+        response_format: Some(schema),
+        ..Default::default()
+    })
+    .await?;
+
+let answer: serde_json::Value = serde_json::from_str(&completion.content())?;
+```
+
+The grammar is the engine's, and the schema is forwarded verbatim — validating it here would be a
+second copy of the engine's rules, drifting from the first.
+
+**The answer arrives as a JSON string in the content, not as a nested object**, and the SDKs do not
+parse it for you. Same reason tool-call `arguments` stays a string: a generation stopped by
+`max_tokens` leaves it truncated, and a response model that raises from the inside is worse than
+one that hands you what arrived. That is not hypothetical — the first structured response measured
+while writing this came back as `{\n  "capital": "Lima"\n` with `finish_reason: length`.
+
 ## Streaming
 
 A separate method, not a flag. That keeps the return type honest, makes the `inference:stream`

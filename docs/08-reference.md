@@ -139,6 +139,7 @@ Body for ``POST /v1/chat/completions``.
 | `top_p` | `float \| None` | `None` |
 | `stop` | `str \| list[str] \| None` | `None` |
 | `tools` | `list[dict[str, Any]] \| None` | `None` |
+| `response_format` | `dict[str, Any] \| None` | `None` |
 | `tool_choice` | `str \| dict[str, Any] \| None` | `None` |
 
 ### `EmbeddingsRequest`
