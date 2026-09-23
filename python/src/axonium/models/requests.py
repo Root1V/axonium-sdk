@@ -151,7 +151,6 @@ class ChatCompletionRequest(_AllowlistRequest):
             "logit_bias",
             "user",
             "seed",
-            "response_format",
         }
     )
 
@@ -164,6 +163,15 @@ class ChatCompletionRequest(_AllowlistRequest):
     stop: str | list[str] | None = None
     #: Forwarded verbatim; the gateway does not validate tool schemas.
     tools: list[dict[str, Any]] | None = None
+    #: Structured outputs. Forwarded verbatim, like ``tools``: the grammar is the engine's, and
+    #: validating the schema here would be a second copy of its rules that drifts.
+    #:
+    #: The answer arrives as a JSON **string** in the message content, not as a nested
+    #: object -- parse it yourself. This SDK deliberately does not, for the same reason
+    #: tool-call ``arguments`` stays a string: a generation stopped by ``max_tokens`` leaves
+    #: it truncated, and a response model that raises from the inside is worse than one that
+    #: hands you what arrived.
+    response_format: dict[str, Any] | None = None
     tool_choice: str | dict[str, Any] | None = None
 
     @field_validator("messages")

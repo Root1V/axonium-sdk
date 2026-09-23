@@ -7,6 +7,17 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+**Structured output works.** `response_format` is now a declared field, forwarded verbatim.
+
+The platform started honouring it on 2026-09-18 and told us. This SDK went on warning that it was
+unsupported, and shipped a release five days later still saying so. In Python the field was also
+*stripped*, so structured output was not reachable at all.
+
+The answer comes back as a JSON **string** in the message content — parse it yourself
+(`json.loads(completion.content)`). It is not parsed here for the same reason tool-call `arguments` is not: a generation
+stopped by `max_tokens` leaves it truncated, and a response object that raises from the inside is
+worse than one that hands you what arrived.
+
 Documentation only, and it matters because it had become wrong.
 
 The rate-limit envelope no longer omits `trace_id`, and `X-RateLimit-Scope` now reaches the `429`
@@ -332,6 +343,17 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+**Structured output works.** `ResponseFormat` is now a declared field, forwarded verbatim.
+
+The platform started honouring it on 2026-09-18 and told us. This SDK went on warning that it was
+unsupported, and shipped a release five days later still saying so. In Python the field was also
+*stripped*, so structured output was not reachable at all.
+
+The answer comes back as a JSON **string** in the message content — parse it yourself
+(`json.Unmarshal([]byte(completion.Content()), &v)`). It is not parsed here for the same reason tool-call `arguments` is not: a generation
+stopped by `max_tokens` leaves it truncated, and a response object that raises from the inside is
+worse than one that hands you what arrived.
+
 Documentation only, and it matters because it had become wrong.
 
 The rate-limit envelope no longer omits `trace_id`, and `X-RateLimit-Scope` now reaches the `429`
@@ -552,6 +574,17 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+**Structured output works.** `response_format` is now a declared field, forwarded verbatim.
+
+The platform started honouring it on 2026-09-18 and told us. This SDK went on warning that it was
+unsupported, and shipped a release five days later still saying so. In Python the field was also
+*stripped*, so structured output was not reachable at all.
+
+The answer comes back as a JSON **string** in the message content — parse it yourself
+(`serde_json::from_str(&completion.content())`). It is not parsed here for the same reason tool-call `arguments` is not: a generation
+stopped by `max_tokens` leaves it truncated, and a response object that raises from the inside is
+worse than one that hands you what arrived.
 
 Documentation only, and it matters because it had become wrong.
 
