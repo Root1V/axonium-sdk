@@ -66,8 +66,8 @@ pub struct RateLimit {
     /// `remaining_requests` read after a chat call says nothing about the embeddings budget, and
     /// nothing in the numbers themselves reveals which one answered.
     ///
-    /// `None` on a deployment predating per-endpoint budgets, and on a 429 from a gateway that
-    /// omits the header there -- see [`RateLimit::with_scope_from`].
+    /// `None` on a deployment predating per-endpoint budgets, or one predating guide
+    /// `2026-09-19b`, which is when the header reached the 429 as well.
     pub scope: Option<String>,
 
     pub limit_requests: Option<u64>,
@@ -95,14 +95,13 @@ impl RateLimit {
 
     /// Fills in [`scope`](Self::scope) from a problem+json body when the header did not carry it.
     ///
-    /// Measured against a deployment 2026-09-19: `X-RateLimit-Scope` is present on successful
-    /// responses and **absent on the 429**, where the body carries `"scope"` instead. That is the
-    /// one response whose budget a caller most needs to attribute -- knowing which bucket you just
-    /// exhausted is the difference between backing off the right endpoint and backing off all of
-    /// them. Same shape as this envelope's documented omission of `trace_id`: the rate-limiting
-    /// middleware writes its own, and what it writes is not what the others write.
+    /// Measured against a deployment 2026-09-19: `X-RateLimit-Scope` was present on successful
+    /// responses and **absent on the 429**, where the body carried `"scope"` instead. The platform
+    /// closed that gap in guide `2026-09-19b` -- the header is now on both -- and this fallback
+    /// stays anyway: a deployment predating the fix still omits it, and the rule costs nothing.
     ///
     /// The header wins when both are present, matching the rule already used for `Retry-After`.
+    /// Today they cannot disagree; the rule is what protects the next envelope carrying only one.
     #[must_use]
     pub fn with_scope_from(mut self, body: Option<&serde_json::Value>) -> Self {
         if self.scope.is_none() {
@@ -237,7 +236,8 @@ mod rate_limit_scope {
 
     #[test]
     fn the_body_supplies_the_scope_when_the_header_does_not() {
-        // Measured 2026-09-19: the 429 omits the header and carries "scope" in the body instead.
+        // Measured 2026-09-19, before PRM-130 put the header on the 429 too. Kept: a deployment
+        // predating that fix still answers this way.
         let headerless = snapshot(&[("x-ratelimit-remaining-requests", "0")]);
         assert_eq!(headerless.scope, None);
 

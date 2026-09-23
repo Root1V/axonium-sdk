@@ -1,6 +1,6 @@
 # Prometheus Gateway — SDK Integration Guide
 
-**Revision**: 2026-09-16a · `f8cf34d`
+**Revision**: 2026-09-19b · `18dfa97`
 <!-- Consumers vendor this file and diff it. The date and commit above are what to quote
      when asking whether a copy is current; they change whenever this document does. -->
 
@@ -317,9 +317,57 @@ instead of always waiting for a `403` from the actual inference call.
 
 Fields: `model`, `messages` required; `stream` (default `false`); `max_tokens` (>0 if set);
 `temperature` (0.0–2.0); `top_p` (0.0 < p ≤ 1.0); `stop` (string or list); `tools` /
-`tool_choice` (forwarded as-is, no gateway-side validation of tool schemas). **Not supported**:
-`n`, `presence_penalty`, `frequency_penalty`, `logit_bias`, `user`, `seed`,
-`response_format` — silently dropped if sent.
+`tool_choice` / `response_format` (forwarded as-is, no gateway-side validation of their
+schemas).
+
+**`response_format` — structured outputs (PRM-126).** Now supported, and constrained by the
+engine rather than by prompting:
+
+```json
+{
+  "model": "qwen3-0.6b",
+  "messages": [{ "role": "user", "content": "Give me the capital of Peru" }],
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "capital",
+      "schema": {
+        "type": "object",
+        "properties": { "capital": { "type": "string" } },
+        "required": ["capital"],
+        "additionalProperties": false
+      }
+    }
+  }
+}
+```
+
+`{"type": "json_object"}` and `{"type": "text"}` work too. The content comes back as a JSON
+**string** in `choices[0].message.content` — parse it; it is not a nested object.
+
+**Anything else is accepted, ignored, and named back to you (PRM-127).** This endpoint takes an
+OpenAI-compatible *subset*. A field outside it — `n`, `presence_penalty`, `frequency_penalty`,
+`logit_bias`, `user`, `seed` — does not fail your request and does not reach the engine either.
+It comes back listed in a response header:
+
+```
+X-Prometheus-Ignored-Parameters: logit_bias, seed
+```
+
+The header is absent when there is nothing to report, so its presence always means something.
+Until PRM-127 these were dropped in silence, and this guide said so in as many words — which
+made it a decision rather than an oversight, and the decision was wrong: a setting that does
+nothing and says nothing is indistinguishable from one that works.
+
+**`require_parameters: true` turns that into a `400 unknown-parameter` instead.** Set it when
+you would rather fail than be quietly given something else — reproducibility runs, structured
+extraction, anything where a silently-dropped parameter invalidates the result. Off by default,
+because most callers want the completion more than they want the argument.
+
+The shape is [OpenRouter's](https://openrouter.ai/docs/guides/routing/provider-selection): route
+and ignore what cannot be honoured, with an opt-in for callers who need every parameter
+respected. The header is our own addition — OpenRouter's clients can look up what each provider
+supports, and you cannot, so the ignoring has to announce itself.
 
 `messages[].role` must be one of `system`, `user`, `assistant`, `tool`. `content` can be a
 plain string, `null` (e.g. an assistant message that only carries `tool_calls`), or a list of
@@ -548,6 +596,7 @@ rather than a quiet reassignment. Responses carry `X-Prometheus-Instance` and
 ```
 X-Request-ID                       — fresh UUID per request, generated server-side
 X-Trace-ID                         — for log correlation; see the exact adoption rule below
+X-RateLimit-Scope                  — which budget the six numbers below describe (PRM-129)
 X-RateLimit-Limit-Requests
 X-RateLimit-Remaining-Requests
 X-RateLimit-Reset-Requests         — unix timestamp of the next window
@@ -555,6 +604,7 @@ X-RateLimit-Limit-Tokens
 X-RateLimit-Remaining-Tokens
 X-RateLimit-Reset-Tokens
 X-Prometheus-Instance              — which replica answered (its per-model label, e.g. "#2")
+X-Prometheus-Ignored-Parameters    — request fields outside the accepted subset (§3.3); absent when none
 X-Prometheus-Instance-Id           — the same replica's instance id
 Idempotent-Replay                  — "true" only on a replayed response
 X-Idempotent-Replay-Of             — on a replay: the request id that was actually billed
@@ -711,8 +761,12 @@ from §2.1) is RFC 9457 "Problem Details", `Content-Type: application/problem+js
 Parse `type`'s last path segment as the machine-readable error code (e.g. `forbidden`,
 `unknown-model`, `spend-cap-exceeded`) — that's the stable field to branch logic on, not
 `detail` (human-readable, may change wording). Rate-limit errors from the rate-limiting
-middleware specifically use a slightly different envelope: no `trace_id`, plus an optional
-`retry_after` (int seconds) field alongside the standard fields.
+middleware add an optional `retry_after` (int seconds) and a `scope` (the budget that ran out —
+§6.3) alongside the standard fields. They used to omit `trace_id`; **as of `2026-09-19b` they no
+longer do**, so this envelope is now a strict superset of the standard one rather than a variant
+of it. Axonium found the `scope` header missing from these same responses and named the cause —
+this middleware writing its own envelope — which is why the omission was closed rather than
+documented again.
 
 **`Retry-After` header vs. body `retry_after`, confirmed — they cannot disagree.** Both are
 written from the exact same computed value inside the same function call that builds the
@@ -769,6 +823,7 @@ model" as something only the SDK can catch.
 | 400 | `unknown-model` | Model ID not registered. Checked *before* any scope check — an unrecognized model is always 400, never 403, regardless of what the token can access. | No |
 | 400 | `modality-mismatch` | Calling `/v1/rerank` with a non-rerank model, calling `/v1/chat/completions` with a model whose modality isn't `text`/`vision` (e.g. an embedding or image-generation model — fixed in RM-66, see note below), sending an image content part to a non-vision model, or calling `/v1/embeddings`/`/v1/images/generations` with the wrong modality. | No |
 | 400 | `context-exceeded` | Request exceeds the model's context window. | No (shrink the request) |
+| 400 | `unknown-parameter` | **Only when you sent `require_parameters: true`** — a request field outside the accepted subset (§3.3), every offending name listed in `detail`. Without that flag the same request succeeds and the fields come back in `X-Prometheus-Ignored-Parameters`. Distinct from `422 validation-error` on purpose: this means "that field does not exist here", not "that value is wrong". | No (drop the field, or the flag) |
 | 400 | `unknown-instance` | `X-Prometheus-Instance` (§3.7) names something that does not serve this model. A pin never falls back to another replica. | No (fix or drop the header) |
 | 400 | `inconsistent-model-group` | The replicas serving this model disagree about their modality, so the gateway refuses the whole group rather than quietly dropping the odd one — answering a chat request from an embedding backend produces confident nonsense, not an error. The detail names each instance and what it claims. | No — needs operator action |
 | 400 | `invalid-idempotency-key` | `Idempotency-Key` is malformed or over 255 characters. A `400`, not a `409`, on purpose: it never conflicted with anything, and calling it a conflict would tell you that you had repeated a request. | No (fix the key) |
@@ -782,7 +837,7 @@ model" as something only the SDK can catch.
 | 401 | `token-revoked` | Token or client was explicitly revoked by an admin. | No — needs new credentials from the operator |
 | 402 | `spend-cap-exceeded` | Client has hit its configured monthly spend cap. | No — needs the cap raised, or wait for next month |
 | 403 | `forbidden` | Missing `inference:read`/`inference:stream`, or missing the specific `model:<id>` scope. | No |
-| 429 | `rate-limit-exceeded-requests` | RPM budget exceeded (per client_id and per user_id, both enforced independently). `Retry-After` header + `retry_after` body field tell you exactly how long to wait. | **Yes**, after `Retry-After` |
+| 429 | `rate-limit-exceeded-requests` | RPM budget exceeded. `Retry-After` header + `retry_after` body field tell you exactly how long to wait, and the `scope` body field says **which** budget ran out. Charged per `client_id` and per `user_id` independently — except where they are the same string, as in a `client_credentials` token, which is charged once (PRM-128; before that fix a 60 RPM budget stopped at 30 while the header still read 60). | **Yes**, after `Retry-After` |
 | 502 | `upstream-error` | Backend returned repeated 502/503/504s and the gateway's own internal retries (3 attempts, exponential backoff) were exhausted. | Cautiously — see §6 |
 | 503 | `model-not-loaded` | Model is registered but not currently deployed/running. | No — needs operator action |
 | 503 | `backend-unavailable` | Two distinct causes share this same `type`, and only one of them sets `Retry-After` — see the note below the table. | See below |
@@ -864,6 +919,26 @@ before hitting the limit, rather than only reacting to `429`. Note the token-bud
 reflect the gateway's own post-hoc accounting for TPM (not a hard pre-flight reservation) — a
 burst of large requests can still occasionally exceed the token budget between header updates;
 treat the TPM headers as a strong signal, not an absolute guarantee against ever seeing a 429.
+
+**There is more than one budget, and the response says which one it is reporting (PRM-129).**
+Endpoints are grouped, and each group has its own RPM/TPM budget:
+
+| Budget | Endpoints |
+|---|---|
+| `chat_completions` | `POST /v1/chat/completions` |
+| `embeddings` | `POST /v1/embeddings` |
+| `rerank` | `POST /v1/rerank` |
+| `default` | everything else (images, usage, token) |
+
+`X-RateLimit-Scope` names the budget the six `X-RateLimit-*` numbers on that response belong to,
+and a `429` carries the same name in its `scope` body field. **Key it before you cache it**: one
+logical operation that calls embeddings, then rerank, then chat, gets three responses describing
+three different budgets, and a single "last seen" slot would end up holding whichever answered
+last while looking entirely plausible.
+
+`embeddings` and `rerank` shared `default` until PRM-129 — not a decision anybody made, just what
+happens when only one route is on the grouping map. A caller spending two of its three requests on
+that pair had half the ceiling it expected.
 
 ### 6.4 Circuit breaker awareness
 

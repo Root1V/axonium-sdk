@@ -215,8 +215,10 @@ match client.chat(&request).await {
 }
 ```
 
-Every error carries `request_id`, and most carry `trace_id` — the rate-limit envelope omits the
-latter, which is the platform's documented behaviour rather than an SDK gap. Those two ids are what
+Every error carries `request_id`, and `trace_id` too on a current deployment. The rate-limit
+envelope used to omit `trace_id`; since guide `2026-09-19b` that envelope is a strict superset of
+the standard one, so both ids are there. The SDKs still model `trace_id` as optional, because a
+deployment predating that fix omits it. Those two ids are what
 a platform team needs; an error report without them is a description of a feeling.
 
 Next: [Configuration and transport](04-configuration.md).

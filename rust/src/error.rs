@@ -152,7 +152,8 @@ pub struct ApiError {
     pub detail: String,
     pub instance: String,
     pub request_id: String,
-    /// Omitted by the rate-limiting middleware's envelope, hence often empty.
+    /// Empty when the response carried none. The rate-limiting envelope used to omit it always;
+    /// since guide 2026-09-19b it does not, so on a current deployment this is populated there too.
     pub trace_id: String,
     /// Resolved wait in seconds, or `None` when the platform supplied one.
     pub retry_after: Option<f64>,

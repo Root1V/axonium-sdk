@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 17,
+  "version": 18,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -949,7 +949,7 @@
     },
     {
       "id": "error-rate-limit-scope-comes-from-the-body",
-      "$comment": "Recorded against a deployment 2026-09-19, by exhausting the embeddings budget. Two edits, both declared: the client uuid and request_id are sanitised as elsewhere in this corpus, and retry_after was reduced from the observed 49 to 1 so three test suites do not sleep through a real rate-limit window -- the number is not what this case is about. What it is about is that X-RateLimit-Scope is present on successful responses and ABSENT here, while the body carries \"scope\". This is the one response whose budget most needs attributing: knowing which bucket you exhausted is the difference between backing off the right endpoint and backing off all of them. Same shape as this envelope's documented omission of trace_id -- the rate-limiting middleware writes its own, and what it writes differs.",
+      "$comment": "Recorded 2026-09-19, BEFORE the platform put X-RateLimit-Scope and trace_id on this envelope (PRM-130, guide 2026-09-19b). Kept deliberately: a deployment predating that fix still answers exactly this way, and this is the only case that exercises reading the scope out of the body. Its companion, error-rate-limit-current-envelope, records what a current deployment sends. Two edits, both declared: ids are sanitised as elsewhere in this corpus, and retry_after was reduced from the observed 49 to 1 so three test suites do not sleep through a real window.",
       "operation": "embeddings.create",
       "request": {
         "model": "qwen3-embedding",
@@ -974,6 +974,43 @@
         "retryable": true,
         "has_request_id": true,
         "has_trace_id": false,
+        "fields": {
+          "rate_limit.scope": "embeddings",
+          "rate_limit.remaining_requests": 0
+        },
+        "$comment": "has_trace_id is false because this envelope predates PRM-130, not because the SDK drops it."
+      }
+    },
+    {
+      "id": "error-rate-limit-current-envelope",
+      "$comment": "Recorded 2026-09-22 against a deployment on guide 2026-09-19b, by exhausting the embeddings budget. This envelope is now a strict superset of the standard one: it adds retry_after and scope and omits nothing. Ids sanitised, retry_after reduced from the observed 58 to 1 for the same reason as its companion. What this pins is that the scope arrives from the HEADER here, and that trace_id is no longer missing -- the two facts the older case cannot show.",
+      "operation": "embeddings.create",
+      "request": {
+        "model": "qwen3-embedding",
+        "input": "x"
+      },
+      "response": {
+        "status": 429,
+        "body_file": "err_rate_limit_current.json",
+        "headers": {
+          "Retry-After": "1",
+          "X-Request-ID": "4b90e7c1-0000-4000-8000-000000000000",
+          "X-Trace-ID": "0378c195-0000-4000-8000-000000000000",
+          "X-RateLimit-Scope": "embeddings",
+          "X-RateLimit-Limit-Requests": "60",
+          "X-RateLimit-Remaining-Requests": "0",
+          "X-RateLimit-Reset-Requests": "1789867620",
+          "X-RateLimit-Limit-Tokens": "40000",
+          "X-RateLimit-Remaining-Tokens": "40000",
+          "X-RateLimit-Reset-Tokens": "1789867620"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": "rate-limit-exceeded-requests",
+        "retryable": true,
+        "has_request_id": true,
+        "has_trace_id": true,
         "fields": {
           "rate_limit.scope": "embeddings",
           "rate_limit.remaining_requests": 0

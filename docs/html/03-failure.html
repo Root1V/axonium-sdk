@@ -319,8 +319,10 @@ mistaken for a real gateway answer.</p>
 <span class="w">    </span><span class="nb">Err</span><span class="p">(</span><span class="n">Error</span><span class="p">::</span><span class="n">Api</span><span class="p">(</span><span class="n">api</span><span class="p">))</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">api</span><span class="p">.</span><span class="n">retryable</span><span class="p">()</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">}</span>
 <span class="w">    </span><span class="n">other</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">other</span><span class="o">?</span><span class="p">,</span>
 <span class="p">}</span></code></pre></div>
-</div><p>Every error carries <code>request_id</code>, and most carry <code>trace_id</code> — the rate-limit envelope omits the
-latter, which is the platform's documented behaviour rather than an SDK gap. Those two ids are what
+</div><p>Every error carries <code>request_id</code>, and <code>trace_id</code> too on a current deployment. The rate-limit
+envelope used to omit <code>trace_id</code>; since guide <code>2026-09-19b</code> that envelope is a strict superset of
+the standard one, so both ids are there. The SDKs still model <code>trace_id</code> as optional, because a
+deployment predating that fix omits it. Those two ids are what
 a platform team needs; an error report without them is a description of a feeling.</p>
 <p>Next: <a href="04-configuration.html">Configuration and transport</a>.</p>
 
