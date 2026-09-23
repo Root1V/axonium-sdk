@@ -25,8 +25,8 @@ type RateLimitSnapshot struct {
 	// RemainingRequests read after a chat call says nothing about the embeddings budget, and
 	// nothing in the numbers themselves reveals which one answered.
 	//
-	// Empty on a deployment predating per-endpoint budgets, and on a 429 from a gateway that omits
-	// the header there -- see WithScopeFrom.
+	// Empty on a deployment predating per-endpoint budgets, or one predating guide 2026-09-19b,
+	// which is when the header reached the 429 as well.
 	Scope string
 
 	LimitRequests     *int
@@ -79,14 +79,14 @@ func rateLimitFromHeaders(h http.Header) *RateLimitSnapshot {
 
 // withScopeFrom fills in Scope from a problem+json body when the header did not carry it.
 //
-// Measured against a deployment 2026-09-19: X-RateLimit-Scope is present on successful responses
-// and ABSENT on the 429, where the body carries "scope" instead. That is the one response whose
-// budget a caller most needs to attribute -- knowing which bucket you just exhausted is the
-// difference between backing off the right endpoint and backing off all of them. Same shape as
-// this envelope's documented omission of trace_id: the rate-limiting middleware writes its own,
-// and what it writes is not what the others write.
+// Measured against a deployment 2026-09-19: X-RateLimit-Scope was present on successful
+// responses and ABSENT on the 429, where the body carried "scope" instead. The platform closed
+// that gap in guide
+// 2026-09-19b -- the header is now on both -- and this fallback stays anyway: a deployment
+// predating the fix still omits it, and the rule costs nothing to keep.
 //
-// The header wins when both are present, matching the rule already used for Retry-After.
+// The header wins when both are present, matching the rule already used for Retry-After. Today
+// they cannot disagree; the rule is what protects the next envelope carrying only one of them.
 func (s *RateLimitSnapshot) withScopeFrom(body map[string]any) *RateLimitSnapshot {
 	if s == nil || s.Scope != "" {
 		return s

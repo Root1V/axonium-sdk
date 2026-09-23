@@ -1,0 +1,11 @@
+{
+  "type": "https://prometheus.internal/errors/rate-limit-exceeded-requests",
+  "title": "Rate Limit Exceeded",
+  "status": 429,
+  "detail": "Client '00000000-0000-4000-8000-000000000000' has exceeded the request rate limit of 60 RPM for endpoint 'embeddings'. Reset in 1 seconds.",
+  "instance": "/v1/embeddings",
+  "request_id": "4b90e7c1-0000-4000-8000-000000000000",
+  "trace_id": "0378c195-0000-4000-8000-000000000000",
+  "retry_after": 1,
+  "scope": "embeddings"
+}

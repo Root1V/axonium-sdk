@@ -5,6 +5,20 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ## Python
 
+### Unreleased
+
+Documentation only, and it matters because it had become wrong.
+
+The rate-limit envelope no longer omits `trace_id`, and `X-RateLimit-Scope` now reaches the `429`
+as well (platform guide `2026-09-19b`). Four statements in this SDK still described the old
+behaviour. They now describe the current one, and say which deployments still behave the old way.
+
+The body fallback for `scope` stays. It is no longer needed against a current deployment and is
+kept for one predating the fix — which the platform team explicitly recommended.
+
+Also documented: what happens to an `Idempotency-Key` whose request *failed* is undefined, is the
+gateway's decision rather than this SDK's, and is being asked.
+
 ### 1.0.0rc5 — 2026-09-20
 
 No change to the public surface beyond the additions above. Verified rather than asserted: the
@@ -316,6 +330,20 @@ which spoke to a platform generation that no longer exists.
 
 ## Go
 
+### Unreleased
+
+Documentation only, and it matters because it had become wrong.
+
+The rate-limit envelope no longer omits `trace_id`, and `X-RateLimit-Scope` now reaches the `429`
+as well (platform guide `2026-09-19b`). Four statements in this SDK still described the old
+behaviour. They now describe the current one, and say which deployments still behave the old way.
+
+The body fallback for `scope` stays. It is no longer needed against a current deployment and is
+kept for one predating the fix — which the platform team explicitly recommended.
+
+Also documented: what happens to an `Idempotency-Key` whose request *failed* is undefined, is the
+gateway's decision rather than this SDK's, and is being asked.
+
 ### 0.4.0 — 2026-09-20
 
 `Version` reported `0.2.0` from the module published as `v0.3.0`.
@@ -522,6 +550,20 @@ dependency. All 24 shared contract cases replay the same recorded wire bytes as 
 No third-party dependencies: standard library only.
 
 ## Rust
+
+### Unreleased
+
+Documentation only, and it matters because it had become wrong.
+
+The rate-limit envelope no longer omits `trace_id`, and `X-RateLimit-Scope` now reaches the `429`
+as well (platform guide `2026-09-19b`). Four statements in this SDK still described the old
+behaviour. They now describe the current one, and say which deployments still behave the old way.
+
+The body fallback for `scope` stays. It is no longer needed against a current deployment and is
+kept for one predating the fix — which the platform team explicitly recommended.
+
+Also documented: what happens to an `Idempotency-Key` whose request *failed* is undefined, is the
+gateway's decision rather than this SDK's, and is being asked.
 
 ### 0.4.0 — 2026-09-20
 

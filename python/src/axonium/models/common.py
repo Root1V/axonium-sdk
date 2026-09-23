@@ -102,8 +102,8 @@ class RateLimitSnapshot(BaseModel):
     #: ``remaining_requests`` read after a chat call says nothing about the embeddings budget, and
     #: nothing in the numbers themselves reveals which one answered.
     #:
-    #: ``None`` on a deployment predating per-endpoint budgets, and on a ``429`` from a gateway
-    #: that omits the header there -- see :meth:`from_headers`.
+    #: ``None`` on a deployment predating per-endpoint budgets, or one predating guide
+    #: ``2026-09-19b``, which is when the header reached the ``429`` as well.
     scope: str | None = None
 
     limit_requests: int | None = None
@@ -136,14 +136,15 @@ class RateLimitSnapshot(BaseModel):
     def with_scope_from(self, body: Any) -> RateLimitSnapshot:
         """Fill in :attr:`scope` from a problem+json body when the header did not carry it.
 
-        Measured against a deployment on 2026-09-19: ``X-RateLimit-Scope`` is present on successful
-        responses and **absent on the 429**, where the body carries ``"scope"`` instead. That is the
-        one response whose budget a caller most needs to attribute -- knowing which bucket you just
-        exhausted is the difference between backing off the right endpoint and backing off all of
-        them. Same shape as the documented omission of ``trace_id`` from this envelope: the
-        rate-limiting middleware writes its own, and what it writes is not what the others write.
+        Measured against a deployment on 2026-09-19: ``X-RateLimit-Scope`` was present on successful
+        responses and **absent on the 429**, where the body carried ``"scope"`` instead. The
+        platform closed that gap in guide ``2026-09-19b`` -- the header is now on both -- and this
+        fallback stays anyway, for two reasons the platform agrees with: a deployment predating the
+        fix still omits it, and the rule costs nothing to keep.
 
         The header wins when both are present, matching the rule already used for ``Retry-After``.
+        Today they cannot disagree; the rule is what protects the next envelope that carries only
+        one of them.
         """
         if self.scope is not None or not isinstance(body, dict):
             return self

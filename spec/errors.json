@@ -15,7 +15,7 @@
       ],
       "optional_fields": {
         "retry_after": "Integer seconds. Present on rate-limit errors, which also omit trace_id. Confirmed by the platform team: the Retry-After header and this field are written from the same variable in the same call, so they cannot disagree \u2014 either source may be read.",
-        "trace_id": "Omitted by the rate-limiting middleware envelope."
+        "trace_id": "Present since guide 2026-09-19b (PRM-130). This envelope used to omit it; it is now a strict superset of the standard one. A deployment predating that fix still omits it, which is why the SDKs treat it as optional rather than required."
       }
     },
     "oauth": {
