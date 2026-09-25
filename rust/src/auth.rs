@@ -322,7 +322,7 @@ fn token_error(status: u16, body: Option<&Value>) -> Error {
         // No rate-limit budget: the token endpoint reports none, and inventing an empty one would
         // read as "measured, and it was zero".
         return Error::Api(Box::new(crate::error::api_error_from_body(
-            status, body, None, None,
+            status, body, None, None, "", "",
         )));
     }
     if field("error").is_some() {

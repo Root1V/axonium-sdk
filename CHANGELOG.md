@@ -7,6 +7,13 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+An error whose body is not a complete problem+json now still carries its correlation ids.
+
+They were read from the body only. A validation failure forwarded verbatim from a backend has
+neither id in its body and both in its headers, so the caller was handed an error with nothing to
+take to the platform team. The body still wins where it has them, so nothing changes on an envelope
+that honours the contract.
+
 `UnknownParameterError` maps `400 unknown-parameter`.
 
 Raised only when a request carries `require_parameters: true`, which asks the gateway to refuse an
@@ -350,6 +357,13 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+An error whose body is not a complete problem+json now still carries its correlation ids.
+
+They were read from the body only. A validation failure forwarded verbatim from a backend has
+neither id in its body and both in its headers, so the caller was handed an error with nothing to
+take to the platform team. The body still wins where it has them, so nothing changes on an envelope
+that honours the contract.
+
 `ErrUnknownParameter` maps `400 unknown-parameter`.
 
 Raised only when a request carries `require_parameters: true`, which asks the gateway to refuse an
@@ -588,6 +602,13 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+An error whose body is not a complete problem+json now still carries its correlation ids.
+
+They were read from the body only. A validation failure forwarded verbatim from a backend has
+neither id in its body and both in its headers, so the caller was handed an error with nothing to
+take to the platform team. The body still wins where it has them, so nothing changes on an envelope
+that honours the contract.
 
 `ErrorKind::UnknownParameter` maps `400 unknown-parameter`.
 

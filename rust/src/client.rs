@@ -296,7 +296,14 @@ impl Client {
                 .rate_limit
                 .clone()
                 .map(|rl| rl.with_scope_from(parsed.as_ref()));
-            let mut api = api_error_from_body(status, parsed.as_ref(), retry_after, rate_limit);
+            let mut api = api_error_from_body(
+                status,
+                parsed.as_ref(),
+                retry_after,
+                rate_limit,
+                &meta.request_id,
+                &meta.trace_id,
+            );
             self.explain_forbidden(&mut api);
             return Err(Error::Api(Box::new(api)));
         }

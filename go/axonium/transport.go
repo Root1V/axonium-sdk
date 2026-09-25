@@ -90,6 +90,8 @@ func errorFromResponse(resp *http.Response) *APIError {
 		// The 429 omits X-RateLimit-Scope and puts it in the body instead, so the header alone
 		// would leave the one error that names a budget unable to say which.
 		rateLimitFromHeaders(resp.Header).withScopeFrom(body),
+		resp.Header.Get("X-Request-ID"),
+		resp.Header.Get("X-Trace-ID"),
 	)
 }
 

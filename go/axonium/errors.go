@@ -352,7 +352,12 @@ func (e *OAuthError) Is(target error) bool {
 
 // errorFromBody builds the most specific APIError for a gateway error response. retryAfter should
 // already be resolved by the caller, which prefers the Retry-After header over the body field.
-func errorFromBody(status int, body map[string]any, retryAfter *float64, rl *RateLimitSnapshot) *APIError {
+// requestID and traceID are what the response headers carried; the body wins when it has them.
+// Not every error body is a complete problem+json envelope -- a validation failure forwarded from a
+// backend, or an HTML page from a proxy that never reached the gateway -- and without this an error
+// that DID carry a request id hands the caller nothing to take to the platform team.
+func errorFromBody(status int, body map[string]any, retryAfter *float64, rl *RateLimitSnapshot,
+	requestID, traceID string) *APIError {
 	if body == nil {
 		body = map[string]any{}
 	}
@@ -379,8 +384,8 @@ func errorFromBody(status int, body map[string]any, retryAfter *float64, rl *Rat
 		Title:      stringOr(body["title"]),
 		Detail:     stringOr(body["detail"]),
 		Instance:   stringOr(body["instance"]),
-		RequestID:  stringOr(body["request_id"]),
-		TraceID:    stringOr(body["trace_id"]),
+		RequestID:  firstNonEmpty(stringOr(body["request_id"]), requestID),
+		TraceID:    firstNonEmpty(stringOr(body["trace_id"]), traceID),
 		RetryAfter: retryAfter,
 		RateLimit:  rl,
 		Raw:        body,
@@ -414,4 +419,12 @@ func numeric(v any) (float64, bool) {
 		return float64(n), true
 	}
 	return 0, false
+}
+
+// firstNonEmpty returns the body's value when it has one, and the header's otherwise.
+func firstNonEmpty(fromBody, fromHeader string) string {
+	if fromBody != "" {
+		return fromBody
+	}
+	return fromHeader
 }

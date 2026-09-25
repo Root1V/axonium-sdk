@@ -54,7 +54,7 @@ func TestEveryCatalogedErrorMapsToASentinel(t *testing.T) {
 			"type":   "https://gateway.example/errors/" + entry.Suffix,
 			"title":  entry.Suffix,
 			"detail": "something went wrong",
-		}, nil, nil)
+		}, nil, nil, "", "")
 
 		if !errors.Is(err, sentinel) {
 			t.Errorf("%s did not match its own sentinel", entry.Suffix)
@@ -109,7 +109,7 @@ func TestUnknownSuffixFallsBackByStatus(t *testing.T) {
 	} {
 		err := errorFromBody(tc.status, map[string]any{
 			"type": "https://gateway.example/errors/invented-tomorrow",
-		}, nil, nil)
+		}, nil, nil, "", "")
 		if !errors.Is(err, tc.sentinel) {
 			t.Errorf("status %d with an unknown suffix should match the status fallback", tc.status)
 		}
@@ -121,7 +121,7 @@ func TestUnknownSuffixFallsBackByStatus(t *testing.T) {
 func TestValidationErrorWithoutProblemEnvelope(t *testing.T) {
 	err := errorFromBody(422, map[string]any{
 		"detail": []any{map[string]any{"loc": []any{"body", "model"}, "msg": "field required"}},
-	}, nil, nil)
+	}, nil, nil, "", "")
 
 	if err.TypeSuffix != "" {
 		t.Errorf("a 422 carries no type suffix, got %q", err.TypeSuffix)

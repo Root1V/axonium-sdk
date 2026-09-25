@@ -713,11 +713,19 @@ def error_from_response(
     body: dict[str, Any] | None,
     retry_after: float | None = None,
     rate_limit: RateLimitSnapshot | None = None,
+    request_id: str | None = None,
+    trace_id: str | None = None,
 ) -> APIError:
     """Build the most specific :class:`APIError` for a gateway error response.
 
     ``retry_after`` should already be resolved by the caller, which prefers the ``Retry-After``
     header over the body's ``retry_after`` field when both are present.
+
+    ``request_id`` and ``trace_id`` are the same idea for correlation: the caller passes what the
+    headers carried, and the body wins when it has them. It matters because not every error body is
+    a complete problem+json envelope -- a validation failure forwarded from a backend, or an HTML
+    page from a proxy that never reached the gateway -- and without this an error that *did* carry
+    a request id hands the caller nothing to take to the platform team.
     """
     body = body or {}
     type_uri = body.get("type")
@@ -743,8 +751,10 @@ def error_from_response(
         title=title if isinstance(title, str) else None,
         detail=detail if isinstance(detail, str) else None,
         instance=body.get("instance") if isinstance(body.get("instance"), str) else None,
-        request_id=body.get("request_id") if isinstance(body.get("request_id"), str) else None,
-        trace_id=body.get("trace_id") if isinstance(body.get("trace_id"), str) else None,
+        request_id=(
+            body.get("request_id") if isinstance(body.get("request_id"), str) else request_id
+        ),
+        trace_id=body.get("trace_id") if isinstance(body.get("trace_id"), str) else trace_id,
         retry_after=retry_after,
         rate_limit=rate_limit,
         raw=body,

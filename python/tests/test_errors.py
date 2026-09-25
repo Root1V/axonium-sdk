@@ -215,3 +215,53 @@ class TestSemantics:
 
     def test_forbidden_is_never_retryable(self) -> None:
         assert ForbiddenError.retryable is False
+
+
+class TestCorrelationSurvivesAnIncompleteEnvelope:
+    """An error whose body is not a full problem+json still has to carry its request id.
+
+    Measured 2026-09-25: `POST /v1/models/{model}/predict` forwards a backend's validation failure
+    verbatim, so the body is FastAPI's `{"detail": [...]}` -- no `type`, no `request_id`, no
+    `trace_id`. The header carried the id all along:
+
+        header x-request-id : a156d971-b328-42e0-a24d-b52fcd7a46dd
+        body   request_id   : absent
+
+    Reading the body alone handed the caller nothing to take to the platform team, on the errors
+    where they most need it. This is not specific to that route: an HTML page from a proxy that
+    never reached the gateway loses the id the same way.
+    """
+
+    def test_the_header_supplies_the_ids_when_the_body_does_not(self) -> None:
+        error = error_from_response(
+            status=422,
+            body={"detail": [{"msg": "Field required"}]},
+            request_id="a156d971-header",
+            trace_id="trace-header",
+        )
+
+        assert error.request_id == "a156d971-header"
+        assert error.trace_id == "trace-header"
+
+    def test_the_body_wins_when_it_has_them(self) -> None:
+        # The gateway's own envelope echoes the header, so this changes nothing where the contract
+        # is honoured -- which is the point: the fallback only fires where the body fell short.
+        error = error_from_response(
+            status=400,
+            body={
+                "type": "https://prometheus.internal/errors/unknown-model",
+                "request_id": "from-body",
+                "trace_id": "trace-body",
+            },
+            request_id="from-header",
+            trace_id="trace-header",
+        )
+
+        assert error.request_id == "from-body"
+        assert error.trace_id == "trace-body"
+
+    def test_neither_source_leaves_it_unset_rather_than_guessing(self) -> None:
+        error = error_from_response(status=500, body=None)
+
+        assert error.request_id is None
+        assert error.trace_id is None
