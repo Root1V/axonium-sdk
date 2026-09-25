@@ -11,7 +11,7 @@ import httpx
 import pytest
 import respx
 
-from axonium import Axonium, NotFoundError
+from axonium import Axonium, NotFoundError, RequestUsage
 
 GATEWAY = "https://gateway.test.invalid"
 AUTH_URL = "https://gateway.test.invalid/oauth2/token"
@@ -86,3 +86,28 @@ class TestTheIdOnTheWire:
             row = client.usage.retrieve("a0f3ec1b")
 
         assert row.termination_reason == "something_invented_next_quarter"
+
+
+class TestRequestKindStaysOpen:
+    """The field must not become an enum, and the doc must not enumerate a stale set.
+
+    The platform warned us that `predict` was arriving and asked whether our types enumerate the
+    kinds, because three consumers break the day one does. They do not -- but all three docstrings
+    listed `"chat", "embeddings", "images"`, two of them pluralised wrongly and none mentioning
+    `rerank`, which this SDK shipped itself. Measured values as of 2026-09-25: chat, embedding,
+    rerank, image, predict.
+    """
+
+    def test_an_unseen_kind_parses_rather_than_failing(self) -> None:
+        row = RequestUsage.model_validate(
+            {"request_id": "r", "model": "m", "request_kind": "a-kind-invented-tomorrow"}
+        )
+
+        assert row.request_kind == "a-kind-invented-tomorrow"
+
+    def test_the_field_is_not_constrained_to_a_set(self) -> None:
+        # A Literal or Enum annotation here would make every new endpoint a parse error for every
+        # SDK that predates it. This asserts the absence of that, which is the whole design.
+        annotation = str(RequestUsage.model_fields["request_kind"].annotation)
+
+        assert "Literal" not in annotation and "Enum" not in annotation, annotation
