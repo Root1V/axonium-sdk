@@ -19,6 +19,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: The catalog still matches the vendored guide
+        # The guard from errors.json to the SDKs already exists. This is the missing direction:
+        # the platform documents a new error, the guide is re-vendored, and nothing notices that
+        # the catalog did not grow. That is how 400 unknown-parameter sat here for days.
+        run: python scripts/check_catalog_matches_guide.py
+
       - name: Every JSON file parses
         run: |
           python - <<'PY'

@@ -14,12 +14,12 @@
         "trace_id"
       ],
       "optional_fields": {
-        "retry_after": "Integer seconds. Present on rate-limit errors, which also omit trace_id. Confirmed by the platform team: the Retry-After header and this field are written from the same variable in the same call, so they cannot disagree \u2014 either source may be read.",
+        "retry_after": "Integer seconds. Present on rate-limit errors, which also omit trace_id. Confirmed by the platform team: the Retry-After header and this field are written from the same variable in the same call, so they cannot disagree — either source may be read.",
         "trace_id": "Present since guide 2026-09-19b (PRM-130). This envelope used to omit it; it is now a strict superset of the standard one. A deployment predating that fix still omits it, which is why the SDKs treat it as optional rather than required."
       }
     },
     "oauth": {
-      "$comment": "RFC 6749 \u00a75.2, returned by the auth-service token endpoint only. Deliberately a different shape from the gateway envelope.",
+      "$comment": "RFC 6749 §5.2, returned by the auth-service token endpoint only. Deliberately a different shape from the gateway envelope.",
       "fields": [
         "error",
         "error_description"
@@ -136,6 +136,12 @@
       "meaning": "Request schema validation failed. Carries an additional `errors` array of field-level problems, each with `loc`, `msg`, `type` and the offending `input`, which is what tells a caller which field to fix.",
       "retryable": false,
       "$comment": "Verified against a live deployment on 2026-09-11. This used to be the one endpoint that broke the envelope -- FastAPI's default shape, with no request_id or trace_id -- and the platform team has since fixed it. Keep the status-keyed fallback anyway: the lesson was that an SDK must not assume every error carries a `type`."
+    },
+    {
+      "status": 400,
+      "suffix": "unknown-parameter",
+      "meaning": "Only when the request carried require_parameters: true -- a field outside the accepted subset, every offending name listed in detail. Without that flag the same request succeeds and the dropped names come back in X-Prometheus-Ignored-Parameters. Distinct from 422 validation-error on purpose: this is \"that field does not exist here\", not \"that value is wrong\".",
+      "retryable": false
     },
     {
       "status": 400,

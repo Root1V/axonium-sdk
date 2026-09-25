@@ -21,6 +21,13 @@ step() {
   fi
 }
 
+# --- spec-lint.yml ---
+# From the repository root, as that workflow does. The first version of this line ran from python/,
+# where the relative path does not resolve -- CI would have stayed green while this went red, which
+# is the divergence this script exists to prevent, pointing the other way.
+cd "$root" || exit 1
+step "spec: catalog matches guide" ./scripts/check_catalog_matches_guide.py
+
 # --- python-ci.yml ---
 cd "$root/python" || exit 1
 step "python: ruff check"        uv run ruff check
