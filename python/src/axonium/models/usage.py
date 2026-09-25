@@ -23,7 +23,13 @@ class RequestUsage(APIObject):
     #: The ``request_id`` this row describes, which should match what was asked for.
     request_id: str | None = None
     model: str | None = None
-    #: ``"chat"``, ``"embeddings"``, ``"images"`` — what kind of request was billed.
+    #: What kind of request was billed. Measured against a deployment 2026-09-25: ``"chat"``,
+    #: ``"embedding"``, ``"rerank"``, ``"image"``, ``"predict"``.
+    #:
+    #: **Open, and typed as a plain string on purpose.** The platform adds kinds as it adds
+    #: endpoints — ``rerank`` and ``predict`` both arrived after this field was first written — so
+    #: an enum here would turn every new one into a parse failure in an SDK that predates it.
+    #: Match on it if you must, but always leave a branch for a value you have not seen.
     request_kind: str | None = None
 
     #: Token counts, mirroring an inference response field for field. ``cache_read_tokens`` is a

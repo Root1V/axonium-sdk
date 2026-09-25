@@ -40,7 +40,13 @@ pub struct RequestUsage {
     pub request_id: String,
     #[serde(default)]
     pub model: String,
-    /// `"chat"`, `"embeddings"` or `"images"` — what kind of request was billed.
+    /// What kind of request was billed. Measured against a deployment 2026-09-25: `"chat"`,
+    /// `"embedding"`, `"rerank"`, `"image"`, `"predict"`.
+    ///
+    /// Open, and a `String` on purpose. The platform adds kinds as it adds endpoints -- `rerank`
+    /// and `predict` both arrived after this field was first written -- so an enum here would turn
+    /// every new one into a parse failure in an SDK that predates it. Match on it if you must, but
+    /// always leave a catch-all arm.
     #[serde(default)]
     pub request_kind: String,
 

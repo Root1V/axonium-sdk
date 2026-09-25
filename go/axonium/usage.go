@@ -21,7 +21,13 @@ type RequestUsage struct {
 	// RequestID is the id this row describes, which should match what was asked for.
 	RequestID string `json:"request_id"`
 	Model     string `json:"model"`
-	// RequestKind is "chat", "embeddings" or "images" -- what kind of request was billed.
+	// RequestKind is what kind of request was billed. Measured against a deployment 2026-09-25:
+	// "chat", "embedding", "rerank", "image", "predict".
+	//
+	// Open, and a plain string on purpose. The platform adds kinds as it adds endpoints -- rerank
+	// and predict both arrived after this field was first written -- so a typed enum here would
+	// turn every new one into a parse failure in an SDK that predates it. Switch on it if you
+	// must, but always leave a default.
 	RequestKind string `json:"request_kind,omitempty"`
 
 	// Usage mirrors an inference response field for field. CacheReadTokens is a subset of
