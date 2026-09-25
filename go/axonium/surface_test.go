@@ -59,18 +59,18 @@ func TestTypeSuffixExtraction(t *testing.T) {
 		"unknown-model": "unknown-model",
 		"":              "",
 	} {
-		got := errorFromBody(400, map[string]any{"type": raw}, nil, nil).TypeSuffix
+		got := errorFromBody(400, map[string]any{"type": raw}, nil, nil, "", "").TypeSuffix
 		if got != want {
 			t.Errorf("%q -> %q, want %q", raw, got, want)
 		}
 	}
 
 	// A type that is not a string at all is not a suffix, and must not panic.
-	if got := errorFromBody(400, map[string]any{"type": 42}, nil, nil).TypeSuffix; got != "" {
+	if got := errorFromBody(400, map[string]any{"type": 42}, nil, nil, "", "").TypeSuffix; got != "" {
 		t.Errorf("a non-string type should yield no suffix, got %q", got)
 	}
 	// retry_after is read off the body when no header supplied one.
-	err := errorFromBody(429, map[string]any{"retry_after": 12}, nil, nil)
+	err := errorFromBody(429, map[string]any{"retry_after": 12}, nil, nil, "", "")
 	if err.RetryAfter == nil || *err.RetryAfter != 12 {
 		t.Errorf("body retry_after was not read: %v", err.RetryAfter)
 	}

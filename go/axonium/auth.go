@@ -303,7 +303,8 @@ func setBearer(req *http.Request, token string) {
 // parse. A 5xx that somehow arrives in the OAuth2 shape is still an OAuth2 answer.
 func tokenError(status int, body map[string]any) error {
 	if _, ok := body["type"].(string); ok {
-		return errorFromBody(status, body, nil, nil)
+		// No headers here: this path only holds the decoded token-endpoint body.
+		return errorFromBody(status, body, nil, nil, "", "")
 	}
 	if _, ok := body["error"].(string); ok {
 		return oauthErrorFromBody(status, body)

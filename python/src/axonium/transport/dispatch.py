@@ -83,6 +83,8 @@ def raise_for_status(response: httpx.Response) -> None:
         status=response.status_code,
         body=body,
         retry_after=retry_after_seconds(response),
+        request_id=response.headers.get("X-Request-ID"),
+        trace_id=response.headers.get("X-Trace-ID"),
         rate_limit=None if rate_limit.is_empty else rate_limit,
     )
 

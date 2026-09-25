@@ -322,11 +322,27 @@ impl Error {
     }
 }
 
+/// The body's value when it has one, the header's otherwise.
+fn non_empty(from_body: String, from_header: &str) -> String {
+    if from_body.is_empty() {
+        from_header.to_string()
+    } else {
+        from_body
+    }
+}
+
+/// `request_id` and `trace_id` are what the response headers carried; the body wins when it has
+/// them. Not every error body is a complete problem+json envelope -- a validation failure
+/// forwarded from a backend, or an HTML page from a proxy that never reached the gateway -- and
+/// without them an error that *did* carry a request id hands the caller nothing to take to the
+/// platform team.
 pub(crate) fn api_error_from_body(
     status: u16,
     body: Option<&Value>,
     retry_after: Option<f64>,
     rate_limit: Option<crate::types::RateLimit>,
+    request_id: &str,
+    trace_id: &str,
 ) -> ApiError {
     let map: BTreeMap<String, Value> = body
         .and_then(Value::as_object)
@@ -361,8 +377,8 @@ pub(crate) fn api_error_from_body(
         title: string("title"),
         detail: string("detail"),
         instance: string("instance"),
-        request_id: string("request_id"),
-        trace_id: string("trace_id"),
+        request_id: non_empty(string("request_id"), request_id),
+        trace_id: non_empty(string("trace_id"), trace_id),
         retry_after,
         hint: String::new(),
         rate_limit,
@@ -437,7 +453,7 @@ mod catalog_parity {
                 "title": suffix,
                 "detail": "something went wrong",
             });
-            let error = api_error_from_body(status, Some(&body), None, None);
+            let error = api_error_from_body(status, Some(&body), None, None, "", "");
 
             // A suffix this build does not know falls back to a status-keyed kind, which is right
             // for an unknown error and wrong for a catalogued one.
@@ -460,5 +476,45 @@ mod catalog_parity {
         }
 
         assert!(problems.is_empty(), "{}", problems.join("\n"));
+    }
+}
+
+#[cfg(test)]
+mod correlation {
+    use super::api_error_from_body;
+
+    /// An error whose body is not a full problem+json still has to carry its request id.
+    ///
+    /// Measured 2026-09-25 on `POST /v1/models/{model}/predict`, which forwards a backend's
+    /// validation failure verbatim: the body is FastAPI's `{"detail": [...]}` with no
+    /// `request_id`, while the header carried one all along.
+    #[test]
+    fn it_falls_back_to_the_headers() {
+        let body = serde_json::json!({"detail": "x"});
+
+        let error = api_error_from_body(422, Some(&body), None, None, "req-header", "trace-header");
+
+        assert_eq!(error.request_id, "req-header");
+        assert_eq!(error.trace_id, "trace-header");
+    }
+
+    /// The gateway's own envelope echoes the header, so this changes nothing where the contract is
+    /// honoured -- the fallback only fires where the body fell short.
+    #[test]
+    fn the_body_wins_when_it_has_them() {
+        let body = serde_json::json!({"request_id": "from-body", "trace_id": "trace-body"});
+
+        let error = api_error_from_body(400, Some(&body), None, None, "from-header", "t-header");
+
+        assert_eq!(error.request_id, "from-body");
+        assert_eq!(error.trace_id, "trace-body");
+    }
+
+    #[test]
+    fn neither_source_invents_one() {
+        let error = api_error_from_body(500, None, None, None, "", "");
+
+        assert!(error.request_id.is_empty());
+        assert!(error.trace_id.is_empty());
     }
 }
