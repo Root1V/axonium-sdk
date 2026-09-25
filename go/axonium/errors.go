@@ -76,6 +76,11 @@ var (
 	// ErrUnknownInstance means a pinned instance does not serve the requested model. A pin never
 	// silently falls back: you get that instance or an error.
 	ErrUnknownInstance = errors.New("axonium: unknown-instance")
+	// ErrUnknownParameter is raised only when the request carried require_parameters: true.
+	// Without that flag the same request succeeds and the dropped names come back in
+	// X-Prometheus-Ignored-Parameters. Not a 422: "that field does not exist here", not
+	// "that value is wrong".
+	ErrUnknownParameter = errors.New("axonium: unknown-parameter")
 
 	// The four idempotency refusals. They need opposite handling, which is why they are four
 	// types and not one: only ErrIdempotencyInProgress is ever worth retrying.
@@ -159,6 +164,7 @@ var suffixSentinels = map[string]error{
 	"upstream-unavailable":              ErrTokenEndpointUnavailable,
 	"not-configured":                    ErrTokenEndpointNotConfigured,
 	"unknown-instance":                  ErrUnknownInstance,
+	"unknown-parameter":                 ErrUnknownParameter,
 	"invalid-idempotency-key":           ErrInvalidIdempotencyKey,
 	"idempotency-key-reuse":             ErrIdempotencyKeyReuse,
 	"idempotency-in-progress":           ErrIdempotencyInProgress,

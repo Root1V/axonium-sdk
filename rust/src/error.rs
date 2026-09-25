@@ -26,6 +26,9 @@ pub enum ErrorKind {
     ContextExceeded,
     ValidationError,
     UnknownInstance,
+    /// Only when the request carried `require_parameters: true`. Without it the same request
+    /// succeeds and the dropped names come back in `X-Prometheus-Ignored-Parameters`.
+    UnknownParameter,
     InvalidIdempotencyKey,
     // 401
     MissingCredentials,
@@ -87,6 +90,7 @@ impl ErrorKind {
             "context-exceeded" => Self::ContextExceeded,
             "validation-error" => Self::ValidationError,
             "unknown-instance" => Self::UnknownInstance,
+            "unknown-parameter" => Self::UnknownParameter,
             "invalid-idempotency-key" => Self::InvalidIdempotencyKey,
             "missing-credentials" => Self::MissingCredentials,
             "invalid-token" => Self::InvalidToken,

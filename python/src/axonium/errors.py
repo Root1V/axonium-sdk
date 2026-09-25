@@ -66,6 +66,7 @@ __all__ = [
     "UnauthorizedRequestError",
     "UnknownInstanceError",
     "UnknownModelError",
+    "UnknownParameterError",
     "UnsupportedFieldWarning",
     "UnsupportedGrantTypeError",
     "UnusedCredentialWarning",
@@ -346,6 +347,21 @@ class ContextExceededError(BadRequestError):
     """The request exceeds the model's context window."""
 
     type_suffix = "context-exceeded"
+
+
+class UnknownParameterError(BadRequestError):
+    """A request field outside the gateway's accepted subset, refused instead of dropped.
+
+    Raised only when the request carried ``require_parameters: true``. Without that flag the same
+    request succeeds and the dropped names come back in ``X-Prometheus-Ignored-Parameters``, which
+    is the gateway's own answer about what it discarded — and a better one than any client-side
+    allowlist, which ages.
+
+    Deliberately not a ``422``: this says *that field does not exist here*, not *that value is
+    wrong*. ``detail`` names every offending field.
+    """
+
+    type_suffix = "unknown-parameter"
 
 
 class UnknownInstanceError(BadRequestError):
@@ -646,6 +662,7 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         IdempotencyInProgressError,
         IdempotencyResponseNotRetainedError,
         UnknownInstanceError,
+        UnknownParameterError,
         MissingCredentialsError,
         InvalidTokenError,
         TokenExpiredError,

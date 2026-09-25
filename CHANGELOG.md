@@ -7,6 +7,13 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+`UnknownParameterError` maps `400 unknown-parameter`.
+
+Raised only when a request carries `require_parameters: true`, which asks the gateway to refuse an
+unaccepted field instead of dropping it. It was documented in the platform guide we had already
+vendored, and nothing here noticed: the parity guard holds the catalog to the SDKs, and nothing
+held the guide to the catalog. That direction is now checked too.
+
 **Structured output works.** `response_format` is now a declared field, forwarded verbatim.
 
 The platform started honouring it on 2026-09-18 and told us. This SDK went on warning that it was
@@ -343,6 +350,13 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+`ErrUnknownParameter` maps `400 unknown-parameter`.
+
+Raised only when a request carries `require_parameters: true`, which asks the gateway to refuse an
+unaccepted field instead of dropping it. It was documented in the platform guide we had already
+vendored, and nothing here noticed: the parity guard holds the catalog to the SDKs, and nothing
+held the guide to the catalog. That direction is now checked too.
+
 **Structured output works.** `ResponseFormat` is now a declared field, forwarded verbatim.
 
 The platform started honouring it on 2026-09-18 and told us. This SDK went on warning that it was
@@ -574,6 +588,13 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+`ErrorKind::UnknownParameter` maps `400 unknown-parameter`.
+
+Raised only when a request carries `require_parameters: true`, which asks the gateway to refuse an
+unaccepted field instead of dropping it. It was documented in the platform guide we had already
+vendored, and nothing here noticed: the parity guard holds the catalog to the SDKs, and nothing
+held the guide to the catalog. That direction is now checked too.
 
 **Structured output works.** `response_format` is now a declared field, forwarded verbatim.
 
