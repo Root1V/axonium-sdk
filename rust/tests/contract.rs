@@ -106,6 +106,18 @@ fn client_with_scope(url: &str, scope: &str) -> Client {
     .expect("building the client")
 }
 
+/// The `error_type_suffix` a case expects, where JSON `null` means the response carried no `type`
+/// at all.
+///
+/// Not hypothetical and not a corner: a validation failure forwarded verbatim from an engine, a
+/// 404 for a route the gateway does not serve, and an HTML page from a proxy that never reached
+/// the gateway all arrive without one. This crate represents that absence as an empty
+/// `type_suffix`, so that is what the manifest's `null` compares against. `.unwrap()` here used
+/// to panic on such a case rather than check it.
+fn expected_suffix(case: &Value) -> &str {
+    case["expect"]["error_type_suffix"].as_str().unwrap_or("")
+}
+
 fn chat_request(request: &Value) -> ChatRequest {
     ChatRequest {
         model: request["model"].as_str().unwrap_or_default().into(),
@@ -203,6 +215,22 @@ fn kind_for(suffix: &str) -> ErrorKind {
     }
 }
 
+/// The kind a case should produce, including when it expects no `type` at all.
+///
+/// An empty suffix is not an unmapped error, it is a response that carried no `type`, and the
+/// contract for that is the status-keyed fallback rather than a named kind. Spelled out here
+/// instead of routed through `kind_for`, which would have to invent a name for the absence.
+fn expected_kind(suffix: &str, status: u16) -> ErrorKind {
+    if !suffix.is_empty() {
+        return kind_for(suffix);
+    }
+    match status {
+        401 => ErrorKind::Unauthorized,
+        s if s >= 500 => ErrorKind::OtherServerError,
+        _ => ErrorKind::OtherClientError,
+    }
+}
+
 #[tokio::test]
 async fn contract_corpus() {
     let Some(manifest) = manifest() else {
@@ -247,11 +275,11 @@ async fn contract_corpus() {
                     }
                 }
                 "error" => {
-                    let want = case["expect"]["error_type_suffix"].as_str().unwrap();
+                    let want = expected_suffix(case);
                     match outcome.unwrap_err() {
                         axonium::Error::Api(api) => {
                             assert_eq!(api.type_suffix, want, "{id}: type suffix");
-                            assert_eq!(api.kind, kind_for(want), "{id}: kind");
+                            assert_eq!(api.kind, expected_kind(want, api.status), "{id}: kind");
                             if let Some(retryable) = case["expect"]["retryable"].as_bool() {
                                 assert_eq!(api.retryable(), retryable, "{id}: retryable");
                             }
@@ -484,7 +512,7 @@ async fn contract_corpus() {
                 }
             }
             ("error", _) => {
-                let suffix = case["expect"]["error_type_suffix"].as_str().unwrap();
+                let suffix = expected_suffix(case);
                 let outcome = if operation == "usage.retrieve" {
                     let request_id = case["request"]["request_id"].as_str().unwrap_or_default();
                     client.usage(request_id).await.err()
@@ -510,7 +538,7 @@ async fn contract_corpus() {
                     "{id}: status"
                 );
                 assert_eq!(api.type_suffix, suffix, "{id}: type suffix");
-                assert_eq!(api.kind, kind_for(suffix), "{id}: kind");
+                assert_eq!(api.kind, expected_kind(suffix, api.status), "{id}: kind");
                 if let Some(want) = case["expect"]["retryable"].as_bool() {
                     assert_eq!(api.retryable(), want, "{id}: retryable");
                 }

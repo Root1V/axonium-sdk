@@ -7,6 +7,18 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+A contract case now pins reading the correlation ids out of the headers.
+
+The behaviour shipped in all three SDKs on 2026-09-27 with one hand-written test per language and
+nothing added to the shared corpus, so it was fixed three times and pinned zero. Measured by
+building a fourth SDK against the corpus alone: removing its header fallback and replaying all
+fourteen error cases passed every one of them. Manifest v19 adds
+`error-correlation-ids-only-in-the-headers` -- a real 422 body with neither id, both ids in the
+headers -- and removing the fallback from each of the three now fails it.
+
+It is also the first case expecting **no** `type` at all, which two of the three runners could
+not express: Rust's panicked on the null, and needed a name for the kind an absent type produces.
+
 An error whose body is not a complete problem+json now still carries its correlation ids.
 
 They were read from the body only. A validation failure forwarded verbatim from a backend has
@@ -357,6 +369,18 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+A contract case now pins reading the correlation ids out of the headers.
+
+The behaviour shipped in all three SDKs on 2026-09-27 with one hand-written test per language and
+nothing added to the shared corpus, so it was fixed three times and pinned zero. Measured by
+building a fourth SDK against the corpus alone: removing its header fallback and replaying all
+fourteen error cases passed every one of them. Manifest v19 adds
+`error-correlation-ids-only-in-the-headers` -- a real 422 body with neither id, both ids in the
+headers -- and removing the fallback from each of the three now fails it.
+
+It is also the first case expecting **no** `type` at all, which two of the three runners could
+not express: Rust's panicked on the null, and needed a name for the kind an absent type produces.
+
 An error whose body is not a complete problem+json now still carries its correlation ids.
 
 They were read from the body only. A validation failure forwarded verbatim from a backend has
@@ -602,6 +626,18 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+A contract case now pins reading the correlation ids out of the headers.
+
+The behaviour shipped in all three SDKs on 2026-09-27 with one hand-written test per language and
+nothing added to the shared corpus, so it was fixed three times and pinned zero. Measured by
+building a fourth SDK against the corpus alone: removing its header fallback and replaying all
+fourteen error cases passed every one of them. Manifest v19 adds
+`error-correlation-ids-only-in-the-headers` -- a real 422 body with neither id, both ids in the
+headers -- and removing the fallback from each of the three now fails it.
+
+It is also the first case expecting **no** `type` at all, which two of the three runners could
+not express: Rust's panicked on the null, and needed a name for the kind an absent type produces.
 
 An error whose body is not a complete problem+json now still carries its correlation ids.
 
