@@ -1,0 +1,11 @@
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "inputs"],
+      "msg": "Field required",
+      "input": {"campo_inventado": "x"}
+    }
+  ],
+  "body": {"campo_inventado": "x"}
+}
