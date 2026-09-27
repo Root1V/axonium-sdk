@@ -7,6 +7,24 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+Two error types the platform added on 2026-09-27 are mapped: `503 capacity-exhausted` and
+`predict-backend-rejected`.
+
+`capacity-exhausted` means every replica of a model is busy rather than broken, which is the one
+`503` where waiting is the whole remedy. It ships disabled on the platform, so nobody has met one
+yet; it is mapped before anyone does.
+
+`predict-backend-rejected` is the first catalogued error with no fixed status. The `predict` route
+passes the body to the engine, so a refusal keeps the engine's status and its body, and the name
+claims no cause. Retryability is therefore read from the status rather than from the name, and the
+engine's own body is reachable through `backend_error`.
+
+**The check that holds the catalog to the guide could not see the second one.** It required a
+three-digit status and the guide's row says `4xx`, so the row never parsed and the set comparison
+found nothing missing — a guard built to catch a row that disappears, blind to a row that never
+arrived. It now validates the status cell instead of selecting on it, and an unreadable one is a
+failure rather than a skip.
+
 An error whose body is not a complete problem+json now still carries its correlation ids.
 
 They were read from the body only. A validation failure forwarded verbatim from a backend has
@@ -357,6 +375,24 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+Two error types the platform added on 2026-09-27 are mapped: `503 capacity-exhausted` and
+`predict-backend-rejected`.
+
+`capacity-exhausted` means every replica of a model is busy rather than broken, which is the one
+`503` where waiting is the whole remedy. It ships disabled on the platform, so nobody has met one
+yet; it is mapped before anyone does.
+
+`predict-backend-rejected` is the first catalogued error with no fixed status. The `predict` route
+passes the body to the engine, so a refusal keeps the engine's status and its body, and the name
+claims no cause. Retryability is therefore read from the status rather than from the name, and the
+engine's own body is reachable through `backend_error`.
+
+**The check that holds the catalog to the guide could not see the second one.** It required a
+three-digit status and the guide's row says `4xx`, so the row never parsed and the set comparison
+found nothing missing — a guard built to catch a row that disappears, blind to a row that never
+arrived. It now validates the status cell instead of selecting on it, and an unreadable one is a
+failure rather than a skip.
+
 An error whose body is not a complete problem+json now still carries its correlation ids.
 
 They were read from the body only. A validation failure forwarded verbatim from a backend has
@@ -602,6 +638,24 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+Two error types the platform added on 2026-09-27 are mapped: `503 capacity-exhausted` and
+`predict-backend-rejected`.
+
+`capacity-exhausted` means every replica of a model is busy rather than broken, which is the one
+`503` where waiting is the whole remedy. It ships disabled on the platform, so nobody has met one
+yet; it is mapped before anyone does.
+
+`predict-backend-rejected` is the first catalogued error with no fixed status. The `predict` route
+passes the body to the engine, so a refusal keeps the engine's status and its body, and the name
+claims no cause. Retryability is therefore read from the status rather than from the name, and the
+engine's own body is reachable through `backend_error`.
+
+**The check that holds the catalog to the guide could not see the second one.** It required a
+three-digit status and the guide's row says `4xx`, so the row never parsed and the set comparison
+found nothing missing — a guard built to catch a row that disappears, blind to a row that never
+arrived. It now validates the status cell instead of selecting on it, and an unreadable one is a
+failure rather than a skip.
 
 An error whose body is not a complete problem+json now still carries its correlation ids.
 

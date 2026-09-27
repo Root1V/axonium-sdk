@@ -103,6 +103,14 @@
     },
     {
       "status": 503,
+      "suffix": "capacity-exhausted",
+      "meaning": "Every replica of the model is above its pending-work headroom, so the request was refused rather than queued behind work that would outlive its own timeout. A saturated replica with a free sibling is not a refusal -- the request goes to the sibling -- so this means all of them, and the detail names each one. Deliberately a distinct type from backend-unavailable, which means the replicas are broken rather than busy.",
+      "retryable": true,
+      "retry_policy": "wait_for_retry_after_when_present",
+      "$comment": "Arrived in guide 2026-09-27 (PRM-158). Carries Retry-After: 1, which the platform team states is a hint and not a promise: a slot frees when some other request finishes, and how long that takes is the model's business. Admission control ships disabled (ADMISSION_HEADROOM=0), so no deployment emits this today -- it appears when an operator turns it on, which is exactly why it is mapped before anyone has seen one."
+    },
+    {
+      "status": 503,
       "suffix": "model-not-loaded",
       "meaning": "Model is registered but not currently deployed or running.",
       "retryable": false,
@@ -240,6 +248,22 @@
       "retryable": false,
       "remedy": "Split it into several exports.",
       "$comment": "Added from guide 2026-09-16a. Admin-scoped; see invalid-date."
+    },
+    {
+      "status": "4xx",
+      "probe_statuses": [
+        400,
+        403,
+        422,
+        429
+      ],
+      "suffix": "predict-backend-rejected",
+      "meaning": "Only on POST /v1/models/{model}/predict. The engine refused the request and the gateway wrapped rather than forwarded it: the engine's own error body is preserved verbatim under the `backend_error` extension member, and the engine's status is kept -- a 422 stays a 422. The type is named for what the gateway can see, so it does not claim a cause: a 429 or 403 from the engine is also a 4xx and is not about the payload.",
+      "retryable": "by_status",
+      "retryable_statuses": [
+        429
+      ],
+      "$comment": "Arrived in guide 2026-09-27 with §3.10. Two firsts in this catalog, and each one bent a guard. Its status is not a number, which is how it stayed invisible to check_catalog_matches_guide.py -- that script required \\d{3} and the guide's row says 4xx. And its retryability is not a constant: since the status is the engine's, the only honest answer is the status-keyed one, which is why `retryable` is by_status here rather than a bool. 429 is the one 4xx worth repeating; the rest are the caller's request to fix."
     }
   ],
   "oauth_errors": [
@@ -271,7 +295,7 @@
   "notes": [
     "There is no 404 for 'model not found' on the inference endpoints; that is 400 unknown-model. Reserve 404 handling for genuinely unmapped routes.",
     "Unknown type suffixes must not raise a parse error: fall back to a status-keyed base error, since the catalog will grow.",
-    "There is no idempotency-key mechanism in this API. A retried chat/embeddings/images request is a genuinely new generation, billable and non-replayable.",
+    "A 404 for a route this gateway does not serve is NOT this envelope: it answers {\"detail\": \"Not Found\"} as application/json, with no type and no request_id in the body -- the header still carries one. Measured 2026-09-27. Same class as the predict 422 before PRM-157, a different site. It also spends a request from the `default` rate-limit budget, so a mistyped path costs one.",
     "Every gateway error observed on a live deployment carries the full RFC 9457 envelope including request_id and trace_id, 422 included. Fall back by status regardless: an SDK that hard-fails on an error without a `type` would break the moment one appears, and one did for a while.",
     "Idempotency-Key covers /v1/chat/completions, /v1/embeddings and /v1/images/generations, AND streaming -- with a boundary that matters. If the gateway's stream from the model completed and it was the client's connection that dropped, the key replays the stored SSE body byte for byte, arriving as one flush rather than paced out. If the model's own stream broke mid-generation there is nothing complete to replay and the key frees itself, so a retry is a genuine new generation. 24h window, scoped per client, 255-character keys, 1 MiB retention cap.",
     "A stream that breaks mid-answer is now BILLED for what it generated; it used to be billed as zero by defect, because token counts arrive only on a final frame a broken stream never sends. Every usage row now carries an `interrupted` flag, exported in the CSV, so a charge for an answer never fully received is disputable with evidence. A stream that broke before producing anything is still not charged."

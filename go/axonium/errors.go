@@ -112,8 +112,12 @@ var (
 	// 429
 	ErrRateLimit = errors.New("axonium: rate-limit-exceeded-requests")
 
+	// 4xx, status not fixed -- see PredictBackendRejected in the catalog.
+	ErrPredictBackendRejected = errors.New("axonium: predict-backend-rejected")
+
 	// 5xx
 	ErrUpstream                = errors.New("axonium: upstream-error")
+	ErrCapacityExhausted       = errors.New("axonium: capacity-exhausted")
 	ErrModelNotLoaded          = errors.New("axonium: model-not-loaded")
 	ErrBackendUnavailable      = errors.New("axonium: backend-unavailable")
 	ErrRateLimitingUnavailable = errors.New("axonium: rate-limiting-unavailable")
@@ -177,6 +181,8 @@ var suffixSentinels = map[string]error{
 	"forbidden":                         ErrForbidden,
 	"rate-limit-exceeded-requests":      ErrRateLimit,
 	"upstream-error":                    ErrUpstream,
+	"capacity-exhausted":                ErrCapacityExhausted,
+	"predict-backend-rejected":          ErrPredictBackendRejected,
 	"model-not-loaded":                  ErrModelNotLoaded,
 	"backend-unavailable":               ErrBackendUnavailable,
 	"rate-limiting-unavailable":         ErrRateLimitingUnavailable,
@@ -198,9 +204,18 @@ var retryableSuffixes = map[string]bool{
 	"rate-limiting-unavailable":    true,
 	"usage-store-unavailable":      true,
 	"idempotency-in-progress":      true,
+	// capacity-exhausted means every replica is busy rather than broken, which is the one 503
+	// where waiting is the whole remedy: a slot frees when some other request finishes.
+	"capacity-exhausted": true,
 	// model-not-loaded is a 5xx but is not retryable: it needs operator action, not patience.
 	"model-not-loaded": false,
+	// predict-backend-rejected is deliberately absent: its status is the engine's, so the answer
+	// is not a property of the name. Retryable() decides it from Status instead.
 }
+
+// predictBackendRetryableStatuses are the engine statuses worth repeating when the gateway wraps a
+// refusal as predict-backend-rejected. Everything else the engine rejects is the request to fix.
+var predictBackendRetryableStatuses = map[int]bool{429: true}
 
 // APIError is an RFC 9457 problem-details error returned by the gateway.
 type APIError struct {
@@ -273,10 +288,38 @@ func (e *APIError) Is(target error) bool {
 }
 
 // Retryable reports whether retrying this error can plausibly succeed at all. It is a necessary
-// condition, not a sufficient one: RetryPolicy additionally requires that no generation occurred,
-// because this API has no idempotency mechanism.
+// condition, not a sufficient one: RetryPolicy additionally requires either that no generation
+// occurred or that an Idempotency-Key makes the repeat a replay rather than a second billing.
+//
+// Keyed on the suffix, with one exception the catalog marks "by_status". predict-backend-rejected
+// carries whatever status the engine returned, so its name says nothing about whether waiting
+// helps and only the status can.
 func (e *APIError) Retryable() bool {
+	if e.TypeSuffix == "predict-backend-rejected" {
+		return predictBackendRetryableStatuses[e.Status]
+	}
 	return retryableSuffixes[e.TypeSuffix]
+}
+
+// BackendError is the engine's own error body, preserved verbatim, on an error from
+// POST /v1/models/{model}/predict.
+//
+// Nil when the extension member is absent: a gateway that wrapped the refusal without capturing
+// it, in which case the status is all there is. The shape is the engine's and this SDK does not
+// model it -- that is the point of the pass-through route.
+func (e *APIError) BackendError() any {
+	return e.Raw["backend_error"]
+}
+
+// BackendStatus is the engine's status when it differs from this error's.
+//
+// Present on the 502 path, where the gateway reports its own status because a 500 the engine
+// produced is not one a caller can act on. On the 4xx path the two are the same and this is 0.
+func (e *APIError) BackendStatus() int {
+	if value, ok := e.Raw["backend_status"].(float64); ok {
+		return int(value)
+	}
+	return 0
 }
 
 // StreamError is a mid-stream failure.

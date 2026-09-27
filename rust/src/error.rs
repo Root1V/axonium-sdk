@@ -67,8 +67,21 @@ pub enum ErrorKind {
     TokenEndpointNotConfigured,
     // 429
     RateLimitExceeded,
+    /// The engine behind `predict` refused the request, wrapped rather than forwarded.
+    ///
+    /// The one kind whose status is not fixed: `/v1/models/{model}/predict` passes the body
+    /// through, so when the engine refuses, its status is kept -- a 422 stays a 422 -- and its
+    /// error body is preserved under the `backend_error` extension member. The name therefore
+    /// claims no cause, and [`ErrorKind::retryable`] cannot answer for it; use
+    /// [`ApiError::retryable`], which reads the status.
+    PredictBackendRejected,
     // 5xx
     UpstreamError,
+    /// Every replica of the model is above its pending-work headroom, so the request was refused
+    /// rather than queued behind work that would outlive its own timeout. Distinct from
+    /// [`ErrorKind::BackendUnavailable`] on purpose: that means the replicas are broken, this
+    /// means they are working. `retry_after` is always 1 and is a hint, not a promise.
+    CapacityExhausted,
     ModelNotLoaded,
     BackendUnavailable,
     RateLimitingUnavailable,
@@ -103,6 +116,8 @@ impl ErrorKind {
             "idempotency-response-not-retained" => Self::IdempotencyResponseNotRetained,
             "rate-limit-exceeded-requests" => Self::RateLimitExceeded,
             "upstream-error" => Self::UpstreamError,
+            "capacity-exhausted" => Self::CapacityExhausted,
+            "predict-backend-rejected" => Self::PredictBackendRejected,
             "model-not-loaded" => Self::ModelNotLoaded,
             "backend-unavailable" => Self::BackendUnavailable,
             "rate-limiting-unavailable" => Self::RateLimitingUnavailable,
@@ -124,12 +139,17 @@ impl ErrorKind {
     /// Whether retrying this can plausibly succeed at all.
     ///
     /// A necessary condition, not a sufficient one: [`crate::RetryPolicy`] additionally requires
-    /// that no generation occurred, because this API has no idempotency by default and a retried
-    /// generation is billable rather than a replay.
+    /// either that no generation occurred, or that an `Idempotency-Key` makes the repeat a replay
+    /// rather than a second billing.
+    ///
+    /// [`Self::PredictBackendRejected`] is deliberately absent and answers `false` here: its
+    /// status belongs to an engine this gateway only wraps, so the name cannot decide. Ask
+    /// [`ApiError::retryable`] instead, which has the status to read.
     pub fn retryable(self) -> bool {
         matches!(
             self,
             Self::TokenExpired
+                | Self::CapacityExhausted
                 | Self::RateLimitExceeded
                 | Self::UpstreamError
                 | Self::BackendUnavailable
@@ -175,9 +195,35 @@ pub struct ApiError {
     pub raw: BTreeMap<String, Value>,
 }
 
+/// The engine statuses worth repeating when the gateway wraps a refusal as
+/// `predict-backend-rejected`. Everything else the engine rejects is the request to fix.
+const PREDICT_BACKEND_RETRYABLE_STATUSES: &[u16] = &[429];
+
 impl ApiError {
     pub fn retryable(&self) -> bool {
+        if self.kind == ErrorKind::PredictBackendRejected {
+            return PREDICT_BACKEND_RETRYABLE_STATUSES.contains(&self.status);
+        }
         self.kind.retryable()
+    }
+
+    /// The engine's own error body, preserved verbatim, on an error from
+    /// `POST /v1/models/{model}/predict`.
+    ///
+    /// `None` when the extension member is absent: a gateway that wrapped the refusal without
+    /// capturing it, in which case the status is all there is. The shape is the engine's and this
+    /// SDK does not model it -- that is what the pass-through route means.
+    pub fn backend_error(&self) -> Option<&Value> {
+        self.raw.get("backend_error")
+    }
+
+    /// The engine's status when it differs from this error's.
+    ///
+    /// Present on the 502 path, where the gateway reports its own status because a 500 the engine
+    /// produced is not one a caller can act on. On the 4xx path the two are the same and this is
+    /// `None`.
+    pub fn backend_status(&self) -> Option<u16> {
+        self.raw.get("backend_status")?.as_u64().map(|v| v as u16)
     }
 }
 
@@ -432,6 +478,41 @@ mod catalog_parity {
             .clone()
     }
 
+    /// The statuses a catalogued entry should be exercised at.
+    ///
+    /// Every entry but one fixes a single number. `predict-backend-rejected` keeps whatever the
+    /// engine returned, so the guide's row reads `4xx` and the catalog says so literally; that
+    /// entry carries `probe_statuses` instead, and `as_u64` on its `status` would panic.
+    fn probe_statuses(entry: &Value) -> Vec<u16> {
+        if let Some(listed) = entry["probe_statuses"].as_array() {
+            return listed
+                .iter()
+                .map(|s| s.as_u64().expect("probe status") as u16)
+                .collect();
+        }
+        vec![entry["status"].as_u64().expect("status") as u16]
+    }
+
+    /// What the catalog says retrying this entry at this status should do.
+    ///
+    /// A bool for every entry whose retryability is a property of the error itself, and the
+    /// string `"by_status"` for the one where it is not.
+    fn want_retryable(entry: &Value, status: u16) -> bool {
+        if let Some(declared) = entry["retryable"].as_bool() {
+            return declared;
+        }
+        assert_eq!(
+            entry["retryable"].as_str(),
+            Some("by_status"),
+            "retryable is neither a bool nor \"by_status\""
+        );
+        entry["retryable_statuses"]
+            .as_array()
+            .expect("retryable_statuses")
+            .iter()
+            .any(|s| s.as_u64() == Some(u64::from(status)))
+    }
+
     #[test]
     fn the_catalog_is_not_empty() {
         // Every assertion below is vacuously true against an empty list, which is exactly how a
@@ -445,33 +526,36 @@ mod catalog_parity {
 
         for entry in catalog() {
             let suffix = entry["suffix"].as_str().expect("suffix");
-            let status = entry["status"].as_u64().expect("status") as u16;
-            let want_retryable = entry["retryable"].as_bool().expect("retryable");
 
-            let body = serde_json::json!({
-                "type": format!("https://gateway.example/errors/{suffix}"),
-                "title": suffix,
-                "detail": "something went wrong",
-            });
-            let error = api_error_from_body(status, Some(&body), None, None, "", "");
+            for status in probe_statuses(&entry) {
+                let body = serde_json::json!({
+                    "type": format!("https://gateway.example/errors/{suffix}"),
+                    "title": suffix,
+                    "detail": "something went wrong",
+                });
+                let error = api_error_from_body(status, Some(&body), None, None, "", "");
 
-            // A suffix this build does not know falls back to a status-keyed kind, which is right
-            // for an unknown error and wrong for a catalogued one.
-            let fell_back = matches!(
-                error.kind,
-                ErrorKind::OtherClientError | ErrorKind::OtherServerError | ErrorKind::Unauthorized
-            );
-            if fell_back {
-                problems.push(format!(
-                    "{suffix} is in spec/errors.json but this SDK maps no kind for it"
-                ));
-                continue;
-            }
-            if error.retryable() != want_retryable {
-                problems.push(format!(
-                    "{suffix}: retryable is {} here, {want_retryable} in the catalog",
-                    error.retryable()
-                ));
+                // A suffix this build does not know falls back to a status-keyed kind, which is
+                // right for an unknown error and wrong for a catalogued one.
+                let fell_back = matches!(
+                    error.kind,
+                    ErrorKind::OtherClientError
+                        | ErrorKind::OtherServerError
+                        | ErrorKind::Unauthorized
+                );
+                if fell_back {
+                    problems.push(format!(
+                        "{suffix} is in spec/errors.json but this SDK maps no kind for it"
+                    ));
+                    continue;
+                }
+                let want_retryable = want_retryable(&entry, status);
+                if error.retryable() != want_retryable {
+                    problems.push(format!(
+                        "{suffix} at {status}: retryable is {} here, {want_retryable} in the catalog",
+                        error.retryable()
+                    ));
+                }
             }
         }
 

@@ -29,6 +29,7 @@ __all__ = [
     "AxoniumError",
     "BackendUnavailableError",
     "BadRequestError",
+    "CapacityExhaustedError",
     "ConfigurationError",
     "ContextExceededError",
     "ForbiddenError",
@@ -48,6 +49,7 @@ __all__ = [
     "ModelNotLoadedError",
     "NotFoundError",
     "OAuthError",
+    "PredictBackendRejectedError",
     "RangeTooLargeError",
     "RateLimitError",
     "RateLimitingUnavailableError",
@@ -524,6 +526,71 @@ class UpstreamError(ServerError):
     type_suffix = "upstream-error"
 
 
+class CapacityExhaustedError(ServerError):
+    """Every replica of this model is above its pending-work headroom.
+
+    Refused rather than queued: the platform declines work it expects to outlive its own timeout
+    instead of accepting it and timing out later. A saturated replica with a free sibling is not
+    this error — the request simply goes to the sibling — so meeting it means all of them are
+    busy, and ``detail`` names each.
+
+    Distinct from :class:`BackendUnavailableError` on purpose. That one means the replicas are
+    broken and somebody should look at them; this one means they are working. Retrying is right
+    here and would be futile there.
+
+    ``retry_after`` is always ``1``, and the platform team is explicit that it is a hint rather
+    than a promise: a slot frees when some other request finishes, and how long that takes is the
+    model's business. Repeated occurrences are a capacity signal, not a client problem.
+    """
+
+    type_suffix = "capacity-exhausted"
+
+
+class PredictBackendRejectedError(APIError):
+    """The engine behind ``predict`` refused the request, wrapped rather than forwarded.
+
+    The only error whose status this SDK does not know in advance: ``/v1/models/{model}/predict``
+    passes the body through to the engine, and when the engine refuses, the gateway keeps its
+    status — a ``422`` stays a ``422`` — and preserves its error body verbatim under
+    :attr:`backend_error`.
+
+    **The name does not claim a cause**, deliberately: a ``429`` or a ``403`` from the engine is
+    also a 4xx and has nothing to do with the payload. Read :attr:`status` and
+    :attr:`backend_error` for that. This is also why :attr:`retryable` is computed here rather
+    than fixed: the honest answer is the one the status gives, and every other entry in the
+    catalog can answer without looking.
+    """
+
+    type_suffix = "predict-backend-rejected"
+
+    #: The one 4xx worth repeating. Everything else the engine rejects is the request to fix.
+    _RETRYABLE_STATUSES = frozenset({429})
+
+    @property
+    def retryable(self) -> bool:  # type: ignore[override]
+        return self.status in self._RETRYABLE_STATUSES
+
+    @property
+    def backend_error(self) -> Any:
+        """The engine's own error body, exactly as it sent it.
+
+        ``None`` when the extension member is absent, which is a gateway that wrapped the refusal
+        without capturing it — the status is then all there is.
+        """
+        return self.raw.get("backend_error")
+
+    @property
+    def backend_status(self) -> int | None:
+        """The engine's status when it differs from this error's.
+
+        Present on the ``502`` path, where the gateway reports its own status because a ``500``
+        the engine produced is not one a caller can act on. On the 4xx path the two are the same
+        and this is ``None``.
+        """
+        value = self.raw.get("backend_status")
+        return value if isinstance(value, int) else None
+
+
 class ModelNotLoadedError(ServerError):
     """The model is registered but not currently deployed.
 
@@ -672,6 +739,8 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         RateLimitError,
         UpstreamError,
         ModelNotLoadedError,
+        CapacityExhaustedError,
+        PredictBackendRejectedError,
         NotFoundError,
         InconsistentModelGroupError,
         UnauthorizedRequestError,
