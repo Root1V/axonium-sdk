@@ -23,6 +23,34 @@ def error_catalog() -> dict[str, Any]:
     return data
 
 
+def probe_statuses(entry: dict[str, Any]) -> list[int]:
+    """The statuses a catalogued error should be exercised at.
+
+    Almost every entry fixes one. ``predict-backend-rejected`` does not -- it keeps whatever the
+    engine returned -- so it carries an explicit ``probe_statuses`` list instead, and a guard that
+    read ``status`` alone would either crash on the string ``"4xx"`` or, worse, coerce it and test
+    a status the platform never sends.
+    """
+    listed = entry.get("probe_statuses")
+    if listed:
+        return [int(status) for status in listed]
+    return [int(entry["status"])]
+
+
+def expected_retryable(entry: dict[str, Any], status: int) -> bool:
+    """What the catalog says retrying this error at this status should do.
+
+    ``retryable`` is a bool for every entry whose retryability is a property of the error itself.
+    ``"by_status"`` marks the one where it is not: the status belongs to an engine this gateway
+    only wraps, so the answer has to be read off the status rather than off the name.
+    """
+    declared = entry["retryable"]
+    if declared == "by_status":
+        return status in set(entry["retryable_statuses"])
+    assert isinstance(declared, bool), f"{entry['suffix']}: unrecognised retryable {declared!r}"
+    return declared
+
+
 @pytest.fixture
 def config_kwargs() -> dict[str, str]:
     """Minimal valid configuration, pointing at hosts that are never actually contacted."""

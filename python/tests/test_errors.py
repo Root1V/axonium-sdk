@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from conftest import expected_retryable, probe_statuses
 
 from axonium import errors
 from axonium.errors import (
@@ -45,21 +46,26 @@ class TestCatalogParity:
     ) -> None:
         for entry in error_catalog["gateway_errors"]:
             suffix = entry["suffix"]
-            exc = error_from_response(status=entry["status"], body=problem(suffix, entry["status"]))
+            for status in probe_statuses(entry):
+                exc = error_from_response(status=status, body=problem(suffix, status))
 
-            assert exc.type_suffix == suffix
-            assert type(exc) not in (BadRequestError, UnauthorizedError, ServerError, APIError), (
-                f"{suffix} fell back to a generic class instead of a dedicated one"
-            )
+                assert exc.type_suffix == suffix
+                assert type(exc) not in (
+                    BadRequestError,
+                    UnauthorizedError,
+                    ServerError,
+                    APIError,
+                ), f"{suffix} at {status} fell back to a generic class instead of a dedicated one"
 
     def test_retryability_matches_the_catalog(self, error_catalog: dict[str, Any]) -> None:
         for entry in error_catalog["gateway_errors"]:
-            exc = error_from_response(
-                status=entry["status"], body=problem(entry["suffix"], entry["status"])
-            )
-            assert exc.retryable is entry["retryable"], (
-                f"{entry['suffix']} retryability disagrees with spec/errors.json"
-            )
+            for status in probe_statuses(entry):
+                exc = error_from_response(status=status, body=problem(entry["suffix"], status))
+                expected = expected_retryable(entry, status)
+                assert exc.retryable is expected, (
+                    f"{entry['suffix']} at {status}: retryable is {exc.retryable} here, "
+                    f"{expected} in spec/errors.json"
+                )
 
     def test_every_catalog_oauth_error_maps_to_a_specific_class(
         self, error_catalog: dict[str, Any]

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import expected_retryable, probe_statuses
 
 from axonium.errors import _BY_SUFFIX, error_from_response
 
@@ -32,16 +33,18 @@ def test_every_catalogued_error_maps_to_a_class(entry: dict[str, Any]) -> None:
     suffix = entry["suffix"]
     assert suffix in _BY_SUFFIX, f"{suffix} is in spec/errors.json but this SDK maps no class"
 
-    error = error_from_response(
-        status=entry["status"],
-        body={
-            "type": f"https://gateway.example/errors/{suffix}",
-            "title": suffix,
-            "detail": "something went wrong",
-        },
-    )
+    for status in probe_statuses(entry):
+        error = error_from_response(
+            status=status,
+            body={
+                "type": f"https://gateway.example/errors/{suffix}",
+                "title": suffix,
+                "detail": "something went wrong",
+            },
+        )
 
-    assert isinstance(error, _BY_SUFFIX[suffix]), f"{suffix} did not build its own class"
-    assert error.retryable is entry["retryable"], (
-        f"{suffix}: retryable is {error.retryable} here, {entry['retryable']} in the catalog"
-    )
+        assert isinstance(error, _BY_SUFFIX[suffix]), f"{suffix} did not build its own class"
+        expected = expected_retryable(entry, status)
+        assert error.retryable is expected, (
+            f"{suffix} at {status}: retryable is {error.retryable} here, {expected} in the catalog"
+        )

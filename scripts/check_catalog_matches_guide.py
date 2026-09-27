@@ -28,10 +28,21 @@ REPO = Path(__file__).resolve().parents[1]
 GUIDE = REPO / "spec" / "prometheus-gateway.md"
 CATALOG = REPO / "spec" / "errors.json"
 
-# The error tables are `| <status> | `<suffix>` | meaning | retryable |`. Anchored on the status so
-# that a backticked word elsewhere in the guide -- a header name, a field, a model id -- cannot be
-# mistaken for an error type.
-TABULATED = re.compile(r"^\|\s*(\d{3})\s*\|\s*`([a-z0-9-]+)`\s*\|", re.M)
+# The error tables are `| <status> | `<suffix>` | meaning | retryable |`. The suffix cell carries the
+# anchor -- a backticked kebab-case word in the second column -- and the first cell is matched as
+# whatever it happens to contain rather than as a number.
+#
+# It used to require `\d{3}` there, and that is how `predict-backend-rejected` went unseen: its row
+# says `4xx`, because the type keeps whatever status the engine returned. A check written to notice a
+# row that vanishes did not notice a row that never parsed, which is the same failure it exists to
+# catch, aimed at itself. So the status cell is now validated rather than used to select: a row whose
+# first cell is not status-shaped is an error, never a skip.
+#
+# Excluding backticks from the first cell is what keeps the §3.10 modality table out -- its rows are
+# `| `classification` | `sst2-clf` | ... |`, which otherwise match. A status is written bare; code is
+# not. If that ever stops being true the rows fall into UNPARSED and this says so out loud.
+ROW = re.compile(r"^\|\s*([^|`]*?)\s*\|\s*`([a-z0-9-]+)`\s*\|", re.M)
+STATUS_CELL = re.compile(r"^(?:\d{3}|\dxx)$")
 
 # The OAuth2 codes are prose, not a table -- "Possible `error` values: `x` (400), `y` (400)..." --
 # so they are read from that sentence rather than from a row. Matching snake_case anywhere would
@@ -44,7 +55,17 @@ def main() -> int:
     guide = GUIDE.read_text(encoding="utf-8")
     catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
 
-    in_guide = {suffix for _, suffix in TABULATED.findall(guide)}
+    rows = ROW.findall(guide)
+    unparsed = sorted({cell for cell, _ in rows if not STATUS_CELL.match(cell)})
+    if unparsed:
+        print(
+            "Rows in the guide's error tables whose status cell this check cannot read: "
+            + ", ".join(repr(cell) for cell in unparsed)
+            + "\nThey would be skipped silently, which is how a catalogued error goes missing.",
+            file=sys.stderr,
+        )
+        return 1
+    in_guide = {suffix for _, suffix in rows}
     sentence = OAUTH_SENTENCE.search(guide)
     if sentence is None:
         print(

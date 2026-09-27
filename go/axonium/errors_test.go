@@ -12,13 +12,56 @@ import (
 // against that file rather than a hand-written list is what stops the taxonomies drifting: a row
 // added to the catalog fails here until this SDK maps it.
 
+type catalogEntry struct {
+	// Status is a number for every entry but one. predict-backend-rejected keeps whatever status
+	// the engine returned, so the guide's row reads "4xx" and the catalog says so literally --
+	// hence json.RawMessage, and hence probeStatuses below rather than a bare int.
+	Status json.RawMessage `json:"status"`
+	// ProbeStatuses lists the statuses to exercise when Status is not a single number.
+	ProbeStatuses []int  `json:"probe_statuses"`
+	Suffix        string `json:"suffix"`
+	// Retryable is a bool, or the string "by_status" for an entry whose retryability belongs to
+	// the status rather than to the name.
+	Retryable json.RawMessage `json:"retryable"`
+	// RetryableStatuses is the set that answers it when Retryable is "by_status".
+	RetryableStatuses []int `json:"retryable_statuses"`
+}
+
+// probeStatuses is the set of statuses this entry should be exercised at.
+func (e catalogEntry) probeStatuses(t *testing.T) []int {
+	t.Helper()
+	if len(e.ProbeStatuses) > 0 {
+		return e.ProbeStatuses
+	}
+	var status int
+	if err := json.Unmarshal(e.Status, &status); err != nil {
+		t.Fatalf("%s: status is not a number and no probe_statuses were listed: %v", e.Suffix, err)
+	}
+	return []int{status}
+}
+
+// wantRetryable is what the catalog says retrying this entry at this status should do.
+func (e catalogEntry) wantRetryable(t *testing.T, status int) bool {
+	t.Helper()
+	var declared bool
+	if err := json.Unmarshal(e.Retryable, &declared); err == nil {
+		return declared
+	}
+	var byStatus string
+	if err := json.Unmarshal(e.Retryable, &byStatus); err != nil || byStatus != "by_status" {
+		t.Fatalf("%s: retryable is neither a bool nor \"by_status\": %s", e.Suffix, e.Retryable)
+	}
+	for _, s := range e.RetryableStatuses {
+		if s == status {
+			return true
+		}
+	}
+	return false
+}
+
 type errorCatalog struct {
-	GatewayErrors []struct {
-		Status    int    `json:"status"`
-		Suffix    string `json:"suffix"`
-		Retryable bool   `json:"retryable"`
-	} `json:"gateway_errors"`
-	OAuthErrors []struct {
+	GatewayErrors []catalogEntry `json:"gateway_errors"`
+	OAuthErrors   []struct {
 		Status string `json:"-"`
 		Code   string `json:"error"`
 	} `json:"oauth_errors"`
@@ -50,17 +93,19 @@ func TestEveryCatalogedErrorMapsToASentinel(t *testing.T) {
 			continue
 		}
 
-		err := errorFromBody(entry.Status, map[string]any{
-			"type":   "https://gateway.example/errors/" + entry.Suffix,
-			"title":  entry.Suffix,
-			"detail": "something went wrong",
-		}, nil, nil, "", "")
+		for _, status := range entry.probeStatuses(t) {
+			err := errorFromBody(status, map[string]any{
+				"type":   "https://gateway.example/errors/" + entry.Suffix,
+				"title":  entry.Suffix,
+				"detail": "something went wrong",
+			}, nil, nil, "", "")
 
-		if !errors.Is(err, sentinel) {
-			t.Errorf("%s did not match its own sentinel", entry.Suffix)
-		}
-		if err.Retryable() != entry.Retryable {
-			t.Errorf("%s: retryable is %v here, %v in the catalog", entry.Suffix, err.Retryable(), entry.Retryable)
+			if !errors.Is(err, sentinel) {
+				t.Errorf("%s at %d did not match its own sentinel", entry.Suffix, status)
+			}
+			if want := entry.wantRetryable(t, status); err.Retryable() != want {
+				t.Errorf("%s at %d: retryable is %v here, %v in the catalog", entry.Suffix, status, err.Retryable(), want)
+			}
 		}
 	}
 }
