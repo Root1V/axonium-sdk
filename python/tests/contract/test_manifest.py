@@ -133,6 +133,15 @@ def call_sync(client: Axonium, case: dict[str, Any]) -> Any:
 
     if operation == "chat.completions.create":
         return client.chat.completions.create(**request)
+    if operation == "chat.completions.stream":
+        # Opening the stream is what sends the request, so a rejection that precedes the stream is
+        # raised by __enter__ rather than by iteration -- which is exactly the difference between an
+        # `error` case and a `stream_error` one, and the reason this branch has to exist. Without it
+        # a streaming error case reached "unhandled operation", so the corpus could not express a
+        # rejection at all. Opened *and* iterated, because an SDK that hands back a stream where a
+        # status belongs must not pass by reading the refusal as an empty body.
+        with client.chat.completions.stream(**request) as stream:
+            return list(stream)
     if operation == "embeddings.create":
         return client.embeddings.create(**request)
     if operation == "images.generate":
@@ -154,6 +163,10 @@ async def call_async(client: AsyncAxonium, case: dict[str, Any]) -> Any:
 
     if operation == "chat.completions.create":
         return await client.chat.completions.create(**request)
+    if operation == "chat.completions.stream":
+        # See call_sync.
+        async with client.chat.completions.stream(**request) as stream:
+            return [chunk async for chunk in stream]
     if operation == "embeddings.create":
         return await client.embeddings.create(**request)
     if operation == "images.generate":

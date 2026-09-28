@@ -242,6 +242,7 @@ fn kind_for(suffix: &str) -> ErrorKind {
         "idempotency-in-progress" => ErrorKind::IdempotencyInProgress,
         "idempotency-response-not-retained" => ErrorKind::IdempotencyResponseNotRetained,
         "not-found" => ErrorKind::NotFound,
+        "backend-unavailable" => ErrorKind::BackendUnavailable,
         "rate-limit-exceeded-requests" => ErrorKind::RateLimitExceeded,
         "upstream-unavailable" => ErrorKind::TokenEndpointUnavailable,
         "not-configured" => ErrorKind::TokenEndpointNotConfigured,
@@ -554,7 +555,26 @@ async fn contract_corpus() {
             }
             ("error", _) => {
                 let suffix = expected_suffix(case);
-                let outcome = if operation == "usage.retrieve" {
+                let outcome = if operation == "chat.completions.stream" {
+                    // Opening the stream is what sends the request, so a rejection that precedes
+                    // the stream comes back from chat_stream itself rather than from next() --
+                    // which is exactly the difference between an `error` case and a `stream_error`
+                    // one, and the reason this branch has to exist. Without it a streaming error
+                    // case fell through to client.chat(), i.e. the NON-streaming call: it would
+                    // have passed while exercising chat() rather than the chat_stream() it names.
+                    // Iterated anyway, for the SDK that hands back a stream here instead of a
+                    // status: it must not pass by reading the refusal as an empty body.
+                    match client.chat_stream(&chat_request(&case["request"])).await {
+                        Err(e) => Some(e),
+                        Ok(mut stream) => loop {
+                            match stream.next().await {
+                                Ok(Some(_)) => {}
+                                Ok(None) => break None,
+                                Err(e) => break Some(e),
+                            }
+                        },
+                    }
+                } else if operation == "usage.retrieve" {
                     let request_id = case["request"]["request_id"].as_str().unwrap_or_default();
                     client.usage(request_id).await.err()
                 } else if operation == "embeddings.create" {

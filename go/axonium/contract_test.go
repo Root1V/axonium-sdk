@@ -376,6 +376,22 @@ func invokeExpectingError(t *testing.T, client *Client, c contractCase) error {
 	case "chat.completions.create":
 		_, err := client.Chat.Create(ctx, chatRequestFrom(c.Request))
 		return err
+	case "chat.completions.stream":
+		// Opening the stream is what sends the request, so a rejection that precedes the stream
+		// comes back from Stream itself rather than from Next -- which is exactly the difference
+		// between an `error` case and a `stream_error` one, and the reason this branch has to
+		// exist. Without it a streaming error case died on "unsupported operation", so the corpus
+		// could not express a rejection at all. Iterated anyway, and Err() returned, for the SDK
+		// that hands back a stream here instead of a status: it must not pass by reading the
+		// refusal as an empty body.
+		stream, err := client.Chat.Stream(ctx, chatRequestFrom(c.Request))
+		if err != nil {
+			return err
+		}
+		defer stream.Close()
+		for stream.Next() {
+		}
+		return stream.Err()
 	case "embeddings.create":
 		_, err := client.Embeddings.Create(ctx, embeddingRequestFrom(c.Request))
 		return err
