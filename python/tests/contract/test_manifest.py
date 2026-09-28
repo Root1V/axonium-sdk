@@ -16,7 +16,7 @@ import httpx
 import pytest
 import respx
 
-from axonium import AsyncAxonium, Axonium
+from axonium import AsyncAxonium, Axonium, RetryPolicy
 from axonium.errors import APIError, AuthTransportError, OAuthError, StreamInterruptedError
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -90,6 +90,24 @@ def mock_response(spec: dict[str, Any]) -> httpx.Response:
     body_text = (SPEC / "fixtures" / spec["body_file"]).read_text()
     headers.setdefault("Content-Type", "application/json")
     return httpx.Response(spec["status"], content=body_text.encode(), headers=headers)
+
+
+def contract_client(config_kwargs: dict[str, str]) -> Axonium:
+    """The client every case is replayed through.
+
+    One constructor rather than six, because ``expect.requests`` counts requests and the number of
+    requests a retryable failure produces IS the retry policy. Leaving the policy at the SDK's
+    default is therefore part of the corpus rather than a detail of this harness -- see the
+    manifest's ``$request_counts`` -- and a single place to build the client is what lets a test say
+    so. Disabling retries here to make the error cases fast, which is a reasonable thing to want,
+    would make a counted case fail on this file instead of on the SDK.
+    """
+    return Axonium(**config_kwargs)
+
+
+def async_contract_client(config_kwargs: dict[str, str]) -> AsyncAxonium:
+    """See :func:`contract_client`."""
+    return AsyncAxonium(**config_kwargs)
 
 
 @pytest.fixture(autouse=True)
@@ -247,7 +265,7 @@ class TestNonStreamingCases:
     def test_sync(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
         route_for(case)
 
-        with Axonium(**config_kwargs) as client:
+        with contract_client(config_kwargs) as client:
             result = call_sync(client, case)
 
         assert_fields(result, case["expect"]["fields"], case["id"])
@@ -257,7 +275,7 @@ class TestNonStreamingCases:
     async def test_async(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
         route_for(case)
 
-        async with AsyncAxonium(**config_kwargs) as client:
+        async with async_contract_client(config_kwargs) as client:
             result = await call_async(client, case)
 
         assert_fields(result, case["expect"]["fields"], case["id"])
@@ -271,7 +289,7 @@ class TestStreamingCases:
         expect = case["expect"]
 
         with (
-            Axonium(**config_kwargs) as client,
+            contract_client(config_kwargs) as client,
             client.chat.completions.stream(**case["request"]) as stream,
         ):
             if expect["kind"] == "stream_error":
@@ -300,7 +318,7 @@ class TestStreamingCases:
         expect = case["expect"]
 
         async with (
-            AsyncAxonium(**config_kwargs) as client,
+            async_contract_client(config_kwargs) as client,
             client.chat.completions.stream(**case["request"]) as stream,
         ):
             if expect["kind"] == "stream_error":
@@ -335,7 +353,7 @@ class TestErrorCases:
     def test_sync(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
         route_for(case)
 
-        with Axonium(**config_kwargs) as client, pytest.raises(APIError) as caught:
+        with contract_client(config_kwargs) as client, pytest.raises(APIError) as caught:
             call_sync(client, case)
 
         assert_error(caught.value, case)
@@ -345,7 +363,7 @@ class TestErrorCases:
     async def test_async(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
         route_for(case)
 
-        async with AsyncAxonium(**config_kwargs) as client:
+        async with async_contract_client(config_kwargs) as client:
             with pytest.raises(APIError) as caught:
                 await call_async(client, case)
 
@@ -397,6 +415,31 @@ class TestManifestIntegrity:
         """
         silent = [case["id"] for case in CASES if not case.get("$comment", "").strip()]
         assert not silent, f"cases that do not say where their bytes came from: {silent}"
+
+    def test_a_counted_case_is_replayed_under_the_default_retry_policy(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        """``expect.requests`` counts requests, and what turns one failure into three is the policy.
+
+        So the policy is part of the corpus, not a detail of this harness, and the manifest says so
+        in ``$request_counts``. This is that sentence as a test, because a sentence is what the last
+        several of these turned out to be: a fourth SDK's runner disables retries to keep its error
+        cases fast -- a reasonable thing to want -- which sends one request and fails a counted case
+        on its own configuration rather than on the SDK. Asserted only while a counted case exists,
+        so it states a dependency rather than a preference.
+        """
+        counted = [case["id"] for case in CASES if "requests" in case["expect"]]
+        if not counted:
+            return
+
+        default = RetryPolicy()
+        with contract_client(config_kwargs) as client:
+            assert client.retry_policy == default, (
+                f"the contract client overrides the retry policy, so the request counts in "
+                f"{counted} no longer measure the SDK"
+            )
+        async_client = async_contract_client(config_kwargs)
+        assert async_client.retry_policy == default, counted
 
     def test_a_case_declaring_a_sequence_is_asserting_the_request_count(self) -> None:
         # A sequence exists to pin how many requests reach the server. Without that count the extra
