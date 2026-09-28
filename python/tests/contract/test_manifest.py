@@ -222,6 +222,32 @@ def assert_error(error: APIError, case: dict[str, Any]) -> None:
         assert_fields(error, expect["fields"], cid)
 
 
+def assert_request_side(route: Any, case: dict[str, Any]) -> None:
+    """What the SDK SENT, which is as much of the contract as what it received.
+
+    The corpus asserted the request side on the token endpoint alone, so six cases could supply an
+    ``idempotency_key`` and not one ask whether it left the process -- and a dropped key turns the
+    retry it exists to protect into a second billable generation. ``request_headers_absent`` is the
+    other direction, and not symmetry for its own sake: a header the SDK invents is a decision the
+    caller never made, silently.
+    """
+    expect = case["expect"]
+    if not ({"request_headers", "request_headers_absent"} & expect.keys()):
+        return
+
+    assert route.calls, f"{case['id']}: no request reached the route to inspect"
+    sent = route.calls.last.request.headers
+
+    for name, want in expect.get("request_headers", {}).items():
+        assert sent.get(name) == want, (
+            f"{case['id']}: header {name} was {sent.get(name)!r}, expected {want!r}"
+        )
+    for name in expect.get("request_headers_absent", []):
+        assert name not in sent, (
+            f"{case['id']}: sent {name}={sent.get(name)!r}, which the caller never asked for"
+        )
+
+
 def assert_traffic(route: Any, stream: Any, case: dict[str, Any]) -> None:
     """How many requests reached the server, and whether the SDK admits to it.
 
@@ -238,6 +264,7 @@ def assert_traffic(route: Any, stream: Any, case: dict[str, Any]) -> None:
     if "attempts" in expect:
         assert stream.meta is not None, case["id"]
         assert stream.meta.attempts == expect["attempts"], case["id"]
+    assert_request_side(route, case)
 
 
 def assert_usage(usage: Any, expected: dict[str, Any] | None, case_id: str) -> None:
@@ -263,22 +290,24 @@ class TestNonStreamingCases:
     @respx.mock
     @pytest.mark.parametrize("case", NON_STREAMING, ids=[c["id"] for c in NON_STREAMING])
     def test_sync(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
-        route_for(case)
+        route = route_for(case)
 
         with contract_client(config_kwargs) as client:
             result = call_sync(client, case)
 
         assert_fields(result, case["expect"]["fields"], case["id"])
+        assert_request_side(route, case)
 
     @respx.mock
     @pytest.mark.parametrize("case", NON_STREAMING, ids=[c["id"] for c in NON_STREAMING])
     async def test_async(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
-        route_for(case)
+        route = route_for(case)
 
         async with async_contract_client(config_kwargs) as client:
             result = await call_async(client, case)
 
         assert_fields(result, case["expect"]["fields"], case["id"])
+        assert_request_side(route, case)
 
 
 class TestStreamingCases:

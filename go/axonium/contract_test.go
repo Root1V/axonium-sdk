@@ -61,6 +61,11 @@ type contractCase struct {
 		// about the second while the first is the fact.
 		Requests *int `json:"requests"`
 		Attempts *int `json:"attempts"`
+		// RequestHeaders is what the SDK must have SENT, and RequestHeadersAbsent what it must not
+		// have invented. The corpus asserted the request side on the token endpoint alone, so six
+		// cases could supply an Idempotency-Key and none ask whether it left the process.
+		RequestHeaders       map[string]string `json:"request_headers"`
+		RequestHeadersAbsent []string          `json:"request_headers_absent"`
 	} `json:"expect"`
 }
 
@@ -132,6 +137,7 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 	// suite would otherwise report as a flake.
 	var mu sync.Mutex
 	served := 0
+	var sentHeaders http.Header
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth2/token" && c.Operation != "token.fetch" {
 			writeToken(w, "contract", 300)
@@ -151,6 +157,7 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 		mu.Lock()
 		index := served
 		served++
+		sentHeaders = r.Header.Clone()
 		mu.Unlock()
 		if index >= len(replies) {
 			index = len(replies) - 1
@@ -175,14 +182,30 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 	// Checked after the case has run, whatever it asserted: a count is only evidence once the
 	// requests are over.
 	defer func() {
-		if c.Expect.Requests == nil {
+		mu.Lock()
+		got, headers := served, sentHeaders
+		mu.Unlock()
+
+		if c.Expect.Requests != nil && got != *c.Expect.Requests {
+			t.Errorf("%d requests reached the server, want %d", got, *c.Expect.Requests)
+		}
+
+		if len(c.Expect.RequestHeaders) == 0 && len(c.Expect.RequestHeadersAbsent) == 0 {
 			return
 		}
-		mu.Lock()
-		got := served
-		mu.Unlock()
-		if got != *c.Expect.Requests {
-			t.Errorf("%d requests reached the server, want %d", got, *c.Expect.Requests)
+		if headers == nil {
+			t.Fatalf("no request reached the server to inspect")
+		}
+		for name, want := range c.Expect.RequestHeaders {
+			if sent := headers.Get(name); sent != want {
+				t.Errorf("header %s: sent %q, want %q", name, sent, want)
+			}
+		}
+		for _, name := range c.Expect.RequestHeadersAbsent {
+			// Absent, not empty: a header the SDK invents is a decision the caller never made.
+			if _, present := headers[http.CanonicalHeaderKey(name)]; present {
+				t.Errorf("sent %s=%q, which the caller never asked for", name, headers.Get(name))
+			}
 		}
 	}()
 

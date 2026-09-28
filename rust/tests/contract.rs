@@ -81,6 +81,46 @@ async fn requests_served(server: &MockServer) -> usize {
         .count()
 }
 
+/// Asserts what the SDK SENT, which is as much of the contract as what it received.
+///
+/// The corpus asserted the request side on the token endpoint alone, so six cases could supply an
+/// `idempotency_key` and not one ask whether it left the process -- and a dropped key turns the
+/// retry it exists to protect into a second billable generation. The absent direction is not
+/// symmetry for its own sake: a header the SDK invents is a decision the caller never made.
+async fn assert_request_side(server: &MockServer, case: &Value) {
+    let want = case["expect"]
+        .get("request_headers")
+        .and_then(Value::as_object);
+    let absent = case["expect"]
+        .get("request_headers_absent")
+        .and_then(Value::as_array);
+    if want.is_none() && absent.is_none() {
+        return;
+    }
+
+    let id = case["id"].as_str().unwrap();
+    let requests = server
+        .received_requests()
+        .await
+        .expect("the mock server records its requests");
+    let last = requests
+        .iter()
+        .rfind(|request| request.url.path() != "/oauth2/token")
+        .unwrap_or_else(|| panic!("{id}: no request reached the server to inspect"));
+
+    for (name, value) in want.into_iter().flatten() {
+        let sent = last.headers.get(name.as_str()).map(|v| v.to_str().unwrap());
+        assert_eq!(sent, value.as_str(), "{id}: header {name}");
+    }
+    for name in absent.into_iter().flatten() {
+        let name = name.as_str().unwrap_or_default();
+        assert!(
+            !last.headers.contains_key(name),
+            "{id}: sent {name}, which the caller never asked for"
+        );
+    }
+}
+
 /// Stands the recorded responses up behind a mock, including the token endpoint every client needs.
 async fn serve(case: &Value) -> MockServer {
     let server = MockServer::start().await;
@@ -636,6 +676,7 @@ async fn contract_corpus() {
                 "{id}: requests that reached the server"
             );
         }
+        assert_request_side(&server, case).await;
         ran += 1;
     }
     assert_eq!(ran, cases.len(), "every case must be executed, not skipped");

@@ -25,10 +25,16 @@ const maxErrorBody = 1 << 20
 // instanceHeader pins a request to one instance, and names the serving instance on the response.
 const instanceHeader = "X-Prometheus-Instance"
 
-// idempotencyHeader makes a retry safe on the non-streaming endpoints: a repeat with the same key
-// and body returns the stored result without reaching a model, recording usage, or counting
-// against the spend cap. Streaming is excluded, and silently -- the gateway takes the key, ignores
-// it, and generates again -- so the SDK refuses to send one there.
+// idempotencyHeader makes a retry safe: a repeat with the same key and body returns the stored
+// result without reaching a model, recording usage, or counting against the spend cap.
+//
+// Sent on streamed requests too, and honoured there. This used to say the opposite -- that the
+// gateway ignored a key on a stream and that the SDK therefore refused to send one -- while attempt
+// below set the header for streamed and non-streamed alike, and while a contract case recorded from
+// a live deployment showed the platform replaying a stream 6 times out of 6. The corpus asserted
+// only what came back, so a false comment and the true code sat in one file for as long as nobody
+// read both. The boundary that IS real is narrower and documented on ChatService.Stream: a key
+// replays a stream the gateway FINISHED and whose delivery dropped, never one the model broke.
 const idempotencyHeader = "Idempotency-Key"
 
 // maxIdempotencyKeyLength is the gateway's limit. Checked client-side to save a round trip:

@@ -7,6 +7,31 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+The corpus now checks what the SDK **sent**, not only what it received.
+Six cases supplied an `Idempotency-Key` and not one asked whether it was sent. The only assertions
+about what went **out** were on the token endpoint, so an SDK that accepted a key and dropped it
+passed all six: the four error cases replay a recorded envelope the mock serves regardless, and the
+two replay cases assert the bytes that come **back**. A key that never leaves the process turns the
+retry it exists to protect into a second billable generation — the premise the whole streamed-retry
+decision rests on.
+
+Manifest v22 adds `expect.request_headers` and `expect.request_headers_absent`, and the three
+runners honour them. `chat-idempotent-replay` and `stream-idempotent-replay` now require the key on
+the wire; `chat-completion-basic` requires that neither an idempotency key nor an instance pin is
+**invented**, because a key the caller never asked for makes a retry silently replay a stale result,
+and an invented pin opts them out of load balancing and failover without saying so.
+
+Mutation-tested in all three, both directions: dropping the key on a stream fails the replay case,
+and inventing one fails the basic case.
+
+**And it found a comment that was false in two of the three.** Python and Go both stated that the
+gateway ignores an idempotency key on a streamed request and that the SDK therefore *refuses to send
+one* — while the code beside them sent it, and while a contract case recorded from a live deployment
+showed the platform replaying a stream 6 times out of 6. Nothing asked what went out, so the false
+comment and the true code sat in one file for as long as nobody read both. The boundary that is real
+is narrower and was always documented correctly elsewhere: a key replays a stream the gateway
+**finished** and whose delivery dropped, never one the model itself broke.
+
 A streamed request rejected **before the stream begins** is now pinned as *recognised* -- the
 precondition the retry above assumes, and the one thing nothing asserted.
 
@@ -474,6 +499,31 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+The corpus now checks what the SDK **sent**, not only what it received.
+Six cases supplied an `Idempotency-Key` and not one asked whether it was sent. The only assertions
+about what went **out** were on the token endpoint, so an SDK that accepted a key and dropped it
+passed all six: the four error cases replay a recorded envelope the mock serves regardless, and the
+two replay cases assert the bytes that come **back**. A key that never leaves the process turns the
+retry it exists to protect into a second billable generation — the premise the whole streamed-retry
+decision rests on.
+
+Manifest v22 adds `expect.request_headers` and `expect.request_headers_absent`, and the three
+runners honour them. `chat-idempotent-replay` and `stream-idempotent-replay` now require the key on
+the wire; `chat-completion-basic` requires that neither an idempotency key nor an instance pin is
+**invented**, because a key the caller never asked for makes a retry silently replay a stale result,
+and an invented pin opts them out of load balancing and failover without saying so.
+
+Mutation-tested in all three, both directions: dropping the key on a stream fails the replay case,
+and inventing one fails the basic case.
+
+**And it found a comment that was false in two of the three.** Python and Go both stated that the
+gateway ignores an idempotency key on a streamed request and that the SDK therefore *refuses to send
+one* — while the code beside them sent it, and while a contract case recorded from a live deployment
+showed the platform replaying a stream 6 times out of 6. Nothing asked what went out, so the false
+comment and the true code sat in one file for as long as nobody read both. The boundary that is real
+is narrower and was always documented correctly elsewhere: a key replays a stream the gateway
+**finished** and whose delivery dropped, never one the model itself broke.
+
 A streamed request rejected **before the stream begins** is now pinned as *recognised* -- the
 precondition the retry above assumes, and the one thing nothing asserted.
 
@@ -831,6 +881,26 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+The corpus now checks what the SDK **sent**, not only what it received.
+Six cases supplied an `Idempotency-Key` and not one asked whether it was sent. The only assertions
+about what went **out** were on the token endpoint, so an SDK that accepted a key and dropped it
+passed all six: the four error cases replay a recorded envelope the mock serves regardless, and the
+two replay cases assert the bytes that come **back**. A key that never leaves the process turns the
+retry it exists to protect into a second billable generation — the premise the whole streamed-retry
+decision rests on.
+
+Manifest v22 adds `expect.request_headers` and `expect.request_headers_absent`, and the three
+runners honour them. `chat-idempotent-replay` and `stream-idempotent-replay` now require the key on
+the wire; `chat-completion-basic` requires that neither an idempotency key nor an instance pin is
+**invented**, because a key the caller never asked for makes a retry silently replay a stale result,
+and an invented pin opts them out of load balancing and failover without saying so.
+
+Mutation-tested in all three, both directions: dropping the key on a stream fails the replay case,
+and inventing one fails the basic case.
+
+Rust carried no such claim on its own constant, so nothing here needed correcting — Python's and
+Go's did, and both are fixed.
 
 A streamed request rejected **before the stream begins** is now pinned as *recognised* -- the
 precondition the retry above assumes, and the one thing nothing asserted.
