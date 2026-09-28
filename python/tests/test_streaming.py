@@ -7,8 +7,13 @@ import httpx
 import pytest
 import respx
 
-from axonium import AsyncAxonium, Axonium
-from axonium.errors import ForbiddenError, StreamInterruptedError
+from axonium import AsyncAxonium, Axonium, RetryPolicy
+from axonium.errors import (
+    ForbiddenError,
+    RateLimitError,
+    StreamInterruptedError,
+    ValidationError,
+)
 from axonium.models.chat import ToolCall
 from axonium.transport.sse import DONE, SSEEvent, StreamAccumulator, decode_line
 
@@ -41,6 +46,31 @@ def sse_response(body: bytes, headers: dict[str, str] | None = None) -> httpx.Re
         content=body,
         headers={"Content-Type": "text/event-stream", **(headers or {})},
     )
+
+
+def rejected_before_the_stream(suffix: str = "rate-limit-exceeded-requests") -> httpx.Response:
+    """A refusal that arrives *instead of* the stream, which is how the gateway reports one.
+
+    A streamed request is refused before the ``200``/``text/event-stream`` headers exist, so it
+    comes back as an ordinary error response rather than as an SSE frame. Until ``PRM-143`` landed
+    on 2026-09-27 it arrived as a ``200`` whose body was only the terminal frame, indistinguishable
+    from a legitimately empty answer -- which is why retrying it could not be expressed before.
+    """
+    return httpx.Response(
+        429,
+        headers={"Retry-After": "0"},
+        json={
+            "type": f"https://prometheus.internal/errors/{suffix}",
+            "status": 429,
+            "detail": f"about {suffix}",
+        },
+    )
+
+
+@pytest.fixture
+def no_wait() -> RetryPolicy:
+    """Retries with every delay removed, so a test exercises the decision without sleeping."""
+    return RetryPolicy(initial_backoff=0.0, max_backoff=0.0, jitter=False)
 
 
 class TestLineDecoding:
@@ -354,13 +384,11 @@ class TestSyncStreaming:
     def test_a_stream_reports_one_attempt_and_no_wait(
         self, config_kwargs: dict[str, str], wire: Any
     ) -> None:
-        """A stream is never retried, and its meta has to say so rather than say nothing.
+        """A stream opened at the first try says so, in the same two fields every call reports.
 
-        Streams bypass the retry loop entirely -- deliberately, since a retry after partial output
-        is a fresh billable generation -- so nothing stamps these two fields on the way out and
-        they fall back to their declared defaults. That fallback is the whole behaviour under test:
-        an ``attempts`` of 0 here would be a count nothing can be true of, on a response something
-        plainly served.
+        The companion of ``test_a_rejection_before_the_stream_begins_is_retried``, which pins what
+        these two read after a reopen. An ``attempts`` of 0 here would be a count nothing can be
+        true of, on a response something plainly served.
         """
         respx.post(CHAT_URL).mock(return_value=sse_response(wire("chat_stream_ok")))
 
@@ -396,6 +424,112 @@ class TestSyncStreaming:
 
             assert stream.content == "Half a sen"
             assert len(chunks) == 1
+
+    @respx.mock
+    def test_a_rejection_before_the_stream_begins_is_retried(
+        self, config_kwargs: dict[str, str], wire: Any, no_wait: RetryPolicy
+    ) -> None:
+        """A refusal that arrives instead of the stream is retried like any other request.
+
+        Nothing is generated and nothing is billed when a stream is refused before it begins -- the
+        gateway reads the engine's status before the SSE headers exist -- so reopening is a first
+        generation rather than a second. It is also the only retry available: the gateway performs
+        none of its own on a streamed request.
+
+        Measured on 2026-09-27, this SDK made one attempt here while Go and Rust made three, and all
+        three documented never retrying. The count is the assertion.
+        """
+        route = respx.post(CHAT_URL).mock(
+            side_effect=[rejected_before_the_stream(), sse_response(wire("chat_stream_ok"))]
+        )
+
+        with (
+            Axonium(retry=no_wait, **config_kwargs) as client,
+            client.chat.completions.stream(
+                model="m", messages=[{"role": "user", "content": "Hi"}]
+            ) as stream,
+        ):
+            list(stream)
+            meta = stream.meta
+
+        assert route.call_count == 2, "the refused open must be reopened, not surfaced"
+        assert stream.reasoning, "the reopened stream is the one the caller reads"
+        assert meta is not None
+        assert meta.attempts == 2, "a reopened stream must report the attempt it took"
+
+    @respx.mock
+    def test_a_rejection_that_retrying_cannot_fix_is_opened_once(
+        self, config_kwargs: dict[str, str], no_wait: RetryPolicy
+    ) -> None:
+        # What is retried stays the policy's decision rather than the stream's. A malformed request
+        # is refused for a reason no repeat can change, so the loop that reopens a 429 leaves this
+        # one alone -- otherwise "retried like any other request" would mean "retried more".
+        route = respx.post(CHAT_URL).mock(
+            return_value=httpx.Response(
+                400,
+                json={
+                    "type": "https://prometheus.internal/errors/validation-error",
+                    "status": 400,
+                    "detail": "about validation-error",
+                },
+            )
+        )
+
+        with Axonium(retry=no_wait, **config_kwargs) as client:
+            opened = client.chat.completions.stream(
+                model="m", messages=[{"role": "user", "content": "Hi"}]
+            )
+            with pytest.raises(ValidationError), opened:
+                pass
+
+        assert route.call_count == 1
+
+    @respx.mock
+    def test_a_refused_open_gives_up_once_the_attempt_budget_is_spent(
+        self, config_kwargs: dict[str, str], no_wait: RetryPolicy
+    ) -> None:
+        # The budget is the policy's, shared with every non-streaming call: three attempts, then the
+        # caller hears about it. A loop that reopened until the gateway relented would be worse than
+        # the single attempt it replaced.
+        route = respx.post(CHAT_URL).mock(return_value=rejected_before_the_stream())
+
+        with Axonium(retry=no_wait, **config_kwargs) as client:
+            opened = client.chat.completions.stream(
+                model="m", messages=[{"role": "user", "content": "Hi"}]
+            )
+            with pytest.raises(RateLimitError), opened:
+                pass
+
+        assert route.call_count == 3
+
+    @respx.mock
+    def test_a_stream_that_has_begun_is_never_retried(
+        self, config_kwargs: dict[str, str], wire: Any, no_wait: RetryPolicy
+    ) -> None:
+        """The other half of the rule, and the half that has no exception.
+
+        An interruption arrives in band, once the ``200`` is already committed: part of the response
+        was delivered and part was billed, so a repeat would be a new generation rather than a
+        resumption. One request, and the partial output raised rather than silently replaced by a
+        second attempt's.
+        """
+        route = respx.post(CHAT_URL).mock(
+            side_effect=[
+                sse_response(wire("chat_stream_interrupted")),
+                sse_response(wire("chat_stream_ok")),
+            ]
+        )
+
+        with (
+            Axonium(retry=no_wait, **config_kwargs) as client,
+            client.chat.completions.stream(
+                model="m", messages=[{"role": "user", "content": "Hi"}]
+            ) as stream,
+            pytest.raises(StreamInterruptedError),
+        ):
+            list(stream)
+
+        assert route.call_count == 1, "a stream that delivered output must not be reopened"
 
     @respx.mock
     def test_close_releases_the_connection(self, config_kwargs: dict[str, str], wire: Any) -> None:
@@ -497,6 +631,67 @@ class TestAsyncStreaming:
                     model="nope", messages=[{"role": "user", "content": "Hi"}]
                 ):
                     pass
+
+    @respx.mock
+    async def test_a_rejection_before_the_stream_begins_is_retried(
+        self, config_kwargs: dict[str, str], wire: Any, no_wait: RetryPolicy
+    ) -> None:
+        """See :meth:`TestSyncStreaming.test_a_rejection_before_the_stream_begins_is_retried`."""
+        route = respx.post(CHAT_URL).mock(
+            side_effect=[rejected_before_the_stream(), sse_response(wire("chat_stream_ok"))]
+        )
+
+        async with (
+            AsyncAxonium(retry=no_wait, **config_kwargs) as client,
+            client.chat.completions.stream(
+                model="m", messages=[{"role": "user", "content": "Hi"}]
+            ) as stream,
+        ):
+            [chunk async for chunk in stream]
+            meta = stream.meta
+
+        assert route.call_count == 2, "the refused open must be reopened, not surfaced"
+        assert stream.reasoning, "the reopened stream is the one the caller reads"
+        assert meta is not None
+        assert meta.attempts == 2, "a reopened stream must report the attempt it took"
+
+    @respx.mock
+    async def test_a_stream_that_has_begun_is_never_retried(
+        self, config_kwargs: dict[str, str], wire: Any, no_wait: RetryPolicy
+    ) -> None:
+        """See :meth:`TestSyncStreaming.test_a_stream_that_has_begun_is_never_retried`."""
+        route = respx.post(CHAT_URL).mock(
+            side_effect=[
+                sse_response(wire("chat_stream_interrupted")),
+                sse_response(wire("chat_stream_ok")),
+            ]
+        )
+
+        async with (
+            AsyncAxonium(retry=no_wait, **config_kwargs) as client,
+            client.chat.completions.stream(
+                model="m", messages=[{"role": "user", "content": "Hi"}]
+            ) as stream,
+        ):
+            with pytest.raises(StreamInterruptedError):
+                [chunk async for chunk in stream]
+
+        assert route.call_count == 1, "a stream that delivered output must not be reopened"
+
+    @respx.mock
+    async def test_a_refused_open_gives_up_once_the_attempt_budget_is_spent(
+        self, config_kwargs: dict[str, str], no_wait: RetryPolicy
+    ) -> None:
+        route = respx.post(CHAT_URL).mock(return_value=rejected_before_the_stream())
+
+        async with AsyncAxonium(retry=no_wait, **config_kwargs) as client:
+            with pytest.raises(RateLimitError):
+                async with client.chat.completions.stream(
+                    model="m", messages=[{"role": "user", "content": "Hi"}]
+                ):
+                    pass
+
+        assert route.call_count == 3
 
     @respx.mock
     async def test_aclose_releases_the_connection(

@@ -227,7 +227,7 @@ one that hands you what arrived. That is not hypothetical — the first structur
 while writing this came back as <code>{\n  &quot;capital&quot;: &quot;Lima&quot;\n</code> with <code>finish_reason: length</code>.</p>
 <h2>Streaming</h2>
 <p>A separate method, not a flag. That keeps the return type honest, makes the <code>inference:stream</code>
-scope check explicit, and gives one place to say that <strong>streams are never retried</strong>.</p>
+scope check explicit, and gives one place to say which of a stream's two failures is retried.</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="k">with</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
     <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"Count to five"</span><span class="p">}],</span>
@@ -251,13 +251,18 @@ scope check explicit, and gives one place to say that <strong>streams are never 
 <span class="k">while</span><span class="w"> </span><span class="kd">let</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stream</span><span class="p">.</span><span class="n">next</span><span class="p">().</span><span class="k">await</span><span class="o">?</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="fm">print!</span><span class="p">(</span><span class="s">"{}"</span><span class="p">,</span><span class="w"> </span><span class="n">chunk</span><span class="p">.</span><span class="n">content</span><span class="p">());</span>
 <span class="p">}</span></code></pre></div>
-</div><p>Three things the stream handles that a naive SSE reader does not:</p>
+</div><p>Four things the stream handles that a naive SSE reader does not:</p>
 <ul>
 <li><strong>The <code>[DONE]</code> sentinel</strong> ends iteration; it is not delivered as a chunk.</li>
+<li><strong>A rejection that arrives instead of the stream</strong> is a real HTTP status, not an SSE frame — the
+gateway reads the engine's status before the <code>200</code>/<code>text/event-stream</code> headers exist. It raises the
+same typed error the non-streaming call would, and <strong>it is retried like any other request</strong>. See
+<a href="03-failure.html">Failure</a>.</li>
 <li><strong>An in-band error</strong> — a decoded event carrying a top-level <code>error</code> key — raises
 <code>StreamInterruptedError</code> <strong>with the text accumulated so far</strong>, so a partial answer is not lost to
 the exception. Detection is by key presence, not by matching the message string, because only one
-message is documented and there is no reason to believe it is the only one.</li>
+message is documented and there is no reason to believe it is the only one. This one is <strong>never
+retried</strong>: part of the answer was delivered and part was billed.</li>
 <li><strong>A stream cut short without <code>[DONE]</code></strong> ends iteration with what arrived, rather than hanging.</li>
 </ul>
 <p>Dropping the stream cancels the request. In Rust that is <code>Drop</code>; in Go it is the <code>context</code>; in

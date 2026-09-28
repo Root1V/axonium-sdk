@@ -7,6 +7,53 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+A streamed request rejected **before the stream begins** is now retried, as every other request
+already was.
+
+`ChatCompletionStream` and `AsyncChatCompletionStream` take a way to *open* a stream rather than one
+already-built connection, so a refused open can be reopened. The retry decision itself is not
+reimplemented there: they call the same policy the non-streaming loop uses, so `Retry-After`, the
+attempt budget, the cooldown registry and the log line are shared rather than similar.
+
+Two things follow that were previously unavailable on a stream. `meta.attempts` and `meta.waited_s`
+now report what a reopen cost instead of always claiming one attempt; and a failed open is diagnosed
+the way a non-streaming failure is, which matters most here, since a denied `inference:stream` scope
+is where callers trip.
+
+The three had never agreed, and none of the three disagreements was a decision. Measured on
+2026-09-27, counting requests that reached the server for a `429` on a streamed
+`POST /v1/chat/completions`: **Python 1, Go 3, Rust 3** -- and all three documented never retrying a
+stream at all. Python's stream opened its connection by another route and missed the shared retry
+loop; Go and Rust ran it because nobody had excluded streaming from it.
+
+The two that contradicted their own documentation were right. A stream can only fail this way
+*before* any body byte exists -- the gateway reads the engine's status before the
+`200`/`text/event-stream` headers are sent -- so nothing was generated and nothing was billed, and
+reopening is a first generation rather than a second. It is also the only retry available: the
+gateway performs **no** internal retries on a streamed request, so a `503 backend-unavailable`
+arrives there after one attempt rather than three.
+
+It could not be said a week earlier. Until `PRM-143`, landed 2026-09-27, a stream rejected before it
+began arrived as a `200` whose body was nothing but `data: [DONE]` -- indistinguishable from a
+legitimately empty answer, so "retry the rejections that precede the 200" named nothing. The gateway
+now returns the engine's real status, and a connection that never opened returns
+`503 backend-unavailable` in the problem+json envelope.
+
+What has no exception, in all four SDKs: **a stream that has already begun is never retried.** There
+the failure arrives in band, part of the answer was delivered, and part was billed.
+
+Manifest v20 pins both halves, because three hand-written suites had pinned neither. The corpus
+gained the shape needed to express it: a case can now serve an ordered *sequence* of responses, and
+assert how many requests reached the server. `stream-retried-when-rejected-before-it-begins` serves a
+`429` then the stream and requires two; `stream-not-retried-once-it-has-begun` queues a healthy
+stream behind an interrupted one and requires that it is never reached -- an SDK that retried there
+would pass every assertion of `stream-interrupted` while billing twice and returning the wrong
+answer. Both were mutation-tested in all three languages: breaking the retry fails the first,
+and the count is what catches it.
+
+Agreed with the Mundus team so the Swift SDK is born with the behaviour rather than inheriting
+whichever of the three it happened to read.
+
 A contract case now pins reading the correlation ids out of the headers.
 
 The behaviour shipped in all three SDKs on 2026-09-27 with one hand-written test per language and
@@ -387,6 +434,49 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+A streamed request rejected **before the stream begins** is retried, and that is now deliberate
+rather than incidental.
+
+No behaviour changed here: `send` already ran the retry loop for a streamed request, because nobody
+had excluded it. What changed is that `streaming` not excluding a request from that loop is now
+stated where a future reader will look, since the opposite is the reading that looks safer. `Stream`
+and `ChatCompletionStream` document the two failures separately instead of claiming a stream is never
+retried.
+
+The three had never agreed, and none of the three disagreements was a decision. Measured on
+2026-09-27, counting requests that reached the server for a `429` on a streamed
+`POST /v1/chat/completions`: **Python 1, Go 3, Rust 3** -- and all three documented never retrying a
+stream at all. Python's stream opened its connection by another route and missed the shared retry
+loop; Go and Rust ran it because nobody had excluded streaming from it.
+
+The two that contradicted their own documentation were right. A stream can only fail this way
+*before* any body byte exists -- the gateway reads the engine's status before the
+`200`/`text/event-stream` headers are sent -- so nothing was generated and nothing was billed, and
+reopening is a first generation rather than a second. It is also the only retry available: the
+gateway performs **no** internal retries on a streamed request, so a `503 backend-unavailable`
+arrives there after one attempt rather than three.
+
+It could not be said a week earlier. Until `PRM-143`, landed 2026-09-27, a stream rejected before it
+began arrived as a `200` whose body was nothing but `data: [DONE]` -- indistinguishable from a
+legitimately empty answer, so "retry the rejections that precede the 200" named nothing. The gateway
+now returns the engine's real status, and a connection that never opened returns
+`503 backend-unavailable` in the problem+json envelope.
+
+What has no exception, in all four SDKs: **a stream that has already begun is never retried.** There
+the failure arrives in band, part of the answer was delivered, and part was billed.
+
+Manifest v20 pins both halves, because three hand-written suites had pinned neither. The corpus
+gained the shape needed to express it: a case can now serve an ordered *sequence* of responses, and
+assert how many requests reached the server. `stream-retried-when-rejected-before-it-begins` serves a
+`429` then the stream and requires two; `stream-not-retried-once-it-has-begun` queues a healthy
+stream behind an interrupted one and requires that it is never reached -- an SDK that retried there
+would pass every assertion of `stream-interrupted` while billing twice and returning the wrong
+answer. Both were mutation-tested in all three languages: breaking the retry fails the first,
+and the count is what catches it.
+
+Agreed with the Mundus team so the Swift SDK is born with the behaviour rather than inheriting
+whichever of the three it happened to read.
+
 A contract case now pins reading the correlation ids out of the headers.
 
 The behaviour shipped in all three SDKs on 2026-09-27 with one hand-written test per language and
@@ -662,6 +752,50 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+A streamed request rejected **before the stream begins** is retried, and that is now deliberate
+rather than incidental.
+
+No behaviour changed here: `send` already ran the retry loop for a streamed request, because nobody
+had excluded it. What changed is that `opts.streaming` not excluding a request from that loop is now
+stated where a future reader will look, since the opposite is the reading that looks safer.
+`chat_stream` and the `stream` module document the two failures separately instead of claiming a
+stream is never retried -- the module's "failures arrive in band" was true only of the half that has
+already begun.
+
+The three had never agreed, and none of the three disagreements was a decision. Measured on
+2026-09-27, counting requests that reached the server for a `429` on a streamed
+`POST /v1/chat/completions`: **Python 1, Go 3, Rust 3** -- and all three documented never retrying a
+stream at all. Python's stream opened its connection by another route and missed the shared retry
+loop; Go and Rust ran it because nobody had excluded streaming from it.
+
+The two that contradicted their own documentation were right. A stream can only fail this way
+*before* any body byte exists -- the gateway reads the engine's status before the
+`200`/`text/event-stream` headers are sent -- so nothing was generated and nothing was billed, and
+reopening is a first generation rather than a second. It is also the only retry available: the
+gateway performs **no** internal retries on a streamed request, so a `503 backend-unavailable`
+arrives there after one attempt rather than three.
+
+It could not be said a week earlier. Until `PRM-143`, landed 2026-09-27, a stream rejected before it
+began arrived as a `200` whose body was nothing but `data: [DONE]` -- indistinguishable from a
+legitimately empty answer, so "retry the rejections that precede the 200" named nothing. The gateway
+now returns the engine's real status, and a connection that never opened returns
+`503 backend-unavailable` in the problem+json envelope.
+
+What has no exception, in all four SDKs: **a stream that has already begun is never retried.** There
+the failure arrives in band, part of the answer was delivered, and part was billed.
+
+Manifest v20 pins both halves, because three hand-written suites had pinned neither. The corpus
+gained the shape needed to express it: a case can now serve an ordered *sequence* of responses, and
+assert how many requests reached the server. `stream-retried-when-rejected-before-it-begins` serves a
+`429` then the stream and requires two; `stream-not-retried-once-it-has-begun` queues a healthy
+stream behind an interrupted one and requires that it is never reached -- an SDK that retried there
+would pass every assertion of `stream-interrupted` while billing twice and returning the wrong
+answer. Both were mutation-tested in all three languages: breaking the retry fails the first,
+and the count is what catches it.
+
+Agreed with the Mundus team so the Swift SDK is born with the behaviour rather than inheriting
+whichever of the three it happened to read.
 
 A contract case now pins reading the correlation ids out of the headers.
 

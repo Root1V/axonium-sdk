@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -32,16 +33,14 @@ type manifest struct {
 }
 
 type contractCase struct {
-	ID        string         `json:"id"`
-	Operation string         `json:"operation"`
-	Request   map[string]any `json:"request"`
-	Response  struct {
-		Status   int               `json:"status"`
-		Headers  map[string]string `json:"headers"`
-		BodyFile string            `json:"body_file"`
-		SSEFile  string            `json:"sse_file"`
-	} `json:"response"`
-	Expect struct {
+	ID        string           `json:"id"`
+	Operation string           `json:"operation"`
+	Request   map[string]any   `json:"request"`
+	Response  contractResponse `json:"response"`
+	// Responses, when present, replaces Response: the ordered replies one case serves, which is how
+	// a case pins a retry rather than a single exchange.
+	Responses []contractResponse `json:"responses"`
+	Expect    struct {
 		Kind               string            `json:"kind"`
 		Fields             map[string]any    `json:"fields"`
 		Content            *string           `json:"content"`
@@ -57,7 +56,29 @@ type contractCase struct {
 		Retryable          *bool             `json:"retryable"`
 		HasRequestID       *bool             `json:"has_request_id"`
 		HasTraceID         *bool             `json:"has_trace_id"`
+		// Requests is how many requests must reach the server, and Attempts how many the SDK admits
+		// to. The first is the one that matters: it is what the server saw, and an SDK can be wrong
+		// about the second while the first is the fact.
+		Requests *int `json:"requests"`
+		Attempts *int `json:"attempts"`
 	} `json:"expect"`
+}
+
+type contractResponse struct {
+	Status   int               `json:"status"`
+	Headers  map[string]string `json:"headers"`
+	BodyFile string            `json:"body_file"`
+	SSEFile  string            `json:"sse_file"`
+}
+
+// replies is the ordered list of responses a case serves. Most cases describe one; a case pinning a
+// retry describes several, and the last repeats so that an SDK retrying once too often fails on the
+// request count -- which says what it did -- rather than on a server with nothing left to send.
+func (c contractCase) replies() []contractResponse {
+	if len(c.Responses) > 0 {
+		return c.Responses
+	}
+	return []contractResponse{c.Response}
 }
 
 func specDir(t *testing.T) string {
@@ -90,17 +111,27 @@ func TestContractManifest(t *testing.T) {
 }
 
 func runContractCase(t *testing.T, spec string, c contractCase) {
-	fixture := c.Response.BodyFile
-	if fixture == "" {
-		fixture = c.Response.SSEFile
-	}
-	body, err := os.ReadFile(filepath.Join(spec, "fixtures", fixture))
-	if err != nil {
-		t.Fatalf("reading fixture %s: %v", fixture, err)
+	replies := c.replies()
+	bodies := make([][]byte, len(replies))
+	for i, reply := range replies {
+		fixture := reply.BodyFile
+		if fixture == "" {
+			fixture = reply.SSEFile
+		}
+		body, err := os.ReadFile(filepath.Join(spec, "fixtures", fixture))
+		if err != nil {
+			t.Fatalf("reading fixture %s: %v", fixture, err)
+		}
+		bodies[i] = body
 	}
 
 	var sentForm url.Values
 	var sentContentType string
+	// Counted under a mutex because the server handles requests on its own goroutines, and -race
+	// is the point: a count read from the test goroutine while a handler writes it is the bug this
+	// suite would otherwise report as a flake.
+	var mu sync.Mutex
+	served := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth2/token" && c.Operation != "token.fetch" {
 			writeToken(w, "contract", 300)
@@ -116,20 +147,44 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 			sentForm = captureForm(r)
 			sentContentType = r.Header.Get("Content-Type")
 		}
-		for k, v := range c.Response.Headers {
+
+		mu.Lock()
+		index := served
+		served++
+		mu.Unlock()
+		if index >= len(replies) {
+			index = len(replies) - 1
+		}
+		reply, body := replies[index], bodies[index]
+
+		for k, v := range reply.Headers {
 			w.Header().Set(k, v)
 		}
-		if c.Response.SSEFile != "" {
+		if reply.SSEFile != "" {
 			w.Header().Set("Content-Type", "text/event-stream")
 		} else {
 			w.Header().Set("Content-Type", "application/json")
 		}
-		w.WriteHeader(c.Response.Status)
+		w.WriteHeader(reply.Status)
 		// Written verbatim: the .sse fixtures are literal wire captures, blank-line record
 		// separators included, and reformatting them would test a stream this gateway never sends.
 		_, _ = w.Write(body)
 	}))
 	defer srv.Close()
+
+	// Checked after the case has run, whatever it asserted: a count is only evidence once the
+	// requests are over.
+	defer func() {
+		if c.Expect.Requests == nil {
+			return
+		}
+		mu.Lock()
+		got := served
+		mu.Unlock()
+		if got != *c.Expect.Requests {
+			t.Errorf("%d requests reached the server, want %d", got, *c.Expect.Requests)
+		}
+	}()
 
 	client := testClient(t, srv.URL)
 	if scope, ok := c.Request["scope"].(string); ok {
@@ -268,8 +323,8 @@ func runErrorCase(t *testing.T, client *Client, c contractCase) {
 	if !errors.As(err, &apiErr) {
 		t.Fatalf("expected an *APIError, got %T: %v", err, err)
 	}
-	if apiErr.Status != c.Response.Status {
-		t.Errorf("status: got %d, want %d", apiErr.Status, c.Response.Status)
+	if want := c.replies()[len(c.replies())-1].Status; apiErr.Status != want {
+		t.Errorf("status: got %d, want %d", apiErr.Status, want)
 	}
 	if apiErr.TypeSuffix != c.Expect.ErrorTypeSuffix {
 		t.Errorf("type suffix: got %q, want %q", apiErr.TypeSuffix, c.Expect.ErrorTypeSuffix)
@@ -364,6 +419,9 @@ func runStreamCase(t *testing.T, client *Client, c contractCase) {
 
 	if stream.Err() != nil {
 		t.Fatalf("the stream failed: %v", stream.Err())
+	}
+	if c.Expect.Attempts != nil && stream.Meta().Attempts != *c.Expect.Attempts {
+		t.Errorf("attempts: got %d, want %d", stream.Meta().Attempts, *c.Expect.Attempts)
 	}
 	if c.Expect.Chunks != nil && chunks != *c.Expect.Chunks {
 		t.Errorf("chunks: got %d, want %d", chunks, *c.Expect.Chunks)

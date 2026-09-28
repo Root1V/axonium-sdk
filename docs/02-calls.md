@@ -105,7 +105,7 @@ while writing this came back as `{\n  "capital": "Lima"\n` with `finish_reason: 
 ## Streaming
 
 A separate method, not a flag. That keeps the return type honest, makes the `inference:stream`
-scope check explicit, and gives one place to say that **streams are never retried**.
+scope check explicit, and gives one place to say which of a stream's two failures is retried.
 
 ```python
 with client.chat.completions.stream(
@@ -139,13 +139,18 @@ while let Some(chunk) = stream.next().await? {
 }
 ```
 
-Three things the stream handles that a naive SSE reader does not:
+Four things the stream handles that a naive SSE reader does not:
 
 - **The `[DONE]` sentinel** ends iteration; it is not delivered as a chunk.
+- **A rejection that arrives instead of the stream** is a real HTTP status, not an SSE frame — the
+  gateway reads the engine's status before the `200`/`text/event-stream` headers exist. It raises the
+  same typed error the non-streaming call would, and **it is retried like any other request**. See
+  [Failure](03-failure.md).
 - **An in-band error** — a decoded event carrying a top-level `error` key — raises
   `StreamInterruptedError` **with the text accumulated so far**, so a partial answer is not lost to
   the exception. Detection is by key presence, not by matching the message string, because only one
-  message is documented and there is no reason to believe it is the only one.
+  message is documented and there is no reason to believe it is the only one. This one is **never
+  retried**: part of the answer was delivered and part was billed.
 - **A stream cut short without `[DONE]`** ends iteration with what arrived, rather than hanging.
 
 Dropping the stream cancels the request. In Rust that is `Drop`; in Go it is the `context`; in

@@ -48,6 +48,7 @@ from axonium.resources.images import AsyncImages, Images
 from axonium.resources.models import AsyncModels, Models
 from axonium.resources.rerank import AsyncRerank, Rerank
 from axonium.resources.usage import AsyncUsage, Usage
+from axonium.streaming import StreamOpen
 from axonium.transport import dispatch
 from axonium.transport.http import build_async_client, build_sync_client
 from axonium.transport.retry import CooldownRegistry, RetryPolicy
@@ -338,11 +339,27 @@ class _BaseAxonium:
         if token is not None:
             error.hint = explain_forbidden(token.scope, model=model, streaming=streaming)
 
-    def _stream_diagnoser(self, model: str | None) -> Callable[[APIError], None]:
-        def diagnose(error: APIError) -> None:
-            self._diagnose(error, model=model, streaming=True)
+    def _stream_open(self, opener: Callable[[], Any], model: str | None) -> StreamOpen:
+        """Bundle a stream opener with the retry decision every other request already goes through.
 
-        return diagnose
+        Handed to the stream rather than reimplemented inside it, so "a refused open is retried like
+        any other request" is true rather than approximately true: the same policy, the same
+        ``Retry-After``, the same cooldown registry, the same log line — and the diagnosis a denied
+        ``inference:stream`` scope needs, which matters more here than anywhere else, since the
+        read/stream scope distinction is where callers trip.
+
+        The success side clears the cooldown, as the non-streaming loop does. Without it a refused
+        first attempt that recorded a wait would leave that wait behind on a call that then worked.
+        """
+        key = self._cooldown_key(model)
+
+        def after_failure(error: APIError, attempt: int) -> float | None:
+            return self._after_failure(key, error, attempt, model=model, streaming=True)
+
+        def succeeded() -> None:
+            self._cooldowns.clear(key)
+
+        return StreamOpen(opener=opener, after_failure=after_failure, succeeded=succeeded)
 
     def _observe(self, method: str, path: str, model: str | None) -> Any:
         return span(
@@ -521,21 +538,29 @@ class Axonium(_BaseAxonium):
         instance: str | None = None,
         idempotency_key: str | None = None,
         timeout: float | None = None,
-    ) -> Any:
-        """Open a streaming request.
+    ) -> StreamOpen:
+        """Describe how to open a streaming request, as many times as it takes.
 
-        Not retried: the gateway never retries streams either, and a retry after partial output
-        has been delivered is a fresh billable generation rather than a resumption.
+        A refusal that arrives *instead of* the stream is retried, so what goes to the stream is a
+        way to open a connection rather than one already-built connection. Everything that can be
+        settled once — validating the key, honouring a cooldown already in effect — is settled here,
+        as it is for a non-streaming request, rather than per attempt.
         """
         _validate_idempotency_key(idempotency_key)
         self._check_cooldown(self._cooldown_key(model))
-        return self._http.stream(
-            "POST",
-            self._url(path),
-            json=json,
-            headers=_request_headers(instance, idempotency_key),
-            timeout=self._config.timeouts.stream_read if timeout is None else timeout,
-        )
+        headers = _request_headers(instance, idempotency_key)
+        read_timeout = self._config.timeouts.stream_read if timeout is None else timeout
+
+        def opener() -> Any:
+            return self._http.stream(
+                "POST",
+                self._url(path),
+                json=json,
+                headers=headers,
+                timeout=read_timeout,
+            )
+
+        return self._stream_open(opener, model)
 
     def close(self) -> None:
         self._http.close()
@@ -672,17 +697,23 @@ class AsyncAxonium(_BaseAxonium):
         instance: str | None = None,
         idempotency_key: str | None = None,
         timeout: float | None = None,
-    ) -> Any:
-        """Open a streaming request. See :meth:`Axonium._open_stream`."""
+    ) -> StreamOpen:
+        """Describe how to open a streaming request. See :meth:`Axonium._open_stream`."""
         _validate_idempotency_key(idempotency_key)
         self._check_cooldown(self._cooldown_key(model))
-        return self._http.stream(
-            "POST",
-            self._url(path),
-            json=json,
-            headers=_request_headers(instance, idempotency_key),
-            timeout=self._config.timeouts.stream_read if timeout is None else timeout,
-        )
+        headers = _request_headers(instance, idempotency_key)
+        read_timeout = self._config.timeouts.stream_read if timeout is None else timeout
+
+        def opener() -> Any:
+            return self._http.stream(
+                "POST",
+                self._url(path),
+                json=json,
+                headers=headers,
+                timeout=read_timeout,
+            )
+
+        return self._stream_open(opener, model)
 
     async def aclose(self) -> None:
         await self._http.aclose()

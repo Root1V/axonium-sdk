@@ -84,9 +84,13 @@ class Completions:
         scope non-streaming calls need: holding one does not grant the other.
 
         A separate method rather than ``create(stream=True)`` so the return type is honest, the
-        scope requirement is explicit, and there is somewhere to say that streams are never
-        retried automatically — a failed stream has already delivered partial output, so retrying
-        it is a fresh billable generation rather than a resumption.
+        scope requirement is explicit, and there is somewhere to say which failures are retried.
+        **A rejection that arrives instead of the stream is retried like any other request**,
+        ``Retry-After`` included: it arrives as a status before any part of the response exists, so
+        nothing was generated and nothing was billed. **A stream that has already begun is never
+        retried** — there the partial output was delivered and billed, and a repeat is a fresh
+        generation rather than a resumption. The gateway performs no internal retries on a streamed
+        request either way, so the attempt this SDK makes is the only one there is.
 
         ``instance`` pins the request to one instance, by label (``"#2"``) or by full instance
         id. It rides on a header, never on ``model``: a grant covers a model, billing attributes
@@ -112,15 +116,16 @@ class Completions:
 
         request = _build(kwargs, stream=True)
         self._client._preflight(request.model, "chat")
-        opener = self._client._open_stream(
-            ENDPOINT,
-            json=request.to_payload(),
-            model=request.model,
-            instance=instance,
-            idempotency_key=idempotency_key,
-            timeout=timeout,
+        return ChatCompletionStream(
+            self._client._open_stream(
+                ENDPOINT,
+                json=request.to_payload(),
+                model=request.model,
+                instance=instance,
+                idempotency_key=idempotency_key,
+                timeout=timeout,
+            )
         )
-        return ChatCompletionStream(opener, self._client._stream_diagnoser(request.model))
 
 
 class AsyncCompletions:
@@ -160,7 +165,7 @@ class AsyncCompletions:
         """Stream a chat completion. See :meth:`Completions.stream`."""
 
         request = _build(kwargs, stream=True)
-        opener = self._client._open_stream(
+        opening = self._client._open_stream(
             ENDPOINT,
             json=request.to_payload(),
             model=request.model,
@@ -172,9 +177,7 @@ class AsyncCompletions:
         async def preflight() -> None:
             await self._client._preflight(request.model, "chat")
 
-        return AsyncChatCompletionStream(
-            opener, self._client._stream_diagnoser(request.model), preflight
-        )
+        return AsyncChatCompletionStream(opening, preflight)
 
 
 class Chat:

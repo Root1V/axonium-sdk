@@ -389,9 +389,15 @@ impl Client {
 
     /// Opens a streaming chat completion.
     ///
-    /// Streaming is a separate method rather than a flag: it needs its own scope, it is never
-    /// retried automatically, and its result is a different type. Folding it into `chat` would
-    /// hide all three.
+    /// Streaming is a separate method rather than a flag: it needs its own scope, it fails in two
+    /// different ways, and its result is a different type. Folding it into `chat` would hide all
+    /// three.
+    ///
+    /// A rejection that arrives *instead of* the stream is retried like any other request,
+    /// `Retry-After` included: the gateway reads the engine's status before the
+    /// `200`/`text/event-stream` headers exist, so nothing was generated and nothing was billed, and
+    /// reopening is a first generation rather than a second. A stream that has already **begun** is
+    /// never retried -- see [`ChatStream`].
     ///
     /// Dropping the returned stream cancels the request, which propagates through the gateway to
     /// Prometheus and stops the generation -- so an abandoned stream stops costing money.

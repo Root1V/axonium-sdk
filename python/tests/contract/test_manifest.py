@@ -66,8 +66,20 @@ def canonical(value: Any) -> Any:
     return value
 
 
-def mock_response(case: dict[str, Any]) -> httpx.Response:
-    spec = case["response"]
+def responses_for(case: dict[str, Any]) -> list[dict[str, Any]]:
+    """The responses a case serves, in order.
+
+    Most cases describe one. A case that pins a retry describes several: the rejection, then what
+    the reopened request gets. Normalised here so every runner and every integrity check sees one
+    shape rather than two.
+    """
+    if "responses" in case:
+        sequence: list[dict[str, Any]] = case["responses"]
+        return sequence
+    return [case["response"]]
+
+
+def mock_response(spec: dict[str, Any]) -> httpx.Response:
     headers = dict(spec.get("headers", {}))
 
     if "sse_file" in spec:
@@ -102,7 +114,17 @@ def route_for(case: dict[str, Any]) -> Any:
         # The id is part of the path here, not the body, so the route has to be built per case.
         url = url.format(request_id=case["request"]["request_id"])
     method = respx.get if operation.startswith(("models.", "usage.")) else respx.post
-    return method(url).mock(return_value=mock_response(case))
+
+    sequence = [mock_response(spec) for spec in responses_for(case)]
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        # The last response repeats rather than running out. An SDK that retries once too often
+        # should fail on the request count, which says what it did, instead of on an exhausted
+        # side_effect, which says only that the fixture list was too short.
+        return sequence[min(len(route.calls), len(sequence) - 1)]
+
+    route = method(url).mock(side_effect=serve)
+    return route
 
 
 def call_sync(client: Axonium, case: dict[str, Any]) -> Any:
@@ -156,7 +178,7 @@ def assert_fields(result: Any, expected: dict[str, Any], case_id: str) -> None:
 def assert_error(error: APIError, case: dict[str, Any]) -> None:
     expect = case["expect"]
     cid = case["id"]
-    assert error.status == case["response"]["status"], cid
+    assert error.status == responses_for(case)[-1]["status"], cid
     assert error.type_suffix == expect["error_type_suffix"], cid
     assert error.retryable is expect["retryable"], cid
     if expect.get("has_request_id"):
@@ -167,6 +189,24 @@ def assert_error(error: APIError, case: dict[str, Any]) -> None:
     # existed, twelve error cases could assert a suffix and nothing about the envelope's contents.
     if "fields" in expect:
         assert_fields(error, expect["fields"], cid)
+
+
+def assert_traffic(route: Any, stream: Any, case: dict[str, Any]) -> None:
+    """How many requests reached the server, and whether the SDK admits to it.
+
+    ``requests`` is the assertion that matters and the only one that would have caught the
+    divergence: ``attempts`` is what the SDK reports, ``requests`` is what the server saw, and an
+    SDK can be wrong about the first while the second is the fact.
+    """
+    expect = case["expect"]
+    if "requests" in expect:
+        assert route.call_count == expect["requests"], (
+            f"{case['id']}: {route.call_count} requests reached the server, "
+            f"expected {expect['requests']}"
+        )
+    if "attempts" in expect:
+        assert stream.meta is not None, case["id"]
+        assert stream.meta.attempts == expect["attempts"], case["id"]
 
 
 def assert_usage(usage: Any, expected: dict[str, Any] | None, case_id: str) -> None:
@@ -214,7 +254,7 @@ class TestStreamingCases:
     @respx.mock
     @pytest.mark.parametrize("case", STREAMING, ids=[c["id"] for c in STREAMING])
     def test_sync(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
-        route_for(case)
+        route = route_for(case)
         expect = case["expect"]
 
         with (
@@ -225,6 +265,7 @@ class TestStreamingCases:
                 with pytest.raises(StreamInterruptedError) as caught:
                     list(stream)
                 assert caught.value.partial_content == expect["partial_content"]
+                assert_traffic(route, stream, case)
                 return
 
             chunks = list(stream)
@@ -237,11 +278,12 @@ class TestStreamingCases:
             # stops a reassembler from inventing calls out of a stream that carried none.
             assembled = [call.model_dump() for call in stream.tool_calls]
             assert assembled == expect.get("tool_calls", []), case["id"]
+            assert_traffic(route, stream, case)
 
     @respx.mock
     @pytest.mark.parametrize("case", STREAMING, ids=[c["id"] for c in STREAMING])
     async def test_async(self, case: dict[str, Any], config_kwargs: dict[str, str]) -> None:
-        route_for(case)
+        route = route_for(case)
         expect = case["expect"]
 
         async with (
@@ -252,6 +294,7 @@ class TestStreamingCases:
                 with pytest.raises(StreamInterruptedError) as caught:
                     [chunk async for chunk in stream]
                 assert caught.value.partial_content == expect["partial_content"]
+                assert_traffic(route, stream, case)
                 return
 
             chunks = [chunk async for chunk in stream]
@@ -264,6 +307,7 @@ class TestStreamingCases:
             # stops a reassembler from inventing calls out of a stream that carried none.
             assembled = [call.model_dump() for call in stream.tool_calls]
             assert assembled == expect.get("tool_calls", []), case["id"]
+            assert_traffic(route, stream, case)
 
 
 class TestErrorCases:
@@ -313,17 +357,30 @@ class TestManifestIntegrity:
 
     def test_every_referenced_fixture_exists(self) -> None:
         for case in CASES:
-            spec = case["response"]
-            name = spec.get("body_file") or spec["sse_file"]
-            assert (SPEC / "fixtures" / name).exists(), f"{case['id']} references missing {name}"
+            for spec in responses_for(case):
+                name = spec.get("body_file") or spec["sse_file"]
+                assert (SPEC / "fixtures" / name).exists(), (
+                    f"{case['id']} references missing {name}"
+                )
 
     def test_no_fixture_is_orphaned(self) -> None:
         # An unreferenced fixture is either a missing case or dead weight; both are worth knowing.
         referenced = {
-            case["response"].get("body_file") or case["response"]["sse_file"] for case in CASES
+            spec.get("body_file") or spec["sse_file"]
+            for case in CASES
+            for spec in responses_for(case)
         }
         on_disk = {path.name for path in (SPEC / "fixtures").iterdir() if path.is_file()}
         assert on_disk == referenced
+
+    def test_a_case_declaring_a_sequence_is_asserting_the_request_count(self) -> None:
+        # A sequence exists to pin how many requests reach the server. Without that count the extra
+        # responses are decoration: an SDK could serve the first, stop, and still pass.
+        for case in CASES:
+            if "responses" in case:
+                assert "requests" in case["expect"], (
+                    f"{case['id']} serves a sequence but asserts no request count"
+                )
 
 
 class TestTokenCases:
@@ -339,7 +396,7 @@ class TestTokenCases:
     def _route(case: dict[str, Any]) -> Any:
         # Registered before the autouse happy-path mock so it wins: respx matches in registration
         # order, and this case's whole point is that the token exchange is not the happy one.
-        route = respx.post(AUTH_URL).mock(return_value=mock_response(case))
+        route = respx.post(AUTH_URL).mock(return_value=mock_response(responses_for(case)[0]))
         respx.get(f"{GATEWAY}/v1/models/mine").mock(
             return_value=httpx.Response(200, json={"object": "list", "data": []})
         )
