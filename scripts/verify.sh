@@ -30,6 +30,12 @@ step "spec: catalog matches guide" ./scripts/check_catalog_matches_guide.py
 
 # --- python-ci.yml ---
 cd "$root/python" || exit 1
+# CI runs this before any of the checks below, and leaving it out let this script disagree with CI:
+# `uv run` syncs the default groups but NOT the extras, so the optional OpenTelemetry dependency was
+# missing and `mypy src/` failed on an import it could not find rather than on anything real. A
+# drift in either direction is the failure this script exists to prevent -- this one pointed at a
+# developer chasing an error CI does not have.
+step "python: sync extras"       uv sync --all-extras
 step "python: ruff check"        uv run ruff check
 step "python: ruff format"       uv run ruff format --check
 step "python: mypy"              uv run mypy src/

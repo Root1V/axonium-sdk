@@ -7,6 +7,46 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+A streamed request rejected **before the stream begins** is now pinned as *recognised* -- the
+precondition the retry above assumes, and the one thing nothing asserted.
+
+No behaviour changed here: the status check that precedes SSE parsing has always been in place. What
+changed is that removing it now fails. Measured by the Swift SDK team: reading the body as a stream
+without first looking at whether the status was `4xx`/`5xx` still passed **all 40 cases of manifest
+v19**. An SDK without that check turns every rejection into a silently empty response -- no error,
+no content, and nothing for a caller to correlate -- and the corpus said that was fine. v20 pinned
+what a recognised rejection leads to and never that it is recognised, which is the shape of AXO-110
+in a different place, and of AXO-108 before it: fixed in three languages, pinned in none.
+
+`expect.kind` for a stream that fails before it begins is `error`, **not** `stream_error`, and the
+two are different contracts. `stream_error` is the in-band failure of a stream that has already
+begun, after the `200`/`text/event-stream` headers are committed, and it is never retried. This one
+arrives *instead of* a stream, as an ordinary status, and is -- which is what the guide (3.3) means
+by a client that sets `stream: true` not getting a different error contract for doing so.
+
+The runner could not have expressed this before. Error cases are selected by `kind == "error"` and
+dispatched by operation through `call_sync`/`call_async`, neither of which had a branch for
+`chat.completions.stream` -- a streaming error case would have died on "unhandled operation". Both
+now open the stream *and* iterate it, because an SDK that hands back a stream where a status belongs
+must not pass by reading the refusal as an empty body.
+
+Manifest v21 adds two cases, both on `chat.completions.stream`.
+`stream-rejected-before-it-begins-is-an-error` replays the `400` that `PRM-143` recorded live on
+2026-09-27: the engine's own status and OpenAI-shaped body, passed through verbatim rather than
+wrapped in a problem+json envelope, so `error_type_suffix` is null and the correlation ids exist
+only in the headers -- which keeps AXO-108's header fallback pinned on the streaming path too.
+`stream-rejected-before-it-begins-is-retryable-when-the-backend-is-unavailable` is the
+`503 backend-unavailable` that justifies the retry v20 added. It carries no `Retry-After` in header
+or body, unlike every other retryable error in the corpus, because the guide (5.2) confirms this
+variant supplies no backoff signal at all; a shortened window would have been cheaper to test and
+would have pinned a value the gateway never sends.
+
+Mutation-tested in all three languages: removing the status check fails both new cases, and takes
+`stream-retried-when-rejected-before-it-begins` with them.
+
+The Swift SDK covers this by hand today, in `StreamRejectionTests.swift`. With the corpus holding
+it, those tests are redundant and that team removes them.
+
 A streamed request rejected **before the stream begins** is now retried, as every other request
 already was.
 
@@ -434,6 +474,45 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+A streamed request rejected **before the stream begins** is now pinned as *recognised* -- the
+precondition the retry above assumes, and the one thing nothing asserted.
+
+No behaviour changed here: the status check that precedes SSE parsing has always been in place. What
+changed is that removing it now fails. Measured by the Swift SDK team: reading the body as a stream
+without first looking at whether the status was `4xx`/`5xx` still passed **all 40 cases of manifest
+v19**. An SDK without that check turns every rejection into a silently empty response -- no error,
+no content, and nothing for a caller to correlate -- and the corpus said that was fine. v20 pinned
+what a recognised rejection leads to and never that it is recognised, which is the shape of AXO-110
+in a different place, and of AXO-108 before it: fixed in three languages, pinned in none.
+
+`expect.kind` for a stream that fails before it begins is `error`, **not** `stream_error`, and the
+two are different contracts. `stream_error` is the in-band failure of a stream that has already
+begun, after the `200`/`text/event-stream` headers are committed, and it is never retried. This one
+arrives *instead of* a stream, as an ordinary status, and is -- which is what the guide (3.3) means
+by a client that sets `stream: true` not getting a different error contract for doing so.
+
+The runner could not have expressed this before. `invokeExpectingError` dispatches by operation and
+had no branch for `chat.completions.stream`, so a streaming error case would have died on
+"unsupported operation". It now opens the stream, iterates it and returns `Err()`, because an SDK that
+hands back a stream where a status belongs must not pass by reading the refusal as an empty body.
+
+Manifest v21 adds two cases, both on `chat.completions.stream`.
+`stream-rejected-before-it-begins-is-an-error` replays the `400` that `PRM-143` recorded live on
+2026-09-27: the engine's own status and OpenAI-shaped body, passed through verbatim rather than
+wrapped in a problem+json envelope, so `error_type_suffix` is null and the correlation ids exist
+only in the headers -- which keeps AXO-108's header fallback pinned on the streaming path too.
+`stream-rejected-before-it-begins-is-retryable-when-the-backend-is-unavailable` is the
+`503 backend-unavailable` that justifies the retry v20 added. It carries no `Retry-After` in header
+or body, unlike every other retryable error in the corpus, because the guide (5.2) confirms this
+variant supplies no backoff signal at all; a shortened window would have been cheaper to test and
+would have pinned a value the gateway never sends.
+
+Mutation-tested in all three languages: removing the status check fails both new cases, and takes
+`stream-retried-when-rejected-before-it-begins` with them.
+
+The Swift SDK covers this by hand today, in `StreamRejectionTests.swift`. With the corpus holding
+it, those tests are redundant and that team removes them.
+
 A streamed request rejected **before the stream begins** is retried, and that is now deliberate
 rather than incidental.
 
@@ -752,6 +831,51 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+A streamed request rejected **before the stream begins** is now pinned as *recognised* -- the
+precondition the retry above assumes, and the one thing nothing asserted.
+
+No behaviour changed here: the status check that precedes SSE parsing has always been in place. What
+changed is that removing it now fails. Measured by the Swift SDK team: reading the body as a stream
+without first looking at whether the status was `4xx`/`5xx` still passed **all 40 cases of manifest
+v19**. An SDK without that check turns every rejection into a silently empty response -- no error,
+no content, and nothing for a caller to correlate -- and the corpus said that was fine. v20 pinned
+what a recognised rejection leads to and never that it is recognised, which is the shape of AXO-110
+in a different place, and of AXO-108 before it: fixed in three languages, pinned in none.
+
+`expect.kind` for a stream that fails before it begins is `error`, **not** `stream_error`, and the
+two are different contracts. `stream_error` is the in-band failure of a stream that has already
+begun, after the `200`/`text/event-stream` headers are committed, and it is never retried. This one
+arrives *instead of* a stream, as an ordinary status, and is -- which is what the guide (3.3) means
+by a client that sets `stream: true` not getting a different error contract for doing so.
+
+The runner could not have expressed this before, and would have failed quietly rather than loudly:
+the `("error", _)` arm matched any operation and fell through to `client.chat(...)`, the
+**non-streaming** call. A streaming error case would have passed while exercising `chat()` rather
+than the `chat_stream()` it describes. It now opens the stream, iterates it and reports whichever
+error came out, because an SDK that hands back a stream where a status belongs must not pass by
+reading the refusal as an empty body.
+
+Adding the case also found that the runner's own suffix-to-`ErrorKind` table had no
+`backend-unavailable` entry -- a table parallel to the SDK's, which has always mapped it, covering
+only what the corpus happened to use until now.
+
+Manifest v21 adds two cases, both on `chat.completions.stream`.
+`stream-rejected-before-it-begins-is-an-error` replays the `400` that `PRM-143` recorded live on
+2026-09-27: the engine's own status and OpenAI-shaped body, passed through verbatim rather than
+wrapped in a problem+json envelope, so `error_type_suffix` is null and the correlation ids exist
+only in the headers -- which keeps AXO-108's header fallback pinned on the streaming path too.
+`stream-rejected-before-it-begins-is-retryable-when-the-backend-is-unavailable` is the
+`503 backend-unavailable` that justifies the retry v20 added. It carries no `Retry-After` in header
+or body, unlike every other retryable error in the corpus, because the guide (5.2) confirms this
+variant supplies no backoff signal at all; a shortened window would have been cheaper to test and
+would have pinned a value the gateway never sends.
+
+Mutation-tested in all three languages: removing the status check fails both new cases, and takes
+`stream-retried-when-rejected-before-it-begins` with them.
+
+The Swift SDK covers this by hand today, in `StreamRejectionTests.swift`. With the corpus holding
+it, those tests are redundant and that team removes them.
 
 A streamed request rejected **before the stream begins** is retried, and that is now deliberate
 rather than incidental.

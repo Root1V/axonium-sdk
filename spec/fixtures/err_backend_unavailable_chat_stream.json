@@ -1,0 +1,9 @@
+{
+  "type": "https://prometheus.internal/errors/backend-unavailable",
+  "title": "Backend Unavailable",
+  "status": 503,
+  "detail": "No replica of model 'qwen3-0.6b' could be reached.",
+  "instance": "/v1/chat/completions",
+  "request_id": "3e1a6f52-0000-4000-8000-000000000000",
+  "trace_id": "0378c195-0000-4000-8000-000000000000"
+}

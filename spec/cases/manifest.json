@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 20,
+  "version": 21,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -1122,9 +1122,64 @@
         "partial_content": "Hello, wor"
       },
       "$comment": "The other half of the rule, and the half with no exception. An interruption arrives in band, after the 200 and text/event-stream headers are committed: part of the response was delivered and part was billed, so a repeat is a fresh generation rather than a resumption. A second, healthy stream is queued behind the interrupted one and must never be reached -- an SDK that retried here would pass every assertion of stream-interrupted while billing twice and returning the wrong answer, which is exactly the failure the count catches. Same bytes as stream-interrupted, which pins what the caller sees; this pins how many times it is asked for."
+    },
+    {
+      "id": "stream-rejected-before-it-begins-is-an-error",
+      "operation": "chat.completions.stream",
+      "request": {
+        "model": "qwen3-0.6b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Count 1 2 3"
+          }
+        ]
+      },
+      "response": {
+        "status": 400,
+        "body_file": "err_engine_rejection_chat_stream.json",
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Request-ID": "c4e9a37b-0000-4000-8000-000000000000",
+          "X-Trace-ID": "0378c195-0000-4000-8000-000000000000"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": null,
+        "retryable": false,
+        "has_request_id": true,
+        "has_trace_id": true
+      },
+      "$comment": "The precondition for the retry stream-retried-when-rejected-before-it-begins pins: a streamed request refused BEFORE the stream begins has to be RECOGNISED as a refusal. The body is the one PRM-143 recorded live on 2026-09-27 (P-29), against qwen3-0.6b with a response_format whose schema cannot be parsed -- the engine's own status and OpenAI-shaped body, passed through verbatim, NOT a problem+json envelope. That is the contract the guide states in 3.3: a client that sets stream: true does not get a different error contract for doing so. expect.kind is `error` and not `stream_error` on purpose -- the two are different contracts. `stream_error` is the in-band failure of a stream that has already BEGUN, after the 200 and text/event-stream headers are committed, and it is never retried; this arrives instead of a stream, as an ordinary status, and is. WHY IT EXISTS: measured by the Swift SDK team, removing the status check that precedes SSE parsing -- reading the body as a stream without first looking at whether the status was 4xx/5xx -- still passed all 40 cases of manifest v19. An SDK without that check turns every rejection into a silently empty response with no error at all, and the corpus said that was fine. Same shape as AXO-110, in a different place -- and as AXO-108, whose case error-correlation-ids-only-in-the-headers says the same thing about the header fallback: fixed in three languages, pinned in none, so the whole corpus passes with the fix taken back out. error_type_suffix is null because the body carries no problem+json `type`: an SDK that invents one from the engine's nested error.type, or that refuses to parse a body without one, fails. The correlation ids are synthetic and in the headers only -- the body has nowhere to put them, for the same reason it has no `type` -- which keeps AXO-108's header fallback pinned on the streaming path too."
+    },
+    {
+      "id": "stream-rejected-before-it-begins-is-retryable-when-the-backend-is-unavailable",
+      "operation": "chat.completions.stream",
+      "request": {
+        "model": "qwen3-0.6b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Count 1 2 3"
+          }
+        ]
+      },
+      "response": {
+        "status": 503,
+        "body_file": "err_backend_unavailable_chat_stream.json"
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": "backend-unavailable",
+        "retryable": true,
+        "has_request_id": true,
+        "has_trace_id": true
+      },
+      "$comment": "The other half of the rejection PRM-143 made visible, and the one that justifies the retry: a streamed request whose connection to the engine never opened. AUTHORED envelope, because what P-29 records live on 2026-09-27 is the status and the type -- `503` with the problem+json envelope and type .../backend-unavailable -- rather than these bytes; the shape is the standard gateway envelope every recorded error in this file already carries. Before PRM-143 this arrived as a 200 whose body was the literal data: {\"error\": \"stream interrupted\"} -- an in-band interruption of a stream that had never begun, which is the failure the case above describes from the other side. Recognising it is what makes the retry reachable at all: it is the rejection stream-retried-when-rejected-before-it-begins reopens, and an SDK that reads the body as SSE without checking the status returns an empty answer here instead of retrying. NO Retry-After, in neither header nor body, unlike every other retryable error in this corpus: the guide (5.2) confirms by reading the response-building call that this variant supplies no backoff signal at all, and a shortened window would have been cheaper to test and would have pinned a value the gateway never sends. The three attempts the SDKs then spend on their own default backoff are the price."
     }
   ],
   "$recording": "Every case states in its own $comment whether its bytes were recorded from a live deployment or authored, and an authored one says why it could not be recorded. Only the recorded ones are evidence about the gateway; the rest pin the SDKs to each other. This used to carry a tally -- \"21 of 25 cases\" -- which nothing enforced and every bump was supposed to update. By v20 the file held 42. A count maintained by hand in the document it describes is the one guard a bump edits on its way past, so it is stated as a rule instead, and a test holds every case to it.",
-  "$version_note": "Version 20 (2026-09-27): the two stream-retry cases. Three SDKs retried a stream rejected before it began 1, 3 and 3 times and all three documented never retrying; nothing in the corpus had an opinion, so a fourth SDK would have inherited whichever it read. Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame.",
+  "$version_note": "Version 21 (2026-09-27): the two cases pinning that a stream rejected before it begins is RECOGNISED as a rejection, which the retry pinned in v20 silently assumed. Removing the status check that precedes SSE parsing passed all 40 cases of v19: the corpus asserted what a recognised rejection leads to and never that it is recognised. Version 20 (2026-09-27): the two stream-retry cases. Three SDKs retried a stream rejected before it began 1, 3 and 3 times and all three documented never retrying; nothing in the corpus had an opinion, so a fourth SDK would have inherited whichever it read. Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame.",
   "$token_cases": "Token-endpoint cases. Deliberately a subset of what each SDK tests about tokens: only what is observable by replaying bytes belongs here. The timing and concurrency rules -- refresh-ahead, single-flight, lifetime clamping -- cannot be expressed against a recorded exchange and stay per-language. What is here is the shape that goes out and the two envelopes that come back."
 }
