@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 19,
+  "version": 20,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -1046,9 +1046,85 @@
         "has_trace_id": true
       },
       "$comment": "An error whose body is not a problem+json envelope at all, with both correlation ids present only in the headers. The body is the exact 422 measured on 2026-09-27 against POST /v1/models/{model}/predict, where the engine's validation failure is passed through verbatim; the X-Request-ID is the one that response actually carried. It is replayed here through chat.completions.create because predict has no SDK method yet, and because the envelope handling under test is not route-specific -- a 404 for an unserved route and an HTML page from a proxy that never reached the gateway both arrive the same way. WHY IT EXISTS: all three SDKs read the ids from the body only until AXO-108 fixed them on 2026-09-27, with one hand-written test per language and nothing added here. Removing the header fallback from a fourth SDK and replaying the whole corpus passed every case, which is how the bug would come back. error_type_suffix is null on purpose: the body carries no `type`, so an SDK that invents one, or that refuses to parse a body without one, fails."
+    },
+    {
+      "id": "stream-retried-when-rejected-before-it-begins",
+      "operation": "chat.completions.stream",
+      "request": {
+        "model": "qwen3-0.6b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Count 1 2 3"
+          }
+        ],
+        "max_tokens": 24
+      },
+      "responses": [
+        {
+          "status": 429,
+          "body_file": "err_rate_limit_chat_stream.json",
+          "headers": {
+            "Retry-After": "1",
+            "X-Request-ID": "b7c41d08-0000-4000-8000-000000000000",
+            "X-Trace-ID": "0378c195-0000-4000-8000-000000000000",
+            "X-RateLimit-Scope": "chat_completions",
+            "X-RateLimit-Limit-Requests": "60",
+            "X-RateLimit-Remaining-Requests": "0",
+            "X-RateLimit-Reset-Requests": "1789867620"
+          }
+        },
+        {
+          "status": 200,
+          "sse_file": "chat_stream_ok.sse"
+        }
+      ],
+      "expect": {
+        "kind": "stream",
+        "requests": 2,
+        "attempts": 2,
+        "content": "",
+        "chunks": 24,
+        "usage": {
+          "prompt_tokens": 15,
+          "completion_tokens": 24,
+          "cache_read_tokens": 8,
+          "estimated": true
+        }
+      },
+      "$comment": "A streamed request refused BEFORE the stream begins is reopened, and the reopened stream is the one the caller reads. WHY IT EXISTS: measured on 2026-09-27, counting requests that reached the server for a 429 on POST /v1/chat/completions with stream: true, the three SDKs made 1, 3 and 3 attempts -- Python bypassed the shared retry loop, Go and Rust ran it because nobody had excluded streaming from it. None of the three decisions was taken, and all three documented the opposite. Two were right: a stream can only fail this way before any body byte exists, so nothing was generated and nothing was billed, and reopening is a first generation rather than a second. Agreed with the Mundus team so a fourth SDK inherits the decision instead of the coin flip. Only expressible since PRM-143 (2026-09-27, guide 3.3): before it this arrived as a 200 whose body was nothing but the terminal frame, indistinguishable from a legitimately empty answer, so there was no visible rejection to retry. It is also the only retry available -- the gateway performs none of its own on a streamed request (guide 6.1), so this 429 reaches a caller after one gateway attempt rather than three. TWO EDITS, BOTH DECLARED: the envelope is the recorded rate-limit shape of error-rate-limit-current-envelope with instance, scope and detail moved to the chat endpoint, because what 2026-09-27 measured was the attempt count and not these bytes; and retry_after is 1 rather than a real window, as in its two companions, so four test suites do not sleep through one. requests is the assertion that matters: attempts is what the SDK reports, requests is what the server saw, and only the second would have caught the divergence. The responses are served in order and the last repeats, so an SDK that reopens twice fails on the count rather than running out of fixtures."
+    },
+    {
+      "id": "stream-not-retried-once-it-has-begun",
+      "operation": "chat.completions.stream",
+      "request": {
+        "model": "qwen3-0.6b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Count 1 2 3"
+          }
+        ]
+      },
+      "responses": [
+        {
+          "status": 200,
+          "sse_file": "chat_stream_interrupted.sse"
+        },
+        {
+          "status": 200,
+          "sse_file": "chat_stream_ok.sse"
+        }
+      ],
+      "expect": {
+        "kind": "stream_error",
+        "requests": 1,
+        "partial_content": "Hello, wor"
+      },
+      "$comment": "The other half of the rule, and the half with no exception. An interruption arrives in band, after the 200 and text/event-stream headers are committed: part of the response was delivered and part was billed, so a repeat is a fresh generation rather than a resumption. A second, healthy stream is queued behind the interrupted one and must never be reached -- an SDK that retried here would pass every assertion of stream-interrupted while billing twice and returning the wrong answer, which is exactly the failure the count catches. Same bytes as stream-interrupted, which pins what the caller sees; this pins how many times it is asked for."
     }
   ],
   "$recording": "21 of 25 cases carry bytes recorded from a live deployment; each says so in its $comment. The four that do not explain why they cannot be produced. Only the recorded ones are evidence about the gateway.",
-  "$version_note": "Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame.",
+  "$version_note": "Version 20 (2026-09-27): the two stream-retry cases. Three SDKs retried a stream rejected before it began 1, 3 and 3 times and all three documented never retrying; nothing in the corpus had an opinion, so a fourth SDK would have inherited whichever it read. Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame.",
   "$token_cases": "Token-endpoint cases. Deliberately a subset of what each SDK tests about tokens: only what is observable by replaying bytes belongs here. The timing and concurrency rules -- refresh-ahead, single-flight, lifetime clamping -- cannot be expressed against a recorded exchange and stay per-language. What is here is the shape that goes out and the two envelopes that come back."
 }

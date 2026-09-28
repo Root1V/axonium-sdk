@@ -174,6 +174,15 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, o
 //
 // On success the response body is still open and belongs to the caller. streaming suppresses the
 // whole-request timeout, because a long generation is not a stalled one.
+//
+// streaming deliberately does NOT exclude a request from the retry loop, and this is the one place
+// to say so, because the reverse looks like the safer reading. A streamed request that fails here
+// failed before its first byte of body existed: the gateway reads the engine's status before the
+// 200/text/event-stream headers are sent, so an error at this point means nothing was generated and
+// nothing was billed. A retry is therefore a first generation rather than a second -- and it is the
+// only retry there is, since the gateway performs none of its own on a streamed request. Once the
+// stream has begun the failure arrives in band instead, where this function cannot see it and never
+// retries it. Agreed across all four SDKs on 2026-09-27; the shared corpus pins the attempt count.
 func (c *Client) send(ctx context.Context, method, path string, body []byte, streaming bool, model, instance, idemKey string) (*http.Response, ResponseMeta, error) {
 	// Keyed by model, not by gateway. 503 backend-unavailable is a per-model condition -- it means
 	// every instance of that model is out, and other models on the same gateway keep serving.

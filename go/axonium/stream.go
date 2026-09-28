@@ -14,6 +14,14 @@ import (
 // cancellation to the gateway and on to Prometheus, which stops the generation and frees the
 // backend slot. A stream that is merely abandoned keeps the GPU busy and keeps billing.
 //
+// A stream that has begun is never retried, and that is not a policy this SDK could choose
+// differently. By the time one chunk exists the 200 and text/event-stream headers are committed, so
+// a later failure arrives in band rather than as a status -- and part of the response has been
+// delivered and billed, which makes a repeat a fresh generation rather than a resumption. Whether
+// that is worth paying for is the caller's decision, and Content reports what arrived so it can be
+// made. The other failure, a rejection that arrives instead of the stream, IS retried: see
+// ChatService.Stream.
+//
 //	stream, err := client.Chat.Stream(ctx, req)
 //	if err != nil { return err }
 //	defer stream.Close()

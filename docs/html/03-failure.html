@@ -193,6 +193,28 @@ extra attempt regardless of <code>max_attempts</code>.</p>
 <p><strong>A client-side timeout is never retried by default either</strong>, and that one surprises people. The
 backend is probably still generating. The error message says so rather than leaving you to work it
 out.</p>
+<h3>A stream fails in two ways, and only one is retried</h3>
+<p>The rule above decides this too, but a stream makes the two halves look alike when they are not.</p>
+<p><strong>Rejected before the stream begins → retried.</strong> The gateway opens the connection to the engine and
+reads its status <em>before</em> the <code>200</code>/<code>text/event-stream</code> headers exist, so a refusal comes back as an
+ordinary error response — the same status and body the non-streaming form of the endpoint returns.
+Nothing was generated and nothing was billed, so reopening is a first generation rather than a
+second, and it goes through the table above unchanged, <code>Retry-After</code> included. It is also the only
+retry there is: <strong>the gateway performs no internal retries on a streamed request</strong>, so a <code>503 backend-unavailable</code> reaches you after one attempt rather than three. The backoff does not change;
+the time you waited before seeing it does.</p>
+<p><strong>Failed after the stream began → never retried.</strong> Once one chunk exists the headers are committed,
+so the failure arrives in band instead, as a chunk carrying <code>error</code>. Part of the answer was delivered
+and part was billed, so a repeat is a fresh generation rather than a resumption. The SDK raises with
+the partial text attached and lets you decide, because only you know what the partial output was used
+for.</p>
+<p>An <code>Idempotency-Key</code> does not change either half. On a stream it replays one the gateway <em>finished</em>
+and whose delivery your connection dropped — never one the model itself broke.</p>
+<blockquote>
+<p>Until 2026-09-27 the first half could not be expressed at all: a stream rejected before it began
+arrived as a <code>200</code> whose body was nothing but <code>data: [DONE]</code>, indistinguishable from a legitimately
+empty answer. There was no visible rejection to retry. The platform now returns the engine's real
+status.</p>
+</blockquote>
 <h2>Waiting</h2>
 <p>When the gateway sends <code>Retry-After</code>, the SDK uses it. It is server-supplied and authoritative: for
 an open circuit breaker it is the real expected recovery time, which no local heuristic improves

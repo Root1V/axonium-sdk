@@ -30,6 +30,33 @@ extra attempt regardless of `max_attempts`.
 backend is probably still generating. The error message says so rather than leaving you to work it
 out.
 
+### A stream fails in two ways, and only one is retried
+
+The rule above decides this too, but a stream makes the two halves look alike when they are not.
+
+**Rejected before the stream begins → retried.** The gateway opens the connection to the engine and
+reads its status *before* the `200`/`text/event-stream` headers exist, so a refusal comes back as an
+ordinary error response — the same status and body the non-streaming form of the endpoint returns.
+Nothing was generated and nothing was billed, so reopening is a first generation rather than a
+second, and it goes through the table above unchanged, `Retry-After` included. It is also the only
+retry there is: **the gateway performs no internal retries on a streamed request**, so a `503
+backend-unavailable` reaches you after one attempt rather than three. The backoff does not change;
+the time you waited before seeing it does.
+
+**Failed after the stream began → never retried.** Once one chunk exists the headers are committed,
+so the failure arrives in band instead, as a chunk carrying `error`. Part of the answer was delivered
+and part was billed, so a repeat is a fresh generation rather than a resumption. The SDK raises with
+the partial text attached and lets you decide, because only you know what the partial output was used
+for.
+
+An `Idempotency-Key` does not change either half. On a stream it replays one the gateway *finished*
+and whose delivery your connection dropped — never one the model itself broke.
+
+> Until 2026-09-27 the first half could not be expressed at all: a stream rejected before it began
+> arrived as a `200` whose body was nothing but `data: [DONE]`, indistinguishable from a legitimately
+> empty answer. There was no visible rejection to retry. The platform now returns the engine's real
+> status.
+
 ## Waiting
 
 When the gateway sends `Retry-After`, the SDK uses it. It is server-supplied and authoritative: for

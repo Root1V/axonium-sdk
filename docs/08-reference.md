@@ -484,7 +484,7 @@ Iterate it inside a ``with`` block::
         print(stream.usage())
 
 ```python
-ChatCompletionStream(opener: Any, diagnose: Callable[[APIError], None]) -> None
+ChatCompletionStream(opening: StreamOpen) -> None
 ```
 
 | Member | Summary |
@@ -496,7 +496,7 @@ ChatCompletionStream(opener: Any, diagnose: Callable[[APIError], None]) -> None
 A streaming completion. See :class:`ChatCompletionStream`.
 
 ```python
-AsyncChatCompletionStream(opener: Any, diagnose: Callable[[APIError], None], preflight: Callable[[], Awaitable[None]]) -> None
+AsyncChatCompletionStream(opening: StreamOpen, preflight: Callable[[], Awaitable[None]]) -> None
 ```
 
 | Member | Summary |

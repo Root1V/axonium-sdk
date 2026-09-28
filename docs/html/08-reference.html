@@ -1333,7 +1333,7 @@ not the resource.</p>
         print(chunk.content or &quot;&quot;, end=&quot;&quot;)
     print(stream.usage())
 </code></pre>
-<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">ChatCompletionStream</span><span class="p">(</span><span class="n">opener</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">diagnose</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">APIError</span><span class="p">],</span> <span class="kc">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">ChatCompletionStream</span><span class="p">(</span><span class="n">opening</span><span class="p">:</span> <span class="n">StreamOpen</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
 <div class="table-scroll"><table>
 <thead>
 <tr>
@@ -1350,7 +1350,7 @@ not the resource.</p>
 </table></div>
 <h3><code>AsyncChatCompletionStream</code></h3>
 <p>A streaming completion. See :class:<code>ChatCompletionStream</code>.</p>
-<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">AsyncChatCompletionStream</span><span class="p">(</span><span class="n">opener</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">diagnose</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">APIError</span><span class="p">],</span> <span class="kc">None</span><span class="p">],</span> <span class="n">preflight</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Awaitable</span><span class="p">[</span><span class="kc">None</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
+<div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">AsyncChatCompletionStream</span><span class="p">(</span><span class="n">opening</span><span class="p">:</span> <span class="n">StreamOpen</span><span class="p">,</span> <span class="n">preflight</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Awaitable</span><span class="p">[</span><span class="kc">None</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span></code></pre></div>
 <div class="table-scroll"><table>
 <thead>
 <tr>

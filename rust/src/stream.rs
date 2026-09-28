@@ -3,10 +3,15 @@
 //! Two things about this stream are easy to get wrong, and both are handled here rather than at
 //! the call sites.
 //!
-//! **Failures arrive in band.** By the time a backend fails mid-generation the `200` and
-//! `text/event-stream` headers are already committed, so a broken stream cannot be signalled with
-//! a status code. The gateway emits an error chunk instead. A client that only checks the status
-//! sees a truncated response as a successful one.
+//! **Failures arrive in band -- but only once the stream has begun.** By the time a backend fails
+//! mid-generation the `200` and `text/event-stream` headers are already committed, so a broken
+//! stream cannot be signalled with a status code. The gateway emits an error chunk instead. A client
+//! that only checks the status sees a truncated response as a successful one. Such a failure is
+//! never retried: part of the response was delivered and part was billed, so a repeat is a fresh
+//! generation rather than a resumption, and [`ChatStream::content`] reports what arrived so the
+//! caller can decide. A request refused *before* the stream begins is the other case entirely --
+//! it arrives as an ordinary status, nothing was generated, and it is retried like any other
+//! request (see [`crate::Client::chat_stream`]).
 //!
 //! **Token counts may never arrive as `usage`.** llama.cpp-family backends send none at all; the
 //! counts have to be recovered from the final chunk's `timings`, and a derived figure is flagged

@@ -39,13 +39,20 @@ fn fixture(name: &str) -> Vec<u8> {
         .unwrap_or_else(|e| panic!("fixture {name}: {e}"))
 }
 
-/// Stands the recorded response up behind a mock, including the token endpoint every client needs.
-async fn serve(case: &Value) -> MockServer {
-    let server = MockServer::start().await;
-    let response = &case["response"];
-    let status = response["status"].as_u64().unwrap_or(200) as u16;
+/// The responses a case serves, in order.
+///
+/// Most cases describe one. A case that pins a retry describes several: the rejection, then what the
+/// reopened request gets. Normalised here so the rest of the runner sees one shape.
+fn replies(case: &Value) -> Vec<&Value> {
+    match case.get("responses").and_then(Value::as_array) {
+        Some(sequence) => sequence.iter().collect(),
+        None => vec![&case["response"]],
+    }
+}
 
-    let (body, content_type) = match (response.get("body_file"), response.get("sse_file")) {
+fn template_for(case: &Value, reply: &Value) -> ResponseTemplate {
+    let status = reply["status"].as_u64().unwrap_or(200) as u16;
+    let (body, content_type) = match (reply.get("body_file"), reply.get("sse_file")) {
         (Some(f), _) => (fixture(f.as_str().unwrap()), "application/json"),
         (_, Some(f)) => (fixture(f.as_str().unwrap()), "text/event-stream"),
         _ => panic!("{}: no fixture", case["id"]),
@@ -54,12 +61,30 @@ async fn serve(case: &Value) -> MockServer {
     let mut template = ResponseTemplate::new(status)
         .set_body_bytes(body)
         .insert_header("content-type", content_type);
-    if let Some(headers) = response.get("headers").and_then(Value::as_object) {
+    if let Some(headers) = reply.get("headers").and_then(Value::as_object) {
         for (name, value) in headers {
             template = template.insert_header(name.as_str(), value.as_str().unwrap_or_default());
         }
     }
+    template
+}
 
+/// How many requests reached the server, the token exchange aside -- the count a case pinning a
+/// retry is really about.
+async fn requests_served(server: &MockServer) -> usize {
+    server
+        .received_requests()
+        .await
+        .expect("the mock server records its requests")
+        .iter()
+        .filter(|request| request.url.path() != "/oauth2/token")
+        .count()
+}
+
+/// Stands the recorded responses up behind a mock, including the token endpoint every client needs.
+async fn serve(case: &Value) -> MockServer {
+    let server = MockServer::start().await;
+    let replies = replies(case);
     let is_token_case = case["operation"] == "token.fetch";
 
     // The token endpoint first, so it wins over the catch-all. On a token case the recorded
@@ -67,7 +92,7 @@ async fn serve(case: &Value) -> MockServer {
     // what is under test is the exchange, not what comes after it.
     if is_token_case {
         Mock::given(wiremock::matchers::path("/oauth2/token"))
-            .respond_with(template)
+            .respond_with(template_for(case, replies[0]))
             .mount(&server)
             .await;
         Mock::given(any())
@@ -88,10 +113,19 @@ async fn serve(case: &Value) -> MockServer {
         })))
         .mount(&server)
         .await;
-    Mock::given(any())
-        .respond_with(template)
-        .mount(&server)
-        .await;
+
+    // One mock per reply, in order, each exhausted after a single hit so the next takes over -- and
+    // the last left unlimited, so an SDK that retries once too often fails on the request count,
+    // which says what it did, rather than on a server with nothing left to send.
+    let last = replies.len() - 1;
+    for (index, reply) in replies.iter().enumerate() {
+        let mock = Mock::given(any()).respond_with(template_for(case, reply));
+        if index == last {
+            mock.mount(&server).await;
+        } else {
+            mock.up_to_n_times(1).mount(&server).await;
+        }
+    }
     server
 }
 
@@ -444,7 +478,7 @@ async fn contract_corpus() {
                 let mut stream = client
                     .chat_stream(&chat_request(&case["request"]))
                     .await
-                    .unwrap();
+                    .unwrap_or_else(|e| panic!("{id}: opening the stream: {e}"));
                 let mut chunks = 0;
                 let mut failure = None;
                 loop {
@@ -470,6 +504,13 @@ async fn contract_corpus() {
                     }
                 } else {
                     assert!(failure.is_none(), "{id}: the stream failed: {failure:?}");
+                    if let Some(want) = case["expect"]["attempts"].as_u64() {
+                        assert_eq!(
+                            u64::from(stream.meta().attempts),
+                            want,
+                            "{id}: attempts the SDK reports"
+                        );
+                    }
                     if let Some(want) = case["expect"]["chunks"].as_u64() {
                         assert_eq!(chunks, want, "{id}: chunk count");
                     }
@@ -534,7 +575,9 @@ async fn contract_corpus() {
                 };
                 assert_eq!(
                     api.status,
-                    case["response"]["status"].as_u64().unwrap() as u16,
+                    replies(case)[replies(case).len() - 1]["status"]
+                        .as_u64()
+                        .unwrap() as u16,
                     "{id}: status"
                 );
                 assert_eq!(api.type_suffix, suffix, "{id}: type suffix");
@@ -560,6 +603,18 @@ async fn contract_corpus() {
                 expect_fields(&error_view(&api), case);
             }
             (k, op) => panic!("{id}: unhandled kind {k} / operation {op}"),
+        }
+
+        // Checked once the case has run, whatever it asserted: a count is only evidence when the
+        // requests are over. This is the assertion that matters on a retry case -- attempts is what
+        // the SDK reports, this is what the server saw, and only the second would have caught a
+        // stream that quietly made one attempt where the agreement says three.
+        if let Some(want) = case["expect"]["requests"].as_u64() {
+            assert_eq!(
+                requests_served(&server).await as u64,
+                want,
+                "{id}: requests that reached the server"
+            );
         }
         ran += 1;
     }

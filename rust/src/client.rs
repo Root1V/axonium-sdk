@@ -166,6 +166,16 @@ impl Client {
     }
 
     /// Sends one logical call, retrying only where the platform says no generation occurred.
+    ///
+    /// `opts.streaming` deliberately does **not** exclude a request from this loop, and this is the
+    /// one place to say so, because the reverse looks like the safer reading. A streamed request
+    /// that fails here failed before its first byte of body existed: the gateway reads the engine's
+    /// status before the `200`/`text/event-stream` headers are sent, so an error at this point means
+    /// nothing was generated and nothing was billed. A retry is therefore a first generation rather
+    /// than a second -- and it is the only one there is, since the gateway performs no internal
+    /// retries on a streamed request. Once the stream has begun the failure arrives in band, where
+    /// this function cannot see it and never retries it. Agreed across all four SDKs on 2026-09-27;
+    /// the shared corpus pins the attempt count.
     pub(crate) async fn send(
         &self,
         path: &str,

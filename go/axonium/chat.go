@@ -412,8 +412,13 @@ func (s *ChatService) Create(ctx context.Context, req ChatRequest) (*ChatComplet
 // Stream opens a streaming chat completion.
 //
 // Streaming is a separate method rather than a flag on Create: it needs its own scope
-// (inference:stream, which inference:read does not imply), it is never retried automatically, and
-// its result is a different type. Folding it into Create would hide all three.
+// (inference:stream, which inference:read does not imply), it fails in two different ways, and its
+// result is a different type. Folding it into Create would hide all three.
+//
+// A rejection that arrives INSTEAD of the stream is retried like any other request, Retry-After
+// included: the gateway reads the engine's status before the 200/text/event-stream headers exist,
+// so nothing was generated and nothing was billed, and reopening is a first generation rather than
+// a second. A stream that has already BEGUN is never retried -- see ChatCompletionStream.
 //
 // The returned stream must be closed. Closing cancels the request, which propagates through the
 // gateway to Prometheus and stops the generation.

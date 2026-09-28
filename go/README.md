@@ -56,7 +56,7 @@ The model name is a **slug**. A slug never changes and is never reused, so pinni
 is safe — but which slugs exist depends on the deployment and on what your token is granted, so
 `client.Models(ctx)` is the source of truth rather than anything written here.
 
-Streaming is a separate method, because it needs a different scope, is never retried automatically,
+Streaming is a separate method, because it needs a different scope, fails in two different ways,
 and returns a different type:
 
 ```go
@@ -71,6 +71,14 @@ for stream.Next() {
 }
 return stream.Err()
 ```
+
+**The two ways it fails are not retried the same.** A rejection that arrives *instead of* the
+stream — the gateway reads the engine's status before the `200`/`text/event-stream` headers exist —
+is retried like any other request, `Retry-After` included: nothing was generated and nothing was
+billed, so reopening is a first generation rather than a second, and it is the only retry there is,
+since the gateway performs none of its own on a streamed request. A stream that has already **begun**
+is never retried: part of the response was delivered and part was billed, so a repeat is a fresh
+generation rather than a resumption.
 
 ### Streamed tool calls
 
