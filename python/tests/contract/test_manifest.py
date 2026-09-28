@@ -373,6 +373,18 @@ class TestManifestIntegrity:
         on_disk = {path.name for path in (SPEC / "fixtures").iterdir() if path.is_file()}
         assert on_disk == referenced
 
+    def test_every_case_declares_where_its_bytes_came_from(self) -> None:
+        """A case with no provenance is a case nobody can weigh.
+
+        ``$recording`` claims every case says whether its bytes were recorded from a deployment or
+        authored, and that claim went unheld: it used to carry the tally "21 of 25 cases", which
+        nothing enforced and every bump was supposed to update. By v20 the file held 42. The rule is
+        checked here instead, so a case added without saying where it came from fails rather than
+        quietly weakening what the corpus is evidence *of*.
+        """
+        silent = [case["id"] for case in CASES if not case.get("$comment", "").strip()]
+        assert not silent, f"cases that do not say where their bytes came from: {silent}"
+
     def test_a_case_declaring_a_sequence_is_asserting_the_request_count(self) -> None:
         # A sequence exists to pin how many requests reach the server. Without that count the extra
         # responses are decoration: an SDK could serve the first, stop, and still pass.
