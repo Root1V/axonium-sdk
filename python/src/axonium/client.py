@@ -92,14 +92,18 @@ def _request_headers(instance: str | None, idempotency_key: str | None) -> dict[
 #: reproducing a problem or comparing machines rather than for normal traffic.
 INSTANCE_HEADER = "X-Prometheus-Instance"
 
-#: Makes a retry safe on the non-streaming endpoints. A repeat with the same key and the same body
-#: returns the stored result without reaching a model, recording usage, or counting against the
-#: spend cap. This is what lets a client-side timeout be retried at all: without it, a retry is a
-#: second billable generation, because the backend is probably still working on the first.
+#: Makes a retry safe. A repeat with the same key and the same body returns the stored result
+#: without reaching a model, recording usage, or counting against the spend cap. This is what lets a
+#: client-side timeout be retried at all: without it, a retry is a second billable generation,
+#: because the backend is probably still working on the first.
 #:
-#: **Streaming is excluded, and silently.** A key on a streaming request is accepted and ignored,
-#: and the call generates again. The SDK refuses to send one there rather than let a caller believe
-#: a stream is protected.
+#: **Sent on streamed requests too, and honoured there.** This used to say the opposite — that the
+#: gateway ignored a key on a stream and that the SDK therefore refused to send one — while the code
+#: three lines from it sent it, and while a contract case recorded from a live deployment showed the
+#: platform replaying a stream 6 times out of 6. The corpus asserted only what came back, so a false
+#: comment and the true code sat in one file for as long as nobody read both. The boundary that *is*
+#: real is narrower and lives on ``chat.completions.stream``: a key replays a stream the gateway
+#: **finished** and whose delivery dropped, never one the model itself broke.
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 
 #: The gateway's limit. Checked client-side to save a round trip: exceeding it is a real error

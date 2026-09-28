@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 21,
+  "version": 22,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -29,9 +29,13 @@
           "usage.prompt_tokens_details.cached_tokens": 3,
           "choices.0.finish_reason": "stop",
           "usage.cache_read_tokens": 3
-        }
+        },
+        "request_headers_absent": [
+          "Idempotency-Key",
+          "X-Prometheus-Instance"
+        ]
       },
-      "$comment": "Recorded 2026-09-12 against the slug catalog. `model` names the MODEL, not the replica that served it -- the replica is in the X-Prometheus-Instance headers. An alias request is answered with the canonical slug too. usage.cache_read_tokens is asserted next to the raw prompt_tokens_details.cached_tokens on purpose: the gateway reports cached tokens under the OpenAI-shaped nested name, and every SDK lifts it to the flat one. Only the raw path was pinned before, so the lift itself was unverified in all three languages."
+      "$comment": "Recorded 2026-09-12 against the slug catalog. `model` names the MODEL, not the replica that served it -- the replica is in the X-Prometheus-Instance headers. An alias request is answered with the canonical slug too. usage.cache_read_tokens is asserted next to the raw prompt_tokens_details.cached_tokens on purpose: the gateway reports cached tokens under the OpenAI-shaped nested name, and every SDK lifts it to the flat one. Only the raw path was pinned before, so the lift itself was unverified in all three languages. REQUEST SIDE, added v22: asserted ABSENT rather than merely unasserted. An SDK that invents an idempotency key the caller never asked for makes a retry silently replay a stale result instead of generating, and an invented instance pin opts the caller out of load balancing and of failover without saying so. Both are the kind of helpfulness that is only visible from the request side."
     },
     {
       "id": "chat-completion-tool-calls",
@@ -677,7 +681,7 @@
     },
     {
       "id": "chat-idempotent-replay",
-      "$comment": "Recorded live 2026-09-14, the day the header shipped. A replay carries its OWN request id, and that id has no usage row -- GET /v1/usage/{it} returns 404, correctly, because a replay reaches no model and is not billed. X-Idempotent-Replay-Of names the generation that WAS billed, and is the only path from the response a caller holds to the charge it corresponds to. Asserted here because the two ids differ: reading the wrong one silently yields a 404 rather than an error.",
+      "$comment": "Recorded live 2026-09-14, the day the header shipped. A replay carries its OWN request id, and that id has no usage row -- GET /v1/usage/{it} returns 404, correctly, because a replay reaches no model and is not billed. X-Idempotent-Replay-Of names the generation that WAS billed, and is the only path from the response a caller holds to the charge it corresponds to. Asserted here because the two ids differ: reading the wrong one silently yields a 404 rather than an error. REQUEST SIDE, added v22: the replay above is asserted from the bytes that come back, which a mock serves whether or not the SDK sent anything. Six cases supplied an idempotency_key and none checked it left the process. A key that never reaches the gateway turns the retry it exists to protect into a second billable generation, and every one of those six passed regardless.",
       "operation": "chat.completions.create",
       "request": {
         "model": "qwen3-0.6b",
@@ -705,12 +709,15 @@
           "meta.request_id": "189da881-ff6f-4cd6-9522-58b02a3a427c",
           "meta.idempotent_replay": true,
           "meta.idempotent_replay_of": "939e2bd4-b3e9-4ee5-9dc5-368631099dfb"
+        },
+        "request_headers": {
+          "Idempotency-Key": "k"
         }
       }
     },
     {
       "id": "stream-idempotent-replay",
-      "$comment": "Re-recorded 2026-09-13, and no longer carries a caution. A streamed replay is now as reliable as a non-streaming one -- measured 6 of 6 with NO wait between calls, against 0 of 6 before the fix. Byte for byte identical to the original, marked Idempotent-Replay, with no second generation and no second charge.",
+      "$comment": "Re-recorded 2026-09-13, and no longer carries a caution. A streamed replay is now as reliable as a non-streaming one -- measured 6 of 6 with NO wait between calls, against 0 of 6 before the fix. Byte for byte identical to the original, marked Idempotent-Replay, with no second generation and no second charge. REQUEST SIDE, added v22: and on a stream it is the half that was documented backwards. Python and Go both carried a comment saying the SDK REFUSES to send a key on a streamed request because the gateway ignores it -- while their own code sent it, and while this case, recorded live, shows the platform honouring it. Nothing in the corpus asked what went out, so the false comment and the true code could sit in one file for as long as nobody read both.",
       "operation": "chat.completions.stream",
       "request": {
         "model": "qwen3-0.6b",
@@ -739,6 +746,9 @@
           "completion_tokens": 16,
           "cache_read_tokens": 14,
           "estimated": true
+        },
+        "request_headers": {
+          "Idempotency-Key": "k"
         }
       }
     },
@@ -1092,7 +1102,7 @@
           "estimated": true
         }
       },
-      "$comment": "A streamed request refused BEFORE the stream begins is reopened, and the reopened stream is the one the caller reads. WHY IT EXISTS: measured on 2026-09-27, counting requests that reached the server for a 429 on POST /v1/chat/completions with stream: true, the three SDKs made 1, 3 and 3 attempts -- Python bypassed the shared retry loop, Go and Rust ran it because nobody had excluded streaming from it. None of the three decisions was taken, and all three documented the opposite. Two were right: a stream can only fail this way before any body byte exists, so nothing was generated and nothing was billed, and reopening is a first generation rather than a second. Agreed with the Mundus team so a fourth SDK inherits the decision instead of the coin flip. Only expressible since PRM-143 (2026-09-27, guide 3.3): before it this arrived as a 200 whose body was nothing but the terminal frame, indistinguishable from a legitimately empty answer, so there was no visible rejection to retry. It is also the only retry available -- the gateway performs none of its own on a streamed request (guide 6.1), so this 429 reaches a caller after one gateway attempt rather than three. TWO EDITS, BOTH DECLARED: the envelope is the recorded rate-limit shape of error-rate-limit-current-envelope with instance, scope and detail moved to the chat endpoint, because what 2026-09-27 measured was the attempt count and not these bytes; and retry_after is 1 rather than a real window, as in its two companions, so four test suites do not sleep through one. requests is the assertion that matters: attempts is what the SDK reports, requests is what the server saw, and only the second would have caught the divergence. The responses are served in order and the last repeats, so an SDK that reopens twice fails on the count rather than running out of fixtures."
+      "$comment": "A streamed request refused BEFORE the stream begins is reopened, and the reopened stream is the one the caller reads. WHY IT EXISTS: measured on 2026-09-27, counting requests that reached the server for a 429 on POST /v1/chat/completions with stream: true, the three SDKs made 1, 3 and 3 attempts -- Python bypassed the shared retry loop, Go and Rust ran it because nobody had excluded streaming from it. None of the three decisions was taken, and all three documented the opposite. Two were right: a stream can only fail this way before any body byte exists, so nothing was generated and nothing was billed, and reopening is a first generation rather than a second. Agreed with the Mundus team so a fourth SDK inherits the decision instead of the coin flip. Only expressible since PRM-143 (2026-09-27, guide 3.3): before it this arrived as a 200 whose body was nothing but the terminal frame, indistinguishable from a legitimately empty answer, so there was no visible rejection to retry. It is also the only retry available -- the gateway performs none of its own on a streamed request (guide 6.1), so this 429 reaches a caller after one gateway attempt rather than three. TWO EDITS, BOTH DECLARED: the envelope is the recorded rate-limit shape of error-rate-limit-current-envelope with instance, scope and detail moved to the chat endpoint, because what 2026-09-27 measured was the attempt count and not these bytes; and retry_after is 1 rather than a real window, as in its two companions, so four test suites do not sleep through one. requests is the assertion that matters: attempts is what the SDK reports, requests is what the server saw, and only the second would have caught the divergence. The responses are served in order and the last repeats, so an SDK that reopens twice fails on the count rather than running out of fixtures. WHAT IT CAUGHT: the fourth SDK, on its first run after taking this case (2026-09-28). It already RECOGNISED a refusal that precedes the stream -- it had a hand-written test asserting exactly that, which passed, correctly, every time -- and it did not REOPEN. Its own tests could not have found it, because they asked the question it already answered. That is the case earning its place, and the reason a behaviour fixed in three languages and pinned in none is worth pinning."
     },
     {
       "id": "stream-not-retried-once-it-has-begun",
@@ -1121,7 +1131,7 @@
         "requests": 1,
         "partial_content": "Hello, wor"
       },
-      "$comment": "The other half of the rule, and the half with no exception. An interruption arrives in band, after the 200 and text/event-stream headers are committed: part of the response was delivered and part was billed, so a repeat is a fresh generation rather than a resumption. A second, healthy stream is queued behind the interrupted one and must never be reached -- an SDK that retried here would pass every assertion of stream-interrupted while billing twice and returning the wrong answer, which is exactly the failure the count catches. Same bytes as stream-interrupted, which pins what the caller sees; this pins how many times it is asked for."
+      "$comment": "The other half of the rule, and the half with no exception. An interruption arrives in band, after the 200 and text/event-stream headers are committed: part of the response was delivered and part was billed, so a repeat is a fresh generation rather than a resumption. A second, healthy stream is queued behind the interrupted one and must never be reached -- an SDK that retried here would pass every assertion of stream-interrupted while billing twice and returning the wrong answer, which is exactly the failure the count catches. Same bytes as stream-interrupted, which pins what the caller sees; this pins how many times it is asked for. WHAT IT CAUGHT: in the fourth SDK (2026-09-28), a deliberately mutated retry of an already-begun stream -- seen by the request count and by nothing else. The healthy stream queued behind the interrupted one means an improper retry SUCCEEDS, so content, chunk count and usage all come out exactly as expected and only the count dissents. That is what the second response is for."
     },
     {
       "id": "stream-rejected-before-it-begins-is-an-error",
@@ -1181,6 +1191,6 @@
   ],
   "$recording": "Every case states in its own $comment whether its bytes were recorded from a live deployment or authored, and an authored one says why it could not be recorded. Only the recorded ones are evidence about the gateway; the rest pin the SDKs to each other. This used to carry a tally -- \"21 of 25 cases\" -- which nothing enforced and every bump was supposed to update. By v20 the file held 42. A count maintained by hand in the document it describes is the one guard a bump edits on its way past, so it is stated as a rule instead, and a test holds every case to it.",
   "$request_counts": "A case asserting expect.requests is asserting a number whose denominator is the SDK's retry policy, so the runner must build its client with that SDK's DEFAULT policy and no per-case override. Python, Go and Rust all do (3 attempts, 1s initial backoff, 60s cap, jitter on), and nothing here said so: a harness that disables retries to keep its error cases fast -- a reasonable thing to want -- sends one request and fails stream-retried-when-rejected-before-it-begins on its own configuration rather than on the SDK. Measured by a fourth SDK whose runner uses no retries at all and who asked before starting. WHAT IT COSTS: a case whose fixture carries Retry-After is bounded by that header, which the policy honours verbatim rather than applying its own backoff -- the 429 here waits ~1s. A retryable case with NO Retry-After falls to the exponential backoff and spends the whole attempt budget, which is why stream-rejected-before-it-begins-is-retryable-when-the-backend-is-unavailable takes ~3s per suite. That is the price of not inventing a backoff signal the gateway does not send.",
-  "$version_note": "Version 21 (2026-09-27): the two cases pinning that a stream rejected before it begins is RECOGNISED as a rejection, which the retry pinned in v20 silently assumed. Removing the status check that precedes SSE parsing passed all 40 cases of v19: the corpus asserted what a recognised rejection leads to and never that it is recognised. Version 20 (2026-09-27): the two stream-retry cases. Three SDKs retried a stream rejected before it began 1, 3 and 3 times and all three documented never retrying; nothing in the corpus had an opinion, so a fourth SDK would have inherited whichever it read. Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame.",
+  "$version_note": "Version 22 (2026-09-28): the request side. Six cases supplied an Idempotency-Key and not one asked whether it was sent; the only assertions about what went OUT were on the token endpoint. An SDK that accepted a key and dropped it passed all six. Version 21 (2026-09-27): the two cases pinning that a stream rejected before it begins is RECOGNISED as a rejection, which the retry pinned in v20 silently assumed. Removing the status check that precedes SSE parsing passed all 40 cases of v19: the corpus asserted what a recognised rejection leads to and never that it is recognised. Version 20 (2026-09-27): the two stream-retry cases. Three SDKs retried a stream rejected before it began 1, 3 and 3 times and all three documented never retrying; nothing in the corpus had an opinion, so a fourth SDK would have inherited whichever it read. Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame.",
   "$token_cases": "Token-endpoint cases. Deliberately a subset of what each SDK tests about tokens: only what is observable by replaying bytes belongs here. The timing and concurrency rules -- refresh-ahead, single-flight, lifetime clamping -- cannot be expressed against a recorded exchange and stay per-language. What is here is the shape that goes out and the two envelopes that come back."
 }
