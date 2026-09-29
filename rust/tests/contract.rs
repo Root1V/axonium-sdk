@@ -94,7 +94,12 @@ async fn assert_request_side(server: &MockServer, case: &Value) {
     let absent = case["expect"]
         .get("request_headers_absent")
         .and_then(Value::as_array);
-    if want.is_none() && absent.is_none() {
+    // By name with no value, for a header whose value belongs to the harness: an Authorization
+    // bearer is each runner's own test token.
+    let present = case["expect"]
+        .get("request_headers_present")
+        .and_then(Value::as_array);
+    if want.is_none() && absent.is_none() && present.is_none() {
         return;
     }
 
@@ -111,6 +116,10 @@ async fn assert_request_side(server: &MockServer, case: &Value) {
     for (name, value) in want.into_iter().flatten() {
         let sent = last.headers.get(name.as_str()).map(|v| v.to_str().unwrap());
         assert_eq!(sent, value.as_str(), "{id}: header {name}");
+    }
+    for name in present.into_iter().flatten() {
+        let name = name.as_str().unwrap_or_default();
+        assert!(last.headers.contains_key(name), "{id}: did not send {name}");
     }
     for name in absent.into_iter().flatten() {
         let name = name.as_str().unwrap_or_default();
