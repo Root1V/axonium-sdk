@@ -225,10 +225,27 @@ class TestTokenTransport:
         assert SECRET not in str(request.headers)
 
     @respx.mock
-    def test_the_catalog_call_sends_no_credential_at_all(
+    def test_the_catalog_call_carries_a_bearer_token_and_never_the_secret(
         self, secret_config: dict[str, str]
     ) -> None:
-        token_route = respx.post(AUTH_URL)
+        """The catalog is authenticated, and what it sends is the token and nothing else.
+
+        This test used to assert the opposite -- that the call sent no credential at all -- and it
+        was right at the time: the platform documented ``GET /v1/models`` as the one public
+        endpoint, so sending a credential there was spending one where none was wanted. The
+        platform closed it without announcing it, and the assertion became a test pinning a
+        failure: ``models.list()`` returned ``MissingCredentialsError`` from a released version
+        while this stayed green.
+
+        What it guards now is the part that never depended on the endpoint being public: the
+        client secret goes to the token endpoint and nowhere else. A bearer token on the wire is
+        the design; a client secret on the wire would be the bug.
+        """
+        token_route = respx.post(AUTH_URL).mock(
+            return_value=httpx.Response(
+                200, json={"access_token": "t", "token_type": "Bearer", "expires_in": 300}
+            )
+        )
         route = respx.get(CATALOG_URL).mock(
             return_value=httpx.Response(200, json={"object": "list", "data": []})
         )
@@ -236,8 +253,14 @@ class TestTokenTransport:
         with Axonium(**secret_config) as client:
             client.models.list()
 
-        assert "Authorization" not in route.calls.last.request.headers
-        assert not token_route.called, "a public endpoint must not cost a token"
+        headers = route.calls.last.request.headers
+        assert headers["Authorization"] == "Bearer t"
+        assert token_route.called, "the catalog needs a token like every other endpoint"
+
+        sent = " ".join(f"{name}: {value}" for name, value in headers.items())
+        assert secret_config["client_secret"] not in sent, (
+            "the client secret reached an inference endpoint; it belongs only to the token request"
+        )
 
 
 class TestTransportHardening:
