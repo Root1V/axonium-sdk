@@ -482,20 +482,20 @@ class TestManifestIntegrity:
     def test_no_meta_assertion_outruns_its_recording(self) -> None:
         """An expectation the recorded bytes cannot produce is fabricated, however true it sounds.
 
-        ``stream-idempotent-replay`` captured only ``Idempotent-Replay``, where its non-streaming
-        twin captured ``X-Request-ID`` and ``X-Idempotent-Replay-Of`` as well. So asserting
-        ``meta.idempotent_replay_of`` there would fail -- correctly, against an SDK doing the right
-        thing -- and the obvious repair is to add the header to the case, which turns a thin
-        recording into an invented one. The integration guide says the gateway sends that header on
-        a replay and that streaming replays work, so the expectation *reads* true; what is missing
-        is anyone having measured it on a stream.
+        For a year the corpus had one live example: ``stream-idempotent-replay`` captured only
+        ``Idempotent-Replay``, so asserting ``meta.idempotent_replay_of`` there failed -- correctly,
+        against an SDK doing the right thing -- and the obvious repair was to add the header to the
+        case, which turns a thin recording into an invented one. That gap is now closed by a
+        measurement rather than by a repair, which is the only way it could be. The check stays for
+        the next thin recording.
 
         **What this cannot catch, stated rather than implied:** adding the header to the case *and*
         asserting it. From inside the repository a recorded header and an invented one are the same
         bytes in the same file, and no test can tell them apart. So this closes the accidental path
-        -- the assertion arrives, the case fails, and the failure says "capture it before asserting
-        it" rather than looking like an SDK bug -- and :meth:`test_a_declared_gap_stays_declared`
-        stands in the deliberate one.
+        only -- the assertion arrives, the case fails, and the failure says "capture it before
+        asserting it" rather than looking like an SDK bug. A tripwire stood in the deliberate path
+        for the one gap the corpus had declared; it was deleted when that gap was measured and
+        closed, which is what it was written to be.
 
         Restricted to ``ok`` and ``stream`` cases: on an error the envelope carries ``request_id``
         and ``trace_id`` in the *body*, and the header is the fallback (AXO-108), so a body-only
@@ -524,41 +524,6 @@ class TestManifestIntegrity:
                     f"{case['id']} asserts {path}, which is read from {header} -- a header these "
                     f"recorded bytes do not carry. Capture it before asserting it."
                 )
-
-    def test_a_declared_gap_stays_declared(self) -> None:
-        """A tripwire on the one gap the corpus declares, because fabricating past it is cheap.
-
-        ``stream-idempotent-replay``'s comment says ``X-Idempotent-Replay-Of`` and ``X-Request-ID``
-        were never captured for a streamed replay, and that they must not be asserted without a new
-        capture. The general check above cannot hold that: adding the header and the assertion
-        together is green, and nothing in a repository can distinguish bytes someone recorded from
-        bytes someone typed.
-
-        So this asserts the gap is still a gap. It is meant to be *removed*, not satisfied: whoever
-        captures those headers for real deletes this test in the same commit, which is a deliberate
-        act with a diff that says what happened. Filling the gap by typing the header trips it
-        instead, and the message is the argument.
-
-        The guide documents both headers on a replay and says streamed replays work, so the
-        expectation reads true -- which is what makes this worth guarding rather than trusting.
-        Open with the platform team; nothing here can settle it.
-        """
-        case = next(c for c in CASES if c["id"] == "stream-idempotent-replay")
-        never_captured = ("X-Idempotent-Replay-Of", "X-Request-ID")
-
-        recorded = {name.lower() for name in case["response"].get("headers", {})}
-        asserted = set(case["expect"].get("fields", {}))
-
-        for header in never_captured:
-            assert header.lower() not in recorded, (
-                f"{header} appears in this case's recorded headers, and the case says it was never "
-                f"captured for a streamed replay. If you measured it, say so in the $comment and "
-                f"delete this test. If you typed it, the corpus claims a measurement nobody made."
-            )
-        for path in ("meta.idempotent_replay_of", "meta.request_id"):
-            assert path not in asserted, (
-                f"{path} is asserted on a case whose bytes cannot produce it -- see its $comment."
-            )
 
     def test_a_stream_case_asserts_fields_only_under_meta(self) -> None:
         """The streaming branch resolves ``fields`` against ``meta``, so a case stops there.
