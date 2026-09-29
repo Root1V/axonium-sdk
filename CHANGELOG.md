@@ -7,6 +7,30 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+The gap the corpus declared is closed by a measurement, not by a repair.
+
+`stream-idempotent-replay` is re-recorded from a complete capture: two streamed calls with the same
+`Idempotency-Key`, the second one's bytes and **all** of its headers. So
+`meta.idempotent_replay_of` and `meta.request_id` are now asserted, because they were finally
+measured on a stream rather than assumed from a guide sentence that happened to read true. A replay
+carries its own `request_id`, distinct from the billed one, and the billed one is what
+`X-Idempotent-Replay-Of` names — confirmed against `/v1/usage` in the same session, where the
+original id returns `200` and the replay's own returns `404`. There is no streaming/non-streaming
+asymmetry, which was the open question.
+
+Every expectation was derived by running this SDK's own accumulator over the new bytes rather than
+carried over from the old case, and the two bodies were compared before recording.
+
+**The complete headers say two things a partial capture hid.** A replay names **no instance** —
+neither `X-Prometheus-Instance` nor `X-Prometheus-Instance-Id`, where the original carried both,
+which is correct because no replica served it. And, undocumented anywhere in the guide, **a replay
+consumes request budget**: `remaining-requests` goes 59 → 58 across the two calls. Not generated, not
+billed, and still counted against the RPM window. The case asserts `58`, so the number itself is the
+evidence, and the question is with the platform team.
+
+The tripwire that stood guard over the gap is deleted, which is what it was written for. The general
+check it backstopped stays: no `meta.*` assertion may outrun the headers its case recorded.
+
 A declared gap in the corpus is now an enforced one.
 
 `stream-idempotent-replay` says `X-Idempotent-Replay-Of` and `X-Request-ID` were never captured for
@@ -544,6 +568,30 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+The gap the corpus declared is closed by a measurement, not by a repair.
+
+`stream-idempotent-replay` is re-recorded from a complete capture: two streamed calls with the same
+`Idempotency-Key`, the second one's bytes and **all** of its headers. So
+`meta.idempotent_replay_of` and `meta.request_id` are now asserted, because they were finally
+measured on a stream rather than assumed from a guide sentence that happened to read true. A replay
+carries its own `request_id`, distinct from the billed one, and the billed one is what
+`X-Idempotent-Replay-Of` names — confirmed against `/v1/usage` in the same session, where the
+original id returns `200` and the replay's own returns `404`. There is no streaming/non-streaming
+asymmetry, which was the open question.
+
+Every expectation was derived by running this SDK's own accumulator over the new bytes rather than
+carried over from the old case, and the two bodies were compared before recording.
+
+**The complete headers say two things a partial capture hid.** A replay names **no instance** —
+neither `X-Prometheus-Instance` nor `X-Prometheus-Instance-Id`, where the original carried both,
+which is correct because no replica served it. And, undocumented anywhere in the guide, **a replay
+consumes request budget**: `remaining-requests` goes 59 → 58 across the two calls. Not generated, not
+billed, and still counted against the RPM window. The case asserts `58`, so the number itself is the
+evidence, and the question is with the platform team.
+
+The tripwire that stood guard over the gap is deleted, which is what it was written for. The general
+check it backstopped stays: no `meta.*` assertion may outrun the headers its case recorded.
+
 A declared gap in the corpus is now an enforced one.
 
 `stream-idempotent-replay` says `X-Idempotent-Replay-Of` and `X-Request-ID` were never captured for
@@ -971,6 +1019,30 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+The gap the corpus declared is closed by a measurement, not by a repair.
+
+`stream-idempotent-replay` is re-recorded from a complete capture: two streamed calls with the same
+`Idempotency-Key`, the second one's bytes and **all** of its headers. So
+`meta.idempotent_replay_of` and `meta.request_id` are now asserted, because they were finally
+measured on a stream rather than assumed from a guide sentence that happened to read true. A replay
+carries its own `request_id`, distinct from the billed one, and the billed one is what
+`X-Idempotent-Replay-Of` names — confirmed against `/v1/usage` in the same session, where the
+original id returns `200` and the replay's own returns `404`. There is no streaming/non-streaming
+asymmetry, which was the open question.
+
+Every expectation was derived by running this SDK's own accumulator over the new bytes rather than
+carried over from the old case, and the two bodies were compared before recording.
+
+**The complete headers say two things a partial capture hid.** A replay names **no instance** —
+neither `X-Prometheus-Instance` nor `X-Prometheus-Instance-Id`, where the original carried both,
+which is correct because no replica served it. And, undocumented anywhere in the guide, **a replay
+consumes request budget**: `remaining-requests` goes 59 → 58 across the two calls. Not generated, not
+billed, and still counted against the RPM window. The case asserts `58`, so the number itself is the
+evidence, and the question is with the platform team.
+
+The tripwire that stood guard over the gap is deleted, which is what it was written for. The general
+check it backstopped stays: no `meta.*` assertion may outrun the headers its case recorded.
 
 A declared gap in the corpus is now an enforced one.
 
