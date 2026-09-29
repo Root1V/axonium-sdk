@@ -7,6 +7,29 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+A stream case can assert a field.
+
+Nine of them could not. The streaming branch of all three runners read the stream-shaped keys --
+`content`, `chunks`, `usage`, `tool_calls` -- and ignored `fields` in silence, so nothing about a
+stream's `meta` was expressible: not the correlation ids, not the rate-limit budget, and not the two
+idempotent-replay flags that `chat-idempotent-replay` has pinned since the day it was recorded. A
+streamed replay that lost its entire `meta` passed all 44 cases.
+
+Manifest v23 adds `meta.idempotent_replay` to `stream-idempotent-replay`, and the three runners
+resolve `fields` on a streamed case against `meta` and nothing else -- `content`, `chunks`, `usage`
+and `tool_calls` each already have a key of their own, and a second way to say the same thing is how
+two ways eventually disagree. A test holds that restriction rather than a comment.
+
+**What is still missing there is a recording, not an assertion.** This case captured only
+`Idempotent-Replay`, where its non-streaming twin captured `X-Request-ID` and
+`X-Idempotent-Replay-Of` too, so `meta.idempotent_replay_of` and `meta.request_id` are deliberately
+*not* asserted: the headers are absent from these bytes, an SDK reporting them empty is correct, and
+an expectation for them would be invented. The gap is declared in the case rather than left to be
+discovered, because `idempotent_replay_of` is the only id that carries a usage row -- the replay's
+own id does not.
+
+Mutation-tested in all three: a stream that loses its `meta` now fails, where it used to pass.
+
 The corpus now checks what the SDK **sent**, not only what it received.
 Six cases supplied an `Idempotency-Key` and not one asked whether it was sent. The only assertions
 about what went **out** were on the token endpoint, so an SDK that accepted a key and dropped it
@@ -499,6 +522,29 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+A stream case can assert a field.
+
+Nine of them could not. The streaming branch of all three runners read the stream-shaped keys --
+`content`, `chunks`, `usage`, `tool_calls` -- and ignored `fields` in silence, so nothing about a
+stream's `meta` was expressible: not the correlation ids, not the rate-limit budget, and not the two
+idempotent-replay flags that `chat-idempotent-replay` has pinned since the day it was recorded. A
+streamed replay that lost its entire `meta` passed all 44 cases.
+
+Manifest v23 adds `meta.idempotent_replay` to `stream-idempotent-replay`, and the three runners
+resolve `fields` on a streamed case against `meta` and nothing else -- `content`, `chunks`, `usage`
+and `tool_calls` each already have a key of their own, and a second way to say the same thing is how
+two ways eventually disagree. A test holds that restriction rather than a comment.
+
+**What is still missing there is a recording, not an assertion.** This case captured only
+`Idempotent-Replay`, where its non-streaming twin captured `X-Request-ID` and
+`X-Idempotent-Replay-Of` too, so `meta.idempotent_replay_of` and `meta.request_id` are deliberately
+*not* asserted: the headers are absent from these bytes, an SDK reporting them empty is correct, and
+an expectation for them would be invented. The gap is declared in the case rather than left to be
+discovered, because `idempotent_replay_of` is the only id that carries a usage row -- the replay's
+own id does not.
+
+Mutation-tested in all three: a stream that loses its `meta` now fails, where it used to pass.
+
 The corpus now checks what the SDK **sent**, not only what it received.
 Six cases supplied an `Idempotency-Key` and not one asked whether it was sent. The only assertions
 about what went **out** were on the token endpoint, so an SDK that accepted a key and dropped it
@@ -881,6 +927,29 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+A stream case can assert a field.
+
+Nine of them could not. The streaming branch of all three runners read the stream-shaped keys --
+`content`, `chunks`, `usage`, `tool_calls` -- and ignored `fields` in silence, so nothing about a
+stream's `meta` was expressible: not the correlation ids, not the rate-limit budget, and not the two
+idempotent-replay flags that `chat-idempotent-replay` has pinned since the day it was recorded. A
+streamed replay that lost its entire `meta` passed all 44 cases.
+
+Manifest v23 adds `meta.idempotent_replay` to `stream-idempotent-replay`, and the three runners
+resolve `fields` on a streamed case against `meta` and nothing else -- `content`, `chunks`, `usage`
+and `tool_calls` each already have a key of their own, and a second way to say the same thing is how
+two ways eventually disagree. A test holds that restriction rather than a comment.
+
+**What is still missing there is a recording, not an assertion.** This case captured only
+`Idempotent-Replay`, where its non-streaming twin captured `X-Request-ID` and
+`X-Idempotent-Replay-Of` too, so `meta.idempotent_replay_of` and `meta.request_id` are deliberately
+*not* asserted: the headers are absent from these bytes, an SDK reporting them empty is correct, and
+an expectation for them would be invented. The gap is declared in the case rather than left to be
+discovered, because `idempotent_replay_of` is the only id that carries a usage row -- the replay's
+own id does not.
+
+Mutation-tested in all three: a stream that loses its `meta` now fails, where it used to pass.
 
 The corpus now checks what the SDK **sent**, not only what it received.
 Six cases supplied an `Idempotency-Key` and not one asked whether it was sent. The only assertions
