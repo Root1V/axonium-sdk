@@ -65,8 +65,11 @@ impl ModelList {
 }
 
 impl Client {
-    /// The full public catalog. Needs no authentication, so it works before any credential is
-    /// configured -- useful for checking connectivity.
+    /// The full catalog. Authenticated like every other endpoint.
+    ///
+    /// This doc used to say it needed no authentication. That was true of the platform and never
+    /// true of this code, which has always sent the token -- and the accident is what kept it
+    /// working when the platform closed the endpoint without announcing it.
     pub async fn models(&self) -> Result<ModelList> {
         self.catalog_request("/v1/models").await
     }

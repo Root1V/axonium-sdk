@@ -98,8 +98,12 @@ type ModelsService struct {
 	cached bool
 }
 
-// List returns the full public catalog. This endpoint needs no authentication, so it works before
-// any credential is configured -- useful for checking connectivity.
+// List returns the full catalog. It is authenticated like every other endpoint.
+//
+// This comment used to say it needed no authentication, which was true of the platform and never
+// true of this code -- doJSON has always sent the token. The platform closed the endpoint without
+// announcing it, and the accident is what kept this working while Python, whose comment was
+// honest, started returning MissingCredentialsError from a released version.
 func (s *ModelsService) List(ctx context.Context) (*ModelList, error) {
 	var out ModelList
 	meta, err := s.client.doJSON(ctx, http.MethodGet, "/v1/models", nil, &out, "", "", "")

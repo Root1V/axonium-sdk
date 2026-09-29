@@ -7,6 +7,35 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+**`GET /v1/models` stopped being public, and this SDK was the one that believed the documentation.**
+
+The platform closed the endpoint without announcing it. Measured against a live deployment:
+
+    GET /v1/models  with no token  ->  401 missing-credentials
+
+Python passed `authenticate=False` there, because the guide said it was the one public endpoint and
+this SDK did what the guide said. `client.models.list()` — the simplest call it has — returned
+`MissingCredentialsError` from a released version. Go, Rust and Swift survived by accident: their
+comments made the same claim while their code sent the token anyway.
+
+Fixed, and the false comments in the other three corrected with it, along with three lines of
+`docs/02-calls.md`.
+
+**Three tests were pinning the broken behaviour**, one of them a security test, and all three were
+right when they were written:
+
+    test_the_catalog_call_sends_no_credential_at_all
+    test_listing_the_public_catalog_sends_no_token [sync] [async]
+
+They asserted that listing the catalog costs no credential, which was the correct property while
+the endpoint was public — spending a token where none is wanted is a real thing to guard against.
+They went on passing while the call returned 401 in the field. The security test now guards what
+never depended on the endpoint being public: the client secret goes to the token request and
+nowhere else, and a bearer token on the wire is the design rather than the bug.
+
+The vendored guide still says otherwise at its line 647. That is a question for the platform team,
+not something to paper over here.
+
 The gap the corpus declared is closed by a measurement, not by a repair.
 
 `stream-idempotent-replay` is re-recorded from a complete capture: two streamed calls with the same
@@ -568,6 +597,35 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+**`GET /v1/models` stopped being public, and this SDK was the one that believed the documentation.**
+
+The platform closed the endpoint without announcing it. Measured against a live deployment:
+
+    GET /v1/models  with no token  ->  401 missing-credentials
+
+Python passed `authenticate=False` there, because the guide said it was the one public endpoint and
+this SDK did what the guide said. `client.models.list()` — the simplest call it has — returned
+`MissingCredentialsError` from a released version. Go, Rust and Swift survived by accident: their
+comments made the same claim while their code sent the token anyway.
+
+Fixed, and the false comments in the other three corrected with it, along with three lines of
+`docs/02-calls.md`.
+
+**Three tests were pinning the broken behaviour**, one of them a security test, and all three were
+right when they were written:
+
+    test_the_catalog_call_sends_no_credential_at_all
+    test_listing_the_public_catalog_sends_no_token [sync] [async]
+
+They asserted that listing the catalog costs no credential, which was the correct property while
+the endpoint was public — spending a token where none is wanted is a real thing to guard against.
+They went on passing while the call returned 401 in the field. The security test now guards what
+never depended on the endpoint being public: the client secret goes to the token request and
+nowhere else, and a bearer token on the wire is the design rather than the bug.
+
+The vendored guide still says otherwise at its line 647. That is a question for the platform team,
+not something to paper over here.
+
 The gap the corpus declared is closed by a measurement, not by a repair.
 
 `stream-idempotent-replay` is re-recorded from a complete capture: two streamed calls with the same
@@ -1019,6 +1077,35 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+**`GET /v1/models` stopped being public, and this SDK was the one that believed the documentation.**
+
+The platform closed the endpoint without announcing it. Measured against a live deployment:
+
+    GET /v1/models  with no token  ->  401 missing-credentials
+
+Python passed `authenticate=False` there, because the guide said it was the one public endpoint and
+this SDK did what the guide said. `client.models.list()` — the simplest call it has — returned
+`MissingCredentialsError` from a released version. Go, Rust and Swift survived by accident: their
+comments made the same claim while their code sent the token anyway.
+
+Fixed, and the false comments in the other three corrected with it, along with three lines of
+`docs/02-calls.md`.
+
+**Three tests were pinning the broken behaviour**, one of them a security test, and all three were
+right when they were written:
+
+    test_the_catalog_call_sends_no_credential_at_all
+    test_listing_the_public_catalog_sends_no_token [sync] [async]
+
+They asserted that listing the catalog costs no credential, which was the correct property while
+the endpoint was public — spending a token where none is wanted is a real thing to guard against.
+They went on passing while the call returned 401 in the field. The security test now guards what
+never depended on the endpoint being public: the client secret goes to the token request and
+nowhere else, and a bearer token on the wire is the design rather than the bug.
+
+The vendored guide still says otherwise at its line 647. That is a question for the platform team,
+not something to paper over here.
 
 The gap the corpus declared is closed by a measurement, not by a repair.
 

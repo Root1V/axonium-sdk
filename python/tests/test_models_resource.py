@@ -124,17 +124,22 @@ class TestCatalog:
         assert models.data[0].model_dump()["max_batch_size"] == 4
 
     @respx.mock
-    async def test_listing_the_public_catalog_sends_no_token(
+    async def test_listing_the_catalog_is_authenticated_like_everything_else(
         self, caller: Caller, config_kwargs: dict[str, str]
     ) -> None:
-        # The endpoint is public, so listing it must not cost an authentication round trip.
-        token_route = respx.post(AUTH_URL)
+        # This asserted the opposite until 2026-09-29, and was right when written: the platform
+        # documented GET /v1/models as its one public endpoint. It closed without announcing it,
+        # the vendored guide still said otherwise, and this test went on passing while
+        # models.list() returned MissingCredentialsError against a live deployment -- a test
+        # pinning the very behaviour that had broken.
+        # The token route comes from the autouse fixture; re-registering it here would replace
+        # that mock with an empty 200 and fail on the token rather than on the catalog.
         catalog = respx.get(CATALOG_URL).mock(return_value=httpx.Response(200, json=CATALOG_BODY))
 
         await caller.models_list(**config_kwargs)
 
-        assert "Authorization" not in catalog.calls.last.request.headers
-        assert not token_route.called
+        # The bearer header is the assertion: it can only be there if a token was obtained.
+        assert catalog.calls.last.request.headers["Authorization"] == "Bearer t"
 
 
 class TestMine:

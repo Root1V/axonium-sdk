@@ -205,17 +205,17 @@ sent, never into the results, which is what keeps a reordered result attributabl
 ## The catalog
 
 ```python
-client.models.list()    # everything the deployment serves; no token needed
+client.models.list()    # everything the deployment serves
 client.models.mine()    # the subset your token is scoped to, cached
 ```
 
 ```go
-client.Models.List(ctx)   // everything the deployment serves; no token needed
+client.Models.List(ctx)   // everything the deployment serves
 client.Models.Mine(ctx)   // the subset your token is scoped to, cached
 ```
 
 ```rust
-client.models().await?;        // everything the deployment serves; no token needed
+client.models().await?;        // everything the deployment serves
 client.models_mine().await?;   // the subset your token is scoped to, cached
 ```
 
