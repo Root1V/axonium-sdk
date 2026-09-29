@@ -40,6 +40,18 @@ ENDPOINTS = {
     "token.fetch": AUTH_URL,
 }
 
+#: Which recorded header each ``meta`` field is read out of. ``waited_s`` and ``attempts`` are
+#: absent on purpose: they are the retry loop's own accounting, not something the gateway sends,
+#: so no recording could source them.
+META_SOURCES = {
+    "request_id": "X-Request-ID",
+    "trace_id": "X-Trace-ID",
+    "instance": "X-Prometheus-Instance",
+    "instance_id": "X-Prometheus-Instance-Id",
+    "idempotent_replay": "Idempotent-Replay",
+    "idempotent_replay_of": "X-Idempotent-Replay-Of",
+}
+
 CASES = MANIFEST["cases"]
 CASE_IDS = [case["id"] for case in CASES]
 
@@ -466,6 +478,87 @@ class TestManifestIntegrity:
         """
         silent = [case["id"] for case in CASES if not case.get("$comment", "").strip()]
         assert not silent, f"cases that do not say where their bytes came from: {silent}"
+
+    def test_no_meta_assertion_outruns_its_recording(self) -> None:
+        """An expectation the recorded bytes cannot produce is fabricated, however true it sounds.
+
+        ``stream-idempotent-replay`` captured only ``Idempotent-Replay``, where its non-streaming
+        twin captured ``X-Request-ID`` and ``X-Idempotent-Replay-Of`` as well. So asserting
+        ``meta.idempotent_replay_of`` there would fail -- correctly, against an SDK doing the right
+        thing -- and the obvious repair is to add the header to the case, which turns a thin
+        recording into an invented one. The integration guide says the gateway sends that header on
+        a replay and that streaming replays work, so the expectation *reads* true; what is missing
+        is anyone having measured it on a stream.
+
+        **What this cannot catch, stated rather than implied:** adding the header to the case *and*
+        asserting it. From inside the repository a recorded header and an invented one are the same
+        bytes in the same file, and no test can tell them apart. So this closes the accidental path
+        -- the assertion arrives, the case fails, and the failure says "capture it before asserting
+        it" rather than looking like an SDK bug -- and :meth:`test_a_declared_gap_stays_declared`
+        stands in the deliberate one.
+
+        Restricted to ``ok`` and ``stream`` cases: on an error the envelope carries ``request_id``
+        and ``trace_id`` in the *body*, and the header is the fallback (AXO-108), so a body-only
+        recording is legitimate there.
+        """
+        for case in CASES:
+            kind = case["expect"]["kind"]
+            if kind != "ok" and not kind.startswith("stream"):
+                continue
+
+            recorded = {
+                name.lower() for spec in responses_for(case) for name in spec.get("headers", {})
+            }
+            for path in case["expect"].get("fields", {}):
+                if not path.startswith("meta."):
+                    continue
+                field = path[len("meta.") :]
+                if field.startswith("rate_limit."):
+                    tail = field.split(".", 1)[1]
+                    header = "X-RateLimit-" + "-".join(w.capitalize() for w in tail.split("_"))
+                else:
+                    header = META_SOURCES.get(field, "")
+                if not header:
+                    continue
+                assert header.lower() in recorded, (
+                    f"{case['id']} asserts {path}, which is read from {header} -- a header these "
+                    f"recorded bytes do not carry. Capture it before asserting it."
+                )
+
+    def test_a_declared_gap_stays_declared(self) -> None:
+        """A tripwire on the one gap the corpus declares, because fabricating past it is cheap.
+
+        ``stream-idempotent-replay``'s comment says ``X-Idempotent-Replay-Of`` and ``X-Request-ID``
+        were never captured for a streamed replay, and that they must not be asserted without a new
+        capture. The general check above cannot hold that: adding the header and the assertion
+        together is green, and nothing in a repository can distinguish bytes someone recorded from
+        bytes someone typed.
+
+        So this asserts the gap is still a gap. It is meant to be *removed*, not satisfied: whoever
+        captures those headers for real deletes this test in the same commit, which is a deliberate
+        act with a diff that says what happened. Filling the gap by typing the header trips it
+        instead, and the message is the argument.
+
+        The guide documents both headers on a replay and says streamed replays work, so the
+        expectation reads true -- which is what makes this worth guarding rather than trusting.
+        Open with the platform team; nothing here can settle it.
+        """
+        case = next(c for c in CASES if c["id"] == "stream-idempotent-replay")
+        never_captured = ("X-Idempotent-Replay-Of", "X-Request-ID")
+
+        recorded = {name.lower() for name in case["response"].get("headers", {})}
+        asserted = set(case["expect"].get("fields", {}))
+
+        for header in never_captured:
+            assert header.lower() not in recorded, (
+                f"{header} appears in this case's recorded headers, and the case says it was never "
+                f"captured for a streamed replay. If you measured it, say so in the $comment and "
+                f"delete this test. If you typed it, the corpus claims a measurement nobody made."
+            )
+        for path in ("meta.idempotent_replay_of", "meta.request_id"):
+            assert path not in asserted, (
+                f"{path} is asserted on a case whose bytes cannot produce it -- see its $comment."
+            )
 
     def test_a_stream_case_asserts_fields_only_under_meta(self) -> None:
         """The streaming branch resolves ``fields`` against ``meta``, so a case stops there.
