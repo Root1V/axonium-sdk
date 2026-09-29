@@ -66,6 +66,9 @@ type contractCase struct {
 		// cases could supply an Idempotency-Key and none ask whether it left the process.
 		RequestHeaders       map[string]string `json:"request_headers"`
 		RequestHeadersAbsent []string          `json:"request_headers_absent"`
+		// RequestHeadersPresent is asserted by name with no value, for a header whose value belongs
+		// to the harness: an Authorization bearer is each runner's own test token.
+		RequestHeadersPresent []string `json:"request_headers_present"`
 	} `json:"expect"`
 }
 
@@ -190,7 +193,8 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 			t.Errorf("%d requests reached the server, want %d", got, *c.Expect.Requests)
 		}
 
-		if len(c.Expect.RequestHeaders) == 0 && len(c.Expect.RequestHeadersAbsent) == 0 {
+		if len(c.Expect.RequestHeaders) == 0 && len(c.Expect.RequestHeadersAbsent) == 0 &&
+			len(c.Expect.RequestHeadersPresent) == 0 {
 			return
 		}
 		if headers == nil {
@@ -199,6 +203,11 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 		for name, want := range c.Expect.RequestHeaders {
 			if sent := headers.Get(name); sent != want {
 				t.Errorf("header %s: sent %q, want %q", name, sent, want)
+			}
+		}
+		for _, name := range c.Expect.RequestHeadersPresent {
+			if _, present := headers[http.CanonicalHeaderKey(name)]; !present {
+				t.Errorf("did not send %s", name)
 			}
 		}
 		for _, name := range c.Expect.RequestHeadersAbsent {

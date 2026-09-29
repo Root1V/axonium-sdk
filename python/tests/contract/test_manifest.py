@@ -262,10 +262,13 @@ def assert_request_side(route: Any, case: dict[str, Any]) -> None:
     ``idempotency_key`` and not one ask whether it left the process -- and a dropped key turns the
     retry it exists to protect into a second billable generation. ``request_headers_absent`` is the
     other direction, and not symmetry for its own sake: a header the SDK invents is a decision the
-    caller never made, silently.
+    caller never made, silently. ``request_headers_present`` is the third form, by name and with no
+    value, for a header whose value belongs to the harness: an ``Authorization`` bearer is each
+    runner's own test token.
     """
     expect = case["expect"]
-    if not ({"request_headers", "request_headers_absent"} & expect.keys()):
+    forms = {"request_headers", "request_headers_absent", "request_headers_present"}
+    if not (forms & expect.keys()):
         return
 
     assert route.calls, f"{case['id']}: no request reached the route to inspect"
@@ -275,6 +278,10 @@ def assert_request_side(route: Any, case: dict[str, Any]) -> None:
         assert sent.get(name) == want, (
             f"{case['id']}: header {name} was {sent.get(name)!r}, expected {want!r}"
         )
+    # By name, with no value: an Authorization bearer carries each runner's own test token, so
+    # pinning the value would assert about the harness rather than about the SDK.
+    for name in expect.get("request_headers_present", []):
+        assert name in sent, f"{case['id']}: did not send {name}"
     for name in expect.get("request_headers_absent", []):
         assert name not in sent, (
             f"{case['id']}: sent {name}={sent.get(name)!r}, which the caller never asked for"

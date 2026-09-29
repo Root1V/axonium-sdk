@@ -7,6 +7,23 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+The catalog call carrying a credential is pinned by the corpus, not just fixed in the code.
+
+`GET /v1/models` stopped being public on 2026-09-29 and the fix landed in four SDKs — and in zero
+contract cases. That is the shape this corpus exists to prevent, for the fourth time: a behaviour
+corrected in N languages and held in none, so the fifth SDK inherits nothing.
+
+Manifest v25 asserts it on `catalog-list`, through a third form of header assertion:
+`request_headers_present`, by name and with no value. The value could not be pinned — an
+`Authorization` bearer is each runner's own test token, so asserting it would assert about the
+harness rather than about the SDK. It joins `request_headers`, which compares a value, and
+`request_headers_absent`, which forbids one.
+
+Mutation-tested in both directions of the released break: restoring `authenticate=False` on the sync
+`list()` fails `catalog-list` sync, and on the async one fails async. That flag is exactly what
+shipped in `1.0.0rc5`, where `models.list()` returned `MissingCredentialsError` against the closed
+endpoint — the corpus now refuses it.
+
 **`GET /v1/models` stopped being public, and this SDK was the one that believed the documentation.**
 
 The platform closed the endpoint without announcing it. Measured against a live deployment:
@@ -597,6 +614,23 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+The catalog call carrying a credential is pinned by the corpus, not just fixed in the code.
+
+`GET /v1/models` stopped being public on 2026-09-29 and the fix landed in four SDKs — and in zero
+contract cases. That is the shape this corpus exists to prevent, for the fourth time: a behaviour
+corrected in N languages and held in none, so the fifth SDK inherits nothing.
+
+Manifest v25 asserts it on `catalog-list`, through a third form of header assertion:
+`request_headers_present`, by name and with no value. The value could not be pinned — an
+`Authorization` bearer is each runner's own test token, so asserting it would assert about the
+harness rather than about the SDK. It joins `request_headers`, which compares a value, and
+`request_headers_absent`, which forbids one.
+
+Mutation-tested in both directions of the released break: restoring `authenticate=False` on the sync
+`list()` fails `catalog-list` sync, and on the async one fails async. That flag is exactly what
+shipped in `1.0.0rc5`, where `models.list()` returned `MissingCredentialsError` against the closed
+endpoint — the corpus now refuses it.
+
 **`GET /v1/models` stopped being public, and this SDK was the one that believed the documentation.**
 
 The platform closed the endpoint without announcing it. Measured against a live deployment:
@@ -1077,6 +1111,23 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+The catalog call carrying a credential is pinned by the corpus, not just fixed in the code.
+
+`GET /v1/models` stopped being public on 2026-09-29 and the fix landed in four SDKs — and in zero
+contract cases. That is the shape this corpus exists to prevent, for the fourth time: a behaviour
+corrected in N languages and held in none, so the fifth SDK inherits nothing.
+
+Manifest v25 asserts it on `catalog-list`, through a third form of header assertion:
+`request_headers_present`, by name and with no value. The value could not be pinned — an
+`Authorization` bearer is each runner's own test token, so asserting it would assert about the
+harness rather than about the SDK. It joins `request_headers`, which compares a value, and
+`request_headers_absent`, which forbids one.
+
+Mutation-tested in both directions of the released break: restoring `authenticate=False` on the sync
+`list()` fails `catalog-list` sync, and on the async one fails async. That flag is exactly what
+shipped in `1.0.0rc5`, where `models.list()` returned `MissingCredentialsError` against the closed
+endpoint — the corpus now refuses it.
 
 **`GET /v1/models` stopped being public, and this SDK was the one that believed the documentation.**
 
