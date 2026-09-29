@@ -222,6 +222,27 @@ def assert_error(error: APIError, case: dict[str, Any]) -> None:
         assert_fields(error, expect["fields"], cid)
 
 
+def assert_stream_fields(stream: Any, case: dict[str, Any]) -> None:
+    """``expect.fields`` on a streamed case, which resolves against ``meta`` and nothing else.
+
+    Nine stream cases could not assert a field at all: this branch read the stream-shaped keys and
+    ignored ``fields`` in silence, so nothing about a stream's ``meta`` was expressible -- not the
+    correlation ids, not the rate-limit budget, and not the two idempotent-replay flags that
+    ``chat-idempotent-replay`` has pinned since it was recorded. A streamed replay that lost its
+    whole ``meta`` passed the corpus.
+
+    Restricted to ``meta.*`` on purpose. ``content``, ``chunks``, ``usage`` and ``tool_calls`` each
+    already have a key of their own, and a second way to say the same thing is how two ways
+    eventually disagree. The restriction is held by a test rather than by this comment.
+    """
+    fields = case["expect"].get("fields")
+    if not fields:
+        return
+
+    assert stream.meta is not None, f"{case['id']}: the stream carries no meta to assert against"
+    assert_fields({"meta": stream.meta}, fields, case["id"])
+
+
 def assert_request_side(route: Any, case: dict[str, Any]) -> None:
     """What the SDK SENT, which is as much of the contract as what it received.
 
@@ -264,6 +285,7 @@ def assert_traffic(route: Any, stream: Any, case: dict[str, Any]) -> None:
     if "attempts" in expect:
         assert stream.meta is not None, case["id"]
         assert stream.meta.attempts == expect["attempts"], case["id"]
+    assert_stream_fields(stream, case)
     assert_request_side(route, case)
 
 
@@ -444,6 +466,22 @@ class TestManifestIntegrity:
         """
         silent = [case["id"] for case in CASES if not case.get("$comment", "").strip()]
         assert not silent, f"cases that do not say where their bytes came from: {silent}"
+
+    def test_a_stream_case_asserts_fields_only_under_meta(self) -> None:
+        """The streaming branch resolves ``fields`` against ``meta``, so a case stops there.
+
+        ``content``, ``chunks``, ``usage`` and ``tool_calls`` each have a key of their own already.
+        A ``fields`` path to any of them would be a second way to say the same thing, which is how
+        two ways eventually disagree -- and it would resolve against nothing here and pass while
+        asserting nothing, which is worse than failing.
+        """
+        for case in CASES:
+            if not case["expect"]["kind"].startswith("stream"):
+                continue
+            for path in case["expect"].get("fields", {}):
+                assert path.startswith("meta."), (
+                    f"{case['id']}: a stream case can only assert meta.*, not {path!r}"
+                )
 
     def test_a_counted_case_is_replayed_under_the_default_retry_policy(
         self, config_kwargs: dict[str, str]

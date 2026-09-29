@@ -558,6 +558,39 @@ async fn contract_corpus() {
                     if let Some(want) = case["expect"]["content"].as_str() {
                         assert_eq!(stream.content(), want, "{id}: content");
                     }
+                    // expect.fields on a streamed case, resolved against meta and nothing else.
+                    // Nine stream cases could not assert a field at all: this arm read the
+                    // stream-shaped keys and ignored `fields` in silence, so nothing about a
+                    // stream's meta was expressible -- not the correlation ids, not the rate-limit
+                    // budget, and not the two idempotent-replay flags chat-idempotent-replay has
+                    // pinned since it was recorded. A streamed replay that lost its whole meta
+                    // passed the corpus.
+                    //
+                    // Restricted to meta.* because content, chunks, usage and tool_calls each
+                    // already have a key of their own, and a second way to say the same thing is how
+                    // two ways eventually disagree. The restriction is held by a test in the Python
+                    // runner rather than by this comment.
+                    if case["expect"].get("fields").is_some() {
+                        let meta = stream.meta();
+                        let view = serde_json::json!({"meta": {
+                            "request_id": meta.request_id,
+                            "trace_id": meta.trace_id,
+                            "instance": meta.instance,
+                            "instance_id": meta.instance_id,
+                            "idempotent_replay": meta.idempotent_replay,
+                            "idempotent_replay_of": meta.idempotent_replay_of,
+                            "waited_s": meta.waited_for.as_secs_f64(),
+                            "attempts": meta.attempts,
+                            "rate_limit": meta.rate_limit.as_ref().map(|r| serde_json::json!({
+                                "scope": r.scope,
+                                "limit_requests": r.limit_requests,
+                                "remaining_requests": r.remaining_requests,
+                                "remaining_tokens": r.remaining_tokens,
+                            })),
+                        }});
+                        expect_fields(&view, case);
+                    }
+
                     // Absent on every case but the two tool-call ones, where it is compared in
                     // full. Asserting the empty case too is what stops a reassembler from
                     // inventing calls out of a stream that carried none.

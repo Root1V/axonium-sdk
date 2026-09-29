@@ -462,6 +462,24 @@ func runStreamCase(t *testing.T, client *Client, c contractCase) {
 	if c.Expect.Attempts != nil && stream.Meta().Attempts != *c.Expect.Attempts {
 		t.Errorf("attempts: got %d, want %d", stream.Meta().Attempts, *c.Expect.Attempts)
 	}
+
+	// expect.fields on a streamed case, resolved against meta and nothing else. Nine stream cases
+	// could not assert a field at all: this function read the stream-shaped keys and ignored Fields
+	// in silence, so nothing about a stream's meta was expressible -- not the correlation ids, not
+	// the rate-limit budget, and not the two idempotent-replay flags chat-idempotent-replay has
+	// pinned since it was recorded. A streamed replay that lost its whole meta passed the corpus.
+	//
+	// Restricted to meta.* because content, chunks, usage and tool_calls each already have a key of
+	// their own, and a second way to say the same thing is how two ways eventually disagree. The
+	// restriction is held by a test in the Python runner rather than by this comment.
+	if len(c.Expect.Fields) > 0 {
+		view := map[string]any{"meta": metaAsMap(stream.Meta())}
+		for path, want := range c.Expect.Fields {
+			if got := resolvePath(t, view, path); !equalJSON(got, want) {
+				t.Errorf("%s: got %#v, want %#v", path, got, want)
+			}
+		}
+	}
 	if c.Expect.Chunks != nil && chunks != *c.Expect.Chunks {
 		t.Errorf("chunks: got %d, want %d", chunks, *c.Expect.Chunks)
 	}
