@@ -7,6 +7,28 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+A declared gap in the corpus is now an enforced one.
+
+`stream-idempotent-replay` says `X-Idempotent-Replay-Of` and `X-Request-ID` were never captured for
+a streamed replay, so asserting `meta.idempotent_replay_of` there would fail against an SDK doing
+exactly the right thing. The obvious repair is to add the header to the case — which turns a thin
+recording into an invented one. Nothing held the sentence that said not to.
+
+Two checks now do, because one cannot. The first refuses any `meta.*` assertion whose sourcing
+header is absent from that case's recorded bytes, so the accidental path fails saying *capture it
+before asserting it* instead of looking like an SDK bug. That check cannot catch the deliberate path:
+from inside a repository a recorded header and a typed one are the same bytes in the same file. So
+the second is a tripwire on this one declared gap, written to be **removed** rather than satisfied —
+whoever measures those headers for real deletes it in the same commit, which is a deliberate act with
+a diff that says so.
+
+**The question itself stays open, and it is the platform's.** The guide documents both headers on a
+replay and says streamed replays work, so the expectation *reads* true; what is missing is anyone
+having measured it on a stream. Attempting the capture locally established only that it cannot be
+done here: the deployment answers `/health` with `{"status":"ok"}` while `GET /v1/models` returns an
+**empty catalog**, so there is no model to generate against — which is incidentally a live instance of
+the `/health` concern already open with the platform team.
+
 A stream case can assert a field.
 
 Nine of them could not. The streaming branch of all three runners read the stream-shaped keys --
@@ -522,6 +544,28 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+A declared gap in the corpus is now an enforced one.
+
+`stream-idempotent-replay` says `X-Idempotent-Replay-Of` and `X-Request-ID` were never captured for
+a streamed replay, so asserting `meta.idempotent_replay_of` there would fail against an SDK doing
+exactly the right thing. The obvious repair is to add the header to the case — which turns a thin
+recording into an invented one. Nothing held the sentence that said not to.
+
+Two checks now do, because one cannot. The first refuses any `meta.*` assertion whose sourcing
+header is absent from that case's recorded bytes, so the accidental path fails saying *capture it
+before asserting it* instead of looking like an SDK bug. That check cannot catch the deliberate path:
+from inside a repository a recorded header and a typed one are the same bytes in the same file. So
+the second is a tripwire on this one declared gap, written to be **removed** rather than satisfied —
+whoever measures those headers for real deletes it in the same commit, which is a deliberate act with
+a diff that says so.
+
+**The question itself stays open, and it is the platform's.** The guide documents both headers on a
+replay and says streamed replays work, so the expectation *reads* true; what is missing is anyone
+having measured it on a stream. Attempting the capture locally established only that it cannot be
+done here: the deployment answers `/health` with `{"status":"ok"}` while `GET /v1/models` returns an
+**empty catalog**, so there is no model to generate against — which is incidentally a live instance of
+the `/health` concern already open with the platform team.
+
 A stream case can assert a field.
 
 Nine of them could not. The streaming branch of all three runners read the stream-shaped keys --
@@ -927,6 +971,28 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+A declared gap in the corpus is now an enforced one.
+
+`stream-idempotent-replay` says `X-Idempotent-Replay-Of` and `X-Request-ID` were never captured for
+a streamed replay, so asserting `meta.idempotent_replay_of` there would fail against an SDK doing
+exactly the right thing. The obvious repair is to add the header to the case — which turns a thin
+recording into an invented one. Nothing held the sentence that said not to.
+
+Two checks now do, because one cannot. The first refuses any `meta.*` assertion whose sourcing
+header is absent from that case's recorded bytes, so the accidental path fails saying *capture it
+before asserting it* instead of looking like an SDK bug. That check cannot catch the deliberate path:
+from inside a repository a recorded header and a typed one are the same bytes in the same file. So
+the second is a tripwire on this one declared gap, written to be **removed** rather than satisfied —
+whoever measures those headers for real deletes it in the same commit, which is a deliberate act with
+a diff that says so.
+
+**The question itself stays open, and it is the platform's.** The guide documents both headers on a
+replay and says streamed replays work, so the expectation *reads* true; what is missing is anyone
+having measured it on a stream. Attempting the capture locally established only that it cannot be
+done here: the deployment answers `/health` with `{"status":"ok"}` while `GET /v1/models` returns an
+**empty catalog**, so there is no model to generate against — which is incidentally a live instance of
+the `/health` concern already open with the platform team.
 
 A stream case can assert a field.
 
