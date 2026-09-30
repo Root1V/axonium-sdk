@@ -128,10 +128,13 @@ impl Client {
         };
 
         let Some(found) = catalog.find(model) else {
-            return Err(Error::InvalidRequest(format!(
-                "model {model:?} is not in the gateway's catalog; known models: {}",
-                catalog.ids().join(", ")
-            )));
+            // Absence is no longer evidence. This used to refuse, because the catalog was the
+            // platform's full public list and a missing model was a typo. Since PRM-167 it holds
+            // only the models this token has a grant for, so absence has two causes this SDK
+            // cannot tell apart: not registered (the gateway says 400 unknown-model) or not
+            // granted (403 forbidden). Refusing here would tell a caller to check a name that is
+            // spelled correctly, and would pre-empt the 403 whose job is to name the scope.
+            return Ok(());
         };
         if found.modality.is_empty() || !KNOWN_MODALITIES.contains(&found.modality.as_str()) {
             return Ok(());

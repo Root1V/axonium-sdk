@@ -13,7 +13,9 @@ it costs one catalog request per client.
 
 from __future__ import annotations
 
-from axonium.errors import ModalityMismatchError, UnknownModelError
+import logging
+
+from axonium.errors import ModalityMismatchError
 from axonium.models.catalog import Model, ModelList
 
 __all__ = ["ENDPOINT_MODALITIES", "check_model"]
@@ -25,6 +27,9 @@ ENDPOINT_MODALITIES: dict[str, frozenset[str]] = {
     "embeddings": frozenset({"embedding"}),
     "images": frozenset({"image"}),
 }
+
+
+logger = logging.getLogger("axonium.preflight")
 
 
 def check_model(catalog: ModelList | None, model_id: str, *, endpoint: str) -> None:
@@ -44,15 +49,26 @@ def check_model(catalog: ModelList | None, model_id: str, *, endpoint: str) -> N
 
     entry: Model | None = catalog.get(model_id)
     if entry is None:
-        # The gateway reports this correctly as 400 unknown-model; raising here just saves the
-        # round trip, and names the alternatives while we have them in hand.
-        raise UnknownModelError(
-            f"Model {model_id!r} is not in the gateway's catalog. "
-            f"Available: {', '.join(catalog.ids) or '(none)'}. "
-            f"Model IDs are case-sensitive.",
-            status=400,
-            type_suffix="unknown-model",
+        # **Absence is no longer evidence.** This used to raise UnknownModelError, on the grounds
+        # that the gateway reports the same thing and refusing locally only saved the round trip.
+        # That was true while the catalog was the platform's full public list. Since PRM-167 it
+        # contains only the models this token holds a grant for, so a model missing from it has
+        # two possible causes and this SDK cannot tell them apart:
+        #
+        #   not registered at all   -> the gateway answers 400 unknown-model
+        #   registered, not granted -> the gateway answers 403 forbidden
+        #
+        # Raising unknown-model for the second is worse than spending a request. It tells the
+        # caller to check the spelling of a name that is spelled correctly, and it pre-empts the
+        # 403 whose whole job is to name the missing scope -- the error this SDK works hardest to
+        # make useful, through ForbiddenError's hint.
+        #
+        # So the round trip is spent, and the gateway answers a question only it can answer.
+        logger.debug(
+            "Model not in this token's catalog; letting the gateway answer",
+            extra={"model": model_id, "granted": len(catalog.ids)},
         )
+        return
 
     modality = entry.modality
     known = frozenset().union(*ENDPOINT_MODALITIES.values())

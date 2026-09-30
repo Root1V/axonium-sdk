@@ -5,7 +5,7 @@ import pytest
 import respx
 
 from axonium import AsyncAxonium, Axonium
-from axonium.errors import ModalityMismatchError, UnknownModelError
+from axonium.errors import ModalityMismatchError
 from axonium.models.catalog import ModelList
 from axonium.preflight import check_model
 
@@ -75,16 +75,38 @@ class TestCheckModel:
         with pytest.raises(ModalityMismatchError):
             check_model(catalog(), model, endpoint=endpoint)
 
-    def test_rejects_a_model_absent_from_the_catalog(self) -> None:
-        with pytest.raises(UnknownModelError, match="case-sensitive") as caught:
-            check_model(catalog(), "chat-modle", endpoint="chat")
+    def test_a_model_absent_from_the_catalog_is_left_to_the_gateway(self) -> None:
+        """Absence is not evidence, so the preflight stays quiet and the request goes.
 
-        # Listing the real IDs turns a typo into an obvious fix.
-        assert "chat-model" in str(caught.value)
+        This asserted the opposite, and was right when written: the catalog was the platform's
+        full public list, so a model missing from it was a typo and refusing locally only saved a
+        round trip. Since PRM-167 the catalog holds only the models this token has a grant for,
+        which gives absence two causes the SDK cannot tell apart — not registered, which the
+        gateway answers as ``400 unknown-model``, and not granted, which it answers as ``403
+        forbidden``.
 
-    def test_model_ids_are_matched_exactly(self) -> None:
-        with pytest.raises(UnknownModelError):
-            check_model(catalog(), "CHAT-MODEL", endpoint="chat")
+        Raising ``UnknownModelError`` for the second told a caller to check a name that was
+        spelled correctly, and pre-empted the ``403`` whose entire job is to name the missing
+        scope. A typo now costs one request; a missing grant now gets diagnosed. That is the
+        trade, and it is the right way round.
+        """
+        check_model(catalog(), "chat-modle", endpoint="chat")
+
+    def test_a_case_mismatch_is_also_left_to_the_gateway(self) -> None:
+        # Model IDs are case-sensitive and the gateway says so accurately. This SDK can no longer
+        # tell a case mismatch from an ungranted model, so it says nothing either way.
+        check_model(catalog(), "CHAT-MODEL", endpoint="chat")
+
+    def test_a_visible_model_with_the_wrong_modality_is_still_refused(self) -> None:
+        """What the preflight can still prove, and the reason it exists.
+
+        A model the catalog *does* show carries its modality, so a mismatch is a fact rather than
+        an inference — and this is the case the gateway will not catch: it rejects a text model on
+        ``/v1/embeddings`` but answers ``/v1/chat/completions`` with an embedding model, returning
+        billable nonsense.
+        """
+        with pytest.raises(ModalityMismatchError, match="billable"):
+            check_model(catalog(), "embed-model", endpoint="chat")
 
     def test_allows_a_modality_this_sdk_does_not_know(self) -> None:
         # A guard rail that rejected valid requests after the platform added a modality would be
