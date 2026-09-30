@@ -65,7 +65,14 @@ impl ModelList {
 }
 
 impl Client {
-    /// The full catalog. Authenticated like every other endpoint.
+    /// The models this token may call -- not every deployed model, and not since PRM-167.
+    ///
+    /// This endpoint was the platform's one public route and returned the whole catalog. It now
+    /// requires a token and answers exactly what [`Client::models_mine`] answers; the two are
+    /// aliases.
+    ///
+    /// An empty `data` means this token holds no `model:<id>` grants, **not** that the platform
+    /// has no models. Those are different facts and only an operator can tell them apart.
     ///
     /// This doc used to say it needed no authentication. That was true of the platform and never
     /// true of this code, which has always sent the token -- and the accident is what kept it

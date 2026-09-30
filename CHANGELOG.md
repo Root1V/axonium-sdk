@@ -7,6 +7,26 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+Re-vendored at guide revision `2026-09-29`, and the catalog means something narrower than it did.
+
+`PRM-167` closed `GET /v1/models` to anonymous callers — which AXO-117 already fixed, by measuring
+rather than by reading. What the guide adds is the half that was not visible from a `401`: the
+endpoint now returns **only the models the token holds `model:<id>` scope for**, which makes
+`models.mine()` an alias of `models.list()`. Same requirement, same filtering, same response.
+
+So three claims in these SDKs were wrong in a way no test could catch: "everything the deployment
+serves", "the full catalog", "the public catalog is not the answer to what can I call". The answer
+is the same from both endpoints now.
+
+And the fact this session got wrong by inference before the guide stated it: **an empty list means
+the token holds no grants, not that the platform has no models.** Two different facts that only an
+operator can distinguish. Measuring an empty `/v1/models` and concluding the registry was empty is
+exactly the mistake, and it was made here today.
+
+The guide also fixed the header exclusion list this SDK reported in `A-29`: `X-Request-ID` and
+`X-Trace-ID` are present on endpoints the old list excluded, and only the rate-limit headers are
+actually absent.
+
 The catalog call carrying a credential is pinned by the corpus, not just fixed in the code.
 
 `GET /v1/models` stopped being public on 2026-09-29 and the fix landed in four SDKs — and in zero
@@ -614,6 +634,26 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+Re-vendored at guide revision `2026-09-29`, and the catalog means something narrower than it did.
+
+`PRM-167` closed `GET /v1/models` to anonymous callers — which AXO-117 already fixed, by measuring
+rather than by reading. What the guide adds is the half that was not visible from a `401`: the
+endpoint now returns **only the models the token holds `model:<id>` scope for**, which makes
+`models.mine()` an alias of `models.list()`. Same requirement, same filtering, same response.
+
+So three claims in these SDKs were wrong in a way no test could catch: "everything the deployment
+serves", "the full catalog", "the public catalog is not the answer to what can I call". The answer
+is the same from both endpoints now.
+
+And the fact this session got wrong by inference before the guide stated it: **an empty list means
+the token holds no grants, not that the platform has no models.** Two different facts that only an
+operator can distinguish. Measuring an empty `/v1/models` and concluding the registry was empty is
+exactly the mistake, and it was made here today.
+
+The guide also fixed the header exclusion list this SDK reported in `A-29`: `X-Request-ID` and
+`X-Trace-ID` are present on endpoints the old list excluded, and only the rate-limit headers are
+actually absent.
+
 The catalog call carrying a credential is pinned by the corpus, not just fixed in the code.
 
 `GET /v1/models` stopped being public on 2026-09-29 and the fix landed in four SDKs — and in zero
@@ -1111,6 +1151,26 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+Re-vendored at guide revision `2026-09-29`, and the catalog means something narrower than it did.
+
+`PRM-167` closed `GET /v1/models` to anonymous callers — which AXO-117 already fixed, by measuring
+rather than by reading. What the guide adds is the half that was not visible from a `401`: the
+endpoint now returns **only the models the token holds `model:<id>` scope for**, which makes
+`models.mine()` an alias of `models.list()`. Same requirement, same filtering, same response.
+
+So three claims in these SDKs were wrong in a way no test could catch: "everything the deployment
+serves", "the full catalog", "the public catalog is not the answer to what can I call". The answer
+is the same from both endpoints now.
+
+And the fact this session got wrong by inference before the guide stated it: **an empty list means
+the token holds no grants, not that the platform has no models.** Two different facts that only an
+operator can distinguish. Measuring an empty `/v1/models` and concluding the registry was empty is
+exactly the mistake, and it was made here today.
+
+The guide also fixed the header exclusion list this SDK reported in `A-29`: `X-Request-ID` and
+`X-Trace-ID` are present on endpoints the old list excluded, and only the rate-limit headers are
+actually absent.
 
 The catalog call carrying a credential is pinned by the corpus, not just fixed in the code.
 
