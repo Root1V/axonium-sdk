@@ -7,6 +7,24 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+Re-vendored at `2026-09-29 · PRM-164/167/170`, which adds §2.7, "Client types — who may hold a
+credential".
+
+It answers `A-30` and reframes it: the question was never about mTLS. A client certificate shipped
+inside an app somebody downloads is a secret shipped inside an app somebody downloads. What is
+actually underneath is that **`client_id` is the billing principal** — grants and invoices are keyed
+to it — so a `client_secret` on an end user's device is the *integrator's* identity copied onto
+every one of their users' machines. Not a shape to harden; a shape not to have.
+
+PKCE is not the alternative either, and not on cost: per-end-user identity has nowhere to live in
+the platform's authorization or billing model, and the auth-service has no authorization endpoint
+at all.
+
+The answer that unblocks a distributed app is an integrator-controlled backend holding the
+credential, with the app authenticating against that. Nothing here changes: these three SDKs run on
+servers, which is the supported shape. It matters for the Swift SDK, whose documented example is an
+on-device secret out of the Keychain.
+
 **The modality preflight said "not in the catalog" about a catalog it can no longer see all of.**
 
 With `verify_modality` on, a model missing from the catalog was refused locally as
@@ -664,6 +682,24 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+Re-vendored at `2026-09-29 · PRM-164/167/170`, which adds §2.7, "Client types — who may hold a
+credential".
+
+It answers `A-30` and reframes it: the question was never about mTLS. A client certificate shipped
+inside an app somebody downloads is a secret shipped inside an app somebody downloads. What is
+actually underneath is that **`client_id` is the billing principal** — grants and invoices are keyed
+to it — so a `client_secret` on an end user's device is the *integrator's* identity copied onto
+every one of their users' machines. Not a shape to harden; a shape not to have.
+
+PKCE is not the alternative either, and not on cost: per-end-user identity has nowhere to live in
+the platform's authorization or billing model, and the auth-service has no authorization endpoint
+at all.
+
+The answer that unblocks a distributed app is an integrator-controlled backend holding the
+credential, with the app authenticating against that. Nothing here changes: these three SDKs run on
+servers, which is the supported shape. It matters for the Swift SDK, whose documented example is an
+on-device secret out of the Keychain.
+
 **The modality preflight said "not in the catalog" about a catalog it can no longer see all of.**
 
 With `verify_modality` on, a model missing from the catalog was refused locally as
@@ -1211,6 +1247,24 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+Re-vendored at `2026-09-29 · PRM-164/167/170`, which adds §2.7, "Client types — who may hold a
+credential".
+
+It answers `A-30` and reframes it: the question was never about mTLS. A client certificate shipped
+inside an app somebody downloads is a secret shipped inside an app somebody downloads. What is
+actually underneath is that **`client_id` is the billing principal** — grants and invoices are keyed
+to it — so a `client_secret` on an end user's device is the *integrator's* identity copied onto
+every one of their users' machines. Not a shape to harden; a shape not to have.
+
+PKCE is not the alternative either, and not on cost: per-end-user identity has nowhere to live in
+the platform's authorization or billing model, and the auth-service has no authorization endpoint
+at all.
+
+The answer that unblocks a distributed app is an integrator-controlled backend holding the
+credential, with the app authenticating against that. Nothing here changes: these three SDKs run on
+servers, which is the supported shape. It matters for the Swift SDK, whose documented example is an
+on-device secret out of the Keychain.
 
 **The modality preflight said "not in the catalog" about a catalog it can no longer see all of.**
 
