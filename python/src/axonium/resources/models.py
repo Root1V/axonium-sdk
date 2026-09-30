@@ -23,22 +23,31 @@ class Models:
         self._client = client
 
     def list(self) -> ModelList:
-        """Every currently-deployed model.
+        """The models this token may call.
 
-        **Authenticated, like every other endpoint.** This one used to be public, and this SDK
-        used to skip the token for it — which stopped working the day the platform closed it, with
-        no announcement and with the vendored guide still saying otherwise. Listing the catalog
-        returned ``MissingCredentialsError`` from a released version.
+        **Not "every deployed model", and not since PRM-167.** This endpoint was the platform's
+        one public route and returned the whole catalog; it now requires a token and answers
+        exactly what :meth:`mine` answers — the two are aliases, and there is no reason to prefer
+        either.
 
-        The other three SDKs survived that change by accident: their comments claimed the endpoint
-        needed no authentication while their code sent the token anyway. Only this one did what it
-        said.
+        **An empty list means this token holds no ``model:<id>`` grants, not that the platform
+        has no models.** Those are different facts and only an operator can tell them apart: ask
+        for the grant rather than concluding the deployment is empty. Model access has been
+        deny-by-default all along; what changed is that discovery stopped being allow-all.
+
+        This SDK used to skip the token here, which is what the guide described, so
+        ``models.list()`` returned ``MissingCredentialsError`` from a released version the day the
+        platform closed it. The other three survived by accident: identical claim in their
+        comments, token sent anyway.
         """
         response = self._client._send("GET", CATALOG)
         return self._client._remember_catalog(dispatch.parse(response, ModelList))
 
     def mine(self) -> ModelList:
-        """Only the models this token holds a ``model:<id>`` scope for.
+        """The models this token may call. An alias of :meth:`list` since PRM-167.
+
+        Kept because it is documented and callers use it. It exists because :meth:`list` used to
+        be the full public catalog and a token had no other way to find out what it could call.
 
         A token with ``inference:read`` but no model grants gets an empty list rather than an
         error, since holding an inference scope conveys no model access by itself.

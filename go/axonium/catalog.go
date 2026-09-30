@@ -98,7 +98,12 @@ type ModelsService struct {
 	cached bool
 }
 
-// List returns the full catalog. It is authenticated like every other endpoint.
+// List returns the models this token may call -- not every deployed model, and not since
+// PRM-167. This endpoint was the platform's one public route and returned the whole catalog; it
+// now requires a token and answers exactly what Mine answers. The two are aliases.
+//
+// An empty Data means this token holds no model:<id> grants, NOT that the platform has no
+// models. Those are different facts and only an operator can tell them apart.
 //
 // This comment used to say it needed no authentication, which was true of the platform and never
 // true of this code -- doJSON has always sent the token. The platform closed the endpoint without
