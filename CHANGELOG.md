@@ -7,6 +7,36 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+**The modality preflight said "not in the catalog" about a catalog it can no longer see all of.**
+
+With `verify_modality` on, a model missing from the catalog was refused locally as
+`unknown-model`, on the stated grounds that the gateway reports the same thing and refusing only
+saves the round trip. That was true while the catalog was the platform's full public list. Since
+`PRM-167` it holds only the models the token has a grant for, which gives absence two causes this
+SDK cannot distinguish:
+
+    not registered at all    -> the gateway answers 400 unknown-model
+    registered, not granted  -> the gateway answers 403 forbidden
+
+Refusing locally told a caller to check the spelling of a name that was spelled correctly, and
+**pre-empted the `403` whose entire job is to name the missing scope** — the error these SDKs work
+hardest to make useful. So the request now goes, and the gateway answers a question only it can
+answer. A typo costs one round trip; a missing grant gets diagnosed. That is the right way round.
+
+What the preflight still does is the thing it was built for and can still prove: a model the
+catalog **does** show carries its modality, and the gateway will not catch that mismatch —
+`/v1/embeddings` rejects a text model, but `/v1/chat/completions` answers an embedding model with
+billable nonsense.
+
+Three tests pinned the old behaviour and were correct when written. The Go one now asserts the
+boundary with a request count rather than a server-side rejection, because only a number can tell
+"stopped locally" from "reached the gateway".
+
+**Not measured against a live deployment.** The only gateway available grants every model it has,
+so the registered-but-ungranted case could not be produced. The reasoning stands on the guide's own
+statement that `unknown-model` is checked before any scope check; it is not a measurement, and is
+labelled as such rather than presented as one.
+
 Re-vendored at guide revision `2026-09-29`, and the catalog means something narrower than it did.
 
 `PRM-167` closed `GET /v1/models` to anonymous callers — which AXO-117 already fixed, by measuring
@@ -634,6 +664,36 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+**The modality preflight said "not in the catalog" about a catalog it can no longer see all of.**
+
+With `verify_modality` on, a model missing from the catalog was refused locally as
+`unknown-model`, on the stated grounds that the gateway reports the same thing and refusing only
+saves the round trip. That was true while the catalog was the platform's full public list. Since
+`PRM-167` it holds only the models the token has a grant for, which gives absence two causes this
+SDK cannot distinguish:
+
+    not registered at all    -> the gateway answers 400 unknown-model
+    registered, not granted  -> the gateway answers 403 forbidden
+
+Refusing locally told a caller to check the spelling of a name that was spelled correctly, and
+**pre-empted the `403` whose entire job is to name the missing scope** — the error these SDKs work
+hardest to make useful. So the request now goes, and the gateway answers a question only it can
+answer. A typo costs one round trip; a missing grant gets diagnosed. That is the right way round.
+
+What the preflight still does is the thing it was built for and can still prove: a model the
+catalog **does** show carries its modality, and the gateway will not catch that mismatch —
+`/v1/embeddings` rejects a text model, but `/v1/chat/completions` answers an embedding model with
+billable nonsense.
+
+Three tests pinned the old behaviour and were correct when written. The Go one now asserts the
+boundary with a request count rather than a server-side rejection, because only a number can tell
+"stopped locally" from "reached the gateway".
+
+**Not measured against a live deployment.** The only gateway available grants every model it has,
+so the registered-but-ungranted case could not be produced. The reasoning stands on the guide's own
+statement that `unknown-model` is checked before any scope check; it is not a measurement, and is
+labelled as such rather than presented as one.
+
 Re-vendored at guide revision `2026-09-29`, and the catalog means something narrower than it did.
 
 `PRM-167` closed `GET /v1/models` to anonymous callers — which AXO-117 already fixed, by measuring
@@ -1151,6 +1211,36 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+**The modality preflight said "not in the catalog" about a catalog it can no longer see all of.**
+
+With `verify_modality` on, a model missing from the catalog was refused locally as
+`unknown-model`, on the stated grounds that the gateway reports the same thing and refusing only
+saves the round trip. That was true while the catalog was the platform's full public list. Since
+`PRM-167` it holds only the models the token has a grant for, which gives absence two causes this
+SDK cannot distinguish:
+
+    not registered at all    -> the gateway answers 400 unknown-model
+    registered, not granted  -> the gateway answers 403 forbidden
+
+Refusing locally told a caller to check the spelling of a name that was spelled correctly, and
+**pre-empted the `403` whose entire job is to name the missing scope** — the error these SDKs work
+hardest to make useful. So the request now goes, and the gateway answers a question only it can
+answer. A typo costs one round trip; a missing grant gets diagnosed. That is the right way round.
+
+What the preflight still does is the thing it was built for and can still prove: a model the
+catalog **does** show carries its modality, and the gateway will not catch that mismatch —
+`/v1/embeddings` rejects a text model, but `/v1/chat/completions` answers an embedding model with
+billable nonsense.
+
+Three tests pinned the old behaviour and were correct when written. The Go one now asserts the
+boundary with a request count rather than a server-side rejection, because only a number can tell
+"stopped locally" from "reached the gateway".
+
+**Not measured against a live deployment.** The only gateway available grants every model it has,
+so the registered-but-ungranted case could not be produced. The reasoning stands on the guide's own
+statement that `unknown-model` is checked before any scope check; it is not a measurement, and is
+labelled as such rather than presented as one.
 
 Re-vendored at guide revision `2026-09-29`, and the catalog means something narrower than it did.
 

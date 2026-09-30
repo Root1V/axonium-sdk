@@ -178,8 +178,13 @@ func (c *Client) checkModality(ctx context.Context, model string, accepted []str
 	}
 	found, ok := catalog.Find(model)
 	if !ok {
-		return fmt.Errorf("%w: model %q is not in the gateway's catalog; known models: %s",
-			ErrInvalidRequest, model, strings.Join(catalog.IDs(), ", "))
+		// Absence is no longer evidence. This used to refuse, because the catalog was the
+		// platform's full public list and a missing model was a typo. Since PRM-167 the catalog
+		// holds only the models this token has a grant for, so absence has two causes this SDK
+		// cannot tell apart: not registered (the gateway says 400 unknown-model) or not granted
+		// (403 forbidden). Refusing here told a caller to check a name that is spelled correctly,
+		// and pre-empted the 403 whose job is to name the missing scope.
+		return nil
 	}
 	// A modality this SDK does not recognise is left alone, and so is one the gateway did not
 	// report. The platform added two modalities in a single week; a guard rail that started

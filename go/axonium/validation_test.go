@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -72,6 +73,7 @@ func TestRemoteImageURLIsRefusedWithTheReason(t *testing.T) {
 // The gateway's modality check is one-directional: an embedding model on /v1/chat/completions
 // returns 200 with degenerate output that is billed. This is the client-side closing of that gap.
 func TestModalityCheckCatchesTheGatewaysOneDirectionalGap(t *testing.T) {
+	var chatCalls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth2/token" {
 			writeToken(w, "tok", 300)
@@ -85,7 +87,14 @@ func TestModalityCheckCatchesTheGatewaysOneDirectionalGap(t *testing.T) {
 			}})
 			return
 		}
-		t.Error("the request reached the gateway; the modality check should have stopped it")
+		// Reaching here is correct for an ABSENT model and wrong for a visible one whose
+		// modality does not fit. Counted rather than rejected, so the two cases can be told
+		// apart by a number instead of by a server-side assertion that cannot distinguish them.
+		chatCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{"index": 0, "message": map[string]any{"content": "hi"}}},
+		})
 	}))
 	defer srv.Close()
 
@@ -107,14 +116,31 @@ func TestModalityCheckCatchesTheGatewaysOneDirectionalGap(t *testing.T) {
 	if !strings.Contains(err.Error(), "bill") {
 		t.Errorf("the message should say what it saved the caller from, got %q", err)
 	}
+	if n := chatCalls.Load(); n != 0 {
+		t.Errorf("a visible model with the wrong modality must not reach the gateway; %d did", n)
+	}
 
-	// A typo is caught by the same check, and the message lists what is available.
+	// A model absent from the catalog is NOT caught, and that is the point of PRM-167.
+	//
+	// This used to assert the opposite -- that a typo is refused locally and the message lists
+	// what is available -- and it was right while the catalog was the platform's full public
+	// list. Since PRM-167 it holds only the models this token has a grant for, so absence has two
+	// causes this SDK cannot tell apart: not registered, which the gateway answers as
+	// 400 unknown-model, and not granted, which it answers as 403 forbidden.
+	//
+	// Refusing here told a caller to check a name that was spelled correctly, and pre-empted the
+	// 403 whose entire job is to name the missing scope. So the request goes, and the error that
+	// comes back is one only the gateway could produce. A typo costs a round trip; a missing grant
+	// gets diagnosed. That is the right way round.
 	_, err = client.Chat.Create(context.Background(), ChatRequest{
 		Model:    "llama3-8b-q5",
 		Messages: []Message{TextMessage("user", "hi")},
 	})
-	if !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), "llama3-8b-q4") {
-		t.Errorf("a mistyped model should be caught and the catalog offered, got %v", err)
+	if errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("an absent model must be left to the gateway, which can tell 400 from 403; got %v", err)
+	}
+	if n := chatCalls.Load(); n != 1 {
+		t.Errorf("the absent model should have reached the gateway exactly once; %d did", n)
 	}
 }
 
