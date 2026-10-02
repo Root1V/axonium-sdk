@@ -32,13 +32,15 @@ equivalent.
 | Language | Install | Version |
 |---|---|---|
 | Python | `pip install axonium` | [`1.0.0rc6`](https://pypi.org/project/axonium/) on PyPI |
-| Go | `go get github.com/Root1V/axonium-sdk/go@v0.4.0` | `v0.4.0` |
-| Rust | `axonium = "0.4"` | [`0.4.0`](https://crates.io/crates/axonium) on crates.io |
+| Go | `go get github.com/Root1V/axonium-sdk/go@v0.5.0` | `v0.5.0` |
+| Rust | `axonium = "0.5"` | [`0.5.0`](https://crates.io/crates/axonium) on crates.io |
+| Swift | `.package(url: "…/axonium-sdk-swift", from: "0.2.0")` | [`0.2.0`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
 
-All three are published and implement the same surface. Python was built first as the reference
-implementation; every behaviour the three share is pinned by the contract corpus in
-[`spec/`](https://github.com/Root1V/axonium-sdk/tree/main/spec) — one manifest, one set of recorded wire bytes, three runners that share no code,
-so identical behaviour is verified rather than intended.
+All four are published and implement the same surface. Python was built first as the reference
+implementation; every behaviour they share is pinned by the contract corpus in
+[`spec/`](https://github.com/Root1V/axonium-sdk/tree/main/spec) — one manifest, one set of recorded wire bytes, four runners that share no code,
+so identical behaviour is verified rather than intended. Swift vendors `spec/` as a submodule and
+replays the same 48 cases.
 
 Backlog and delivered work:
 [ROADMAP.md](https://github.com/Root1V/axonium-sdk/blob/main/ROADMAP.md).

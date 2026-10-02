@@ -829,6 +829,59 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+Nothing yet.
+
+### 0.5.0 — 2026-10-02
+
+**The modality guard was refusing nothing on `/v1/rerank`, and had not since rerank shipped.** The
+accepted set at the call site was right; the separate hand-kept list of *known* modalities had never
+heard of `rerank`, and the check returns early on a modality it does not recognise. So it could not
+compare anything. Measured against a live deployment:
+
+    qwen3-reranker  on chat    -> ALLOWED   (the doc comment promised 400)
+    qwen3-embedding on rerank  -> ALLOWED   (same)
+    qwen3-embedding on chat    -> refused   <- the only pairing that worked
+
+The known set is now **derived** from the per-endpoint sets, so the two cannot drift again, and a
+test refuses a literal at the call site — which is how a modality gets accepted by an endpoint
+without ever becoming known.
+
+#### Announced: the guard now refuses more
+
+With the modality check enabled, these pairings used to reach the gateway and come back `400
+modality-mismatch`. They are refused locally now, before the request:
+
+    a rerank model on chat            a classification model on chat
+    a chat model on /v1/rerank        anything with its own endpoint on /predict
+
+Same failure, one round trip earlier, and as `ErrInvalidRequest` rather than an `*APIError`. Off by default, so a caller who never enabled it sees
+no change.
+
+#### And the reason the guard exists had expired
+
+Every justification for it — the doc comment and the error message — said the gateway accepts chat on
+an embedding model and answers `200` with degenerate billable output. All six wrong-modality
+combinations measured live answer `400 modality-mismatch`: `RM-66` closed it, and **the guide
+documenting `RM-66` was vendored in this repository the whole time**, read for its error-catalog rows
+without the prose being re-read against the code.
+
+The guard stays — it saves a request and a rate-limit unit, and the guide says a check of this kind
+can stay — and no longer claims to save money. Nothing about its behaviour changed here, only what
+it tells a caller.
+
+#### New
+
+- **`client.Predict.Create(ctx, model, body, PredictOptions{})`** — the pass-through route, `POST /v1/models/{model}/predict`, for `classification`,
+  `zero_shot` and `typed_decision`. `PredictResult.Value` is a `json.RawMessage`, read through `Into(&dest)`, because `sst2-clf` answers a **top-level array** and a
+  map would have failed on the first engine the platform put on this route.
+- **`payload_schema` on the catalog entry** — the field that identifies which body a model takes.
+  Dispatch on it rather than on the modality: `sst2-clf` and `von-decide` are both classifiers and
+  want different bodies.
+
+Four contract cases cover the route, recorded live, including the first recorded
+`predict-backend-rejected` — the one catalog row whose status is the engine's rather than the
+gateway's, with the engine's own error preserved under `backend_error`.
+
 **The pass-through route: `client.Predict.Create(ctx, model, body, PredictOptions{})`.**
 
 `POST /v1/models/{model}/predict` serves three modalities the OpenAI surface has no shape for ---
@@ -1482,6 +1535,59 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+Nothing yet.
+
+### 0.5.0 — 2026-10-02
+
+**The modality guard was refusing nothing on `/v1/rerank`, and had not since rerank shipped.** The
+accepted set at the call site was right; the separate hand-kept list of *known* modalities had never
+heard of `rerank`, and the check returns early on a modality it does not recognise. So it could not
+compare anything. Measured against a live deployment:
+
+    qwen3-reranker  on chat    -> ALLOWED   (the doc comment promised 400)
+    qwen3-embedding on rerank  -> ALLOWED   (same)
+    qwen3-embedding on chat    -> refused   <- the only pairing that worked
+
+The known set is now **derived** from the per-endpoint sets, so the two cannot drift again, and a
+test refuses a literal at the call site — which is how a modality gets accepted by an endpoint
+without ever becoming known.
+
+#### Announced: the guard now refuses more
+
+With the modality check enabled, these pairings used to reach the gateway and come back `400
+modality-mismatch`. They are refused locally now, before the request:
+
+    a rerank model on chat            a classification model on chat
+    a chat model on /v1/rerank        anything with its own endpoint on /predict
+
+Same failure, one round trip earlier, and as `Error::InvalidRequest` rather than `Error::Api`. Off by default, so a caller who never enabled it sees
+no change.
+
+#### And the reason the guard exists had expired
+
+Every justification for it — the doc comment and the error message — said the gateway accepts chat on
+an embedding model and answers `200` with degenerate billable output. All six wrong-modality
+combinations measured live answer `400 modality-mismatch`: `RM-66` closed it, and **the guide
+documenting `RM-66` was vendored in this repository the whole time**, read for its error-catalog rows
+without the prose being re-read against the code.
+
+The guard stays — it saves a request and a rate-limit unit, and the guide says a check of this kind
+can stay — and no longer claims to save money. Nothing about its behaviour changed here, only what
+it tells a caller.
+
+#### New
+
+- **`client.predict(model, &body, &PredictOptions::default())`** — the pass-through route, `POST /v1/models/{model}/predict`, for `classification`,
+  `zero_shot` and `typed_decision`. `PredictResult::value` is a `serde_json::Value`, read through `decode()`, because `sst2-clf` answers a **top-level array** and a
+  map would have failed on the first engine the platform put on this route.
+- **`payload_schema` on the catalog entry** — the field that identifies which body a model takes.
+  Dispatch on it rather than on the modality: `sst2-clf` and `von-decide` are both classifiers and
+  want different bodies.
+
+Four contract cases cover the route, recorded live, including the first recorded
+`predict-backend-rejected` — the one catalog row whose status is the engine's rather than the
+gateway's, with the engine's own error preserved under `backend_error`.
 
 **The pass-through route: `client.predict(model, &body, &PredictOptions::default())`.**
 
