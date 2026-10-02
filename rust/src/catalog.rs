@@ -184,3 +184,92 @@ impl Client {
         )))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::Path;
+
+    /// Named here so a set added to one list and not the other is caught rather than inferred.
+    const DECLARED: &[(&str, &[&str])] = &[
+        ("CHAT_MODALITIES", CHAT_MODALITIES),
+        ("EMBEDDING_MODALITIES", EMBEDDING_MODALITIES),
+        ("IMAGE_MODALITIES", IMAGE_MODALITIES),
+        ("RERANK_MODALITIES", RERANK_MODALITIES),
+        ("PREDICT_MODALITIES", PREDICT_MODALITIES),
+    ];
+
+    /// A modality only one endpoint accepts is still known, or that endpoint has no check at all.
+    ///
+    /// This is the assertion that was missing. `Client::rerank` passed a literal `&["rerank"]`, and
+    /// because `KNOWN_MODALITIES` was a separate hand-written list that had never heard of
+    /// `"rerank"`, [`Client::check_modality`] returned before it could compare anything -- the call
+    /// refused nothing, including the pairing its own doc comment promised to catch.
+    #[test]
+    fn every_accepted_modality_is_known() {
+        for (name, set) in DECLARED {
+            for modality in *set {
+                assert!(
+                    is_known_modality(modality),
+                    "{name} accepts {modality:?}, which is_known_modality rejects: \
+                     check_modality returns early on it, so that endpoint refuses nothing"
+                );
+            }
+        }
+    }
+
+    /// Every `check_modality` call must pass one of the declared endpoint sets.
+    ///
+    /// A literal at the call site is how a modality gets accepted by an endpoint without ever
+    /// becoming known, which is exactly how the rerank check shipped dead. Literals are refused.
+    #[test]
+    fn every_modality_check_uses_a_declared_set() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut found = 0;
+
+        for entry in fs::read_dir(&src).expect("src is readable") {
+            let path = entry.expect("entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            let source = fs::read_to_string(&path).expect("source is readable");
+            // Truncated at the test module, because this very test mentions check_modality and
+            // would otherwise match itself -- which it did, on the first run.
+            let source = source
+                .split_once("#[cfg(test)]")
+                .map_or(source.as_str(), |(before, _)| before);
+            for line in source.lines() {
+                let Some(rest) = line.split_once("check_modality(").map(|(_, r)| r) else {
+                    continue;
+                };
+                // The definition itself, and the doc comments that name it, are not calls.
+                if line.trim_start().starts_with("///")
+                    || line.trim_start().starts_with("//")
+                    || line.contains("pub(crate) async fn check_modality")
+                {
+                    continue;
+                }
+                found += 1;
+                let argument = rest
+                    .split(',')
+                    .nth(1)
+                    .unwrap_or("")
+                    .trim()
+                    .trim_end_matches(')')
+                    .trim_start_matches("crate::catalog::");
+                assert!(
+                    DECLARED.iter().any(|(name, _)| *name == argument),
+                    "{} passes {argument:?} to check_modality; it must pass one of the declared \
+                     endpoint sets, because the known set is derived from those and a literal here \
+                     is accepted by an endpoint without ever becoming known",
+                    path.file_name().unwrap().to_string_lossy()
+                );
+            }
+        }
+        assert!(
+            found > 0,
+            "found no check_modality call sites; the pattern stopped matching, not the code"
+        );
+    }
+}

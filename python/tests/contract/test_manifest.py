@@ -33,6 +33,7 @@ ENDPOINTS = {
     "images.generate": f"{GATEWAY}/v1/images/generations",
     "models.list": f"{GATEWAY}/v1/models",
     "models.mine": f"{GATEWAY}/v1/models/mine",
+    "predict.create": f"{GATEWAY}/v1/models/{{model}}/predict",
     "rerank.create": f"{GATEWAY}/v1/rerank",
     "usage.retrieve": f"{GATEWAY}/v1/usage/{{request_id}}",
     # The token exchange is scaffolding for every other case, so it is routed and dispatched
@@ -143,6 +144,11 @@ def route_for(case: dict[str, Any]) -> Any:
     if operation == "usage.retrieve":
         # The id is part of the path here, not the body, so the route has to be built per case.
         url = url.format(request_id=case["request"]["request_id"])
+    if operation == "predict.create":
+        # Same reason: predict addresses the model through the path. Which also means the route
+        # itself is an assertion -- an SDK that put the model in the body would reach no route and
+        # fail on a connection error rather than on a field.
+        url = url.format(model=case["request"]["model"])
     method = respx.get if operation.startswith(("models.", "usage.")) else respx.post
 
     sequence = [mock_response(spec) for spec in responses_for(case)]
@@ -180,6 +186,8 @@ def call_sync(client: Axonium, case: dict[str, Any]) -> Any:
         return client.models.list()
     if operation == "models.mine":
         return client.models.mine()
+    if operation == "predict.create":
+        return client.predict.create(request["model"], request["body"])
     if operation == "rerank.create":
         return client.rerank.create(**request)
     if operation == "usage.retrieve":
@@ -205,6 +213,8 @@ async def call_async(client: AsyncAxonium, case: dict[str, Any]) -> Any:
         return await client.models.list()
     if operation == "models.mine":
         return await client.models.mine()
+    if operation == "predict.create":
+        return await client.predict.create(request["model"], request["body"])
     if operation == "rerank.create":
         return await client.rerank.create(**request)
     if operation == "usage.retrieve":

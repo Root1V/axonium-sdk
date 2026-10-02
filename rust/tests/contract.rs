@@ -292,6 +292,11 @@ fn kind_for(suffix: &str) -> ErrorKind {
         "idempotency-response-not-retained" => ErrorKind::IdempotencyResponseNotRetained,
         "not-found" => ErrorKind::NotFound,
         "backend-unavailable" => ErrorKind::BackendUnavailable,
+        // Deliberately spelled out here rather than read from ErrorKind::from_suffix: a runner that
+        // asked the SDK which kind a suffix maps to would assert the SDK against itself. The panic
+        // below is what makes this duplication safe -- a new suffix fails loudly instead of being
+        // quietly unchecked.
+        "predict-backend-rejected" => ErrorKind::PredictBackendRejected,
         "rate-limit-exceeded-requests" => ErrorKind::RateLimitExceeded,
         "upstream-unavailable" => ErrorKind::TokenEndpointUnavailable,
         "not-configured" => ErrorKind::TokenEndpointNotConfigured,
@@ -474,6 +479,32 @@ async fn contract_corpus() {
                     .await
                     .unwrap_or_else(|e| panic!("{id}: {e}"));
                 expect_fields(&response.raw, case);
+            }
+            ("ok", "predict.create") => {
+                let request = &case["request"];
+                let result = client
+                    .predict(
+                        request["model"].as_str().unwrap_or_default(),
+                        &request["body"],
+                        &axonium::PredictOptions::default(),
+                    )
+                    .await
+                    .unwrap_or_else(|e| panic!("{id}: {e}"));
+                // The one operation whose top level is not an object, so the view is built around
+                // a "value" key rather than being the payload itself.
+                let view = serde_json::json!({
+                    "value": result.value,
+                    "meta": {
+                        "request_id": result.meta.request_id,
+                        "trace_id": result.meta.trace_id,
+                        "rate_limit": result.meta.rate_limit.as_ref().map(|r| serde_json::json!({
+                            "scope": r.scope,
+                            "limit_requests": r.limit_requests,
+                            "remaining_requests": r.remaining_requests,
+                        })),
+                    },
+                });
+                expect_fields(&view, case);
             }
             ("ok", "usage.retrieve") => {
                 let request_id = case["request"]["request_id"].as_str().unwrap_or_default();
@@ -667,6 +698,16 @@ async fn contract_corpus() {
                             input: vec!["x".into()],
                             ..Default::default()
                         })
+                        .await
+                        .err()
+                } else if operation == "predict.create" {
+                    let request = &case["request"];
+                    client
+                        .predict(
+                            request["model"].as_str().unwrap_or_default(),
+                            &request["body"],
+                            &axonium::PredictOptions::default(),
+                        )
                         .await
                         .err()
                 } else {

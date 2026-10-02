@@ -118,8 +118,15 @@ func TestModalityCheckRefusesBeforeTheWire(t *testing.T) {
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("chat on an embedding model should be refused, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "bill") {
-		t.Errorf("the message should say what it saved the caller from, got %q", err)
+	// This asserted "bill", and was right when written: the gateway answered 200 with degenerate
+	// billable output here. RM-66 made its own check hold in every direction, so the local refusal
+	// now saves a request and a rate-limit unit instead. Nothing went red when that premise died --
+	// the code was still correct and still produced a message -- which is why a mutation could not
+	// have found it and only measuring the live gateway did. What is asserted now is that the
+	// message says the gateway refuses it too, so nobody reads a local refusal as the only thing
+	// standing between them and a bill.
+	if !strings.Contains(err.Error(), "refuses this combination too") {
+		t.Errorf("the message should say the gateway refuses it too, got %q", err)
 	}
 	if n := chatCalls.Load(); n != 0 {
 		t.Errorf("a visible model with the wrong modality must not reach the gateway; %d did", n)

@@ -202,6 +202,73 @@ println!("{:?}", ranked.ranking());
 candidates costs one unit rather than fifty. Each result's `index` points into the array **you**
 sent, never into the results, which is what keeps a reordered result attributable to its input.
 
+## Predict — the tasks OpenAI has no shape for
+
+Three modalities route here and nowhere else: `classification`, `zero_shot` and `typed_decision`.
+Every other endpoint is OpenAI-shaped because every task it serves has an OpenAI endpoint to be
+shaped like. These do not.
+
+```python
+result = client.predict.create("sst2-clf", {"inputs": "El servicio ha sido excelente"})
+result.value        # [{"label": "POSITIVE", "score": 0.9783}]  -- a LIST, not a dict
+
+result = client.predict.create(
+    "von-decide",
+    {"inputs": "Me cobraron dos veces la misma factura",
+     "parameters": {"candidate_labels": ["cargo duplicado", "cliente satisfecho"]}},
+)
+result.value["labels"][0]   # "cargo duplicado"
+```
+
+```go
+result, err := client.Predict.Create(ctx, "sst2-clf",
+	map[string]any{"inputs": "El servicio ha sido excelente"}, axonium.PredictOptions{})
+
+var labels []struct {
+	Label string  `json:"label"`
+	Score float64 `json:"score"`
+}
+err = result.Into(&labels)
+```
+
+```rust
+let result = client
+    .predict(
+        "sst2-clf",
+        &serde_json::json!({"inputs": "El servicio ha sido excelente"}),
+        &PredictOptions::default(),
+    )
+    .await?;
+let labels: Vec<Label> = result.decode()?;
+```
+
+**The body goes to the engine verbatim and its answer comes back verbatim.** Inventing a body for
+these would be the gateway deciding, on the engine's behalf, what the engine's API should look like.
+
+**So the answer is handed back undecoded, and that is not defensive typing.** `sst2-clf` answers a
+top-level **array**; `von-decide` and `laya-decide` answer objects. A client that modelled this as a
+dictionary would report "this is not JSON" about valid JSON, for the first engine the platform
+shipped on the route.
+
+**Dispatch on `payload_schema`, not on `modality`.** `sst2-clf` and `von-decide` are both
+classifiers and want different bodies, so there is no `classify(text)` here — a typed method would
+promise a stability the endpoint does not offer. The catalog says which contract a model speaks:
+
+| model | `modality` | `payload_schema` |
+|---|---|---|
+| `sst2-clf` | `classification` | `hf-inference.text-classification.v1` |
+| `von-decide` | `zero_shot` | `hf-inference.zero-shot-classification.v1` |
+| `laya-decide` | `typed_decision` | `typed-decision.v1` |
+
+**What does not pass through is the policy.** The model still resolves, `inference:read` plus the
+specific `model:<id>` scope is still required, a dead replica is still skipped, and the request is
+still metered and still counts against a spend cap. All three modalities share **one** rate-limit
+budget, named `predict` — so classification requests and typed decisions eat the same 60 RPM.
+
+**A model that has an OpenAI endpoint is refused here** with `400 modality-mismatch`, the inverse of
+every other handler's check. Without it the same model would be reachable two ways, with two billing
+paths, and the one that billed correctly would be whichever you did not use.
+
 ## The catalog
 
 ```python

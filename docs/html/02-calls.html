@@ -302,6 +302,77 @@ Python it is leaving the <code>with</code> block.</p>
 </div><p><strong>Rerank scores the whole document set in one request.</strong> Against a 60 RPM budget, scoring 50
 candidates costs one unit rather than fifty. Each result's <code>index</code> points into the array <strong>you</strong>
 sent, never into the results, which is what keeps a reordered result attributable to its input.</p>
+<h2>Predict — the tasks OpenAI has no shape for</h2>
+<p>Three modalities route here and nowhere else: <code>classification</code>, <code>zero_shot</code> and <code>typed_decision</code>.
+Every other endpoint is OpenAI-shaped because every task it serves has an OpenAI endpoint to be
+shaped like. These do not.</p>
+<div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">predict</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">"sst2-clf"</span><span class="p">,</span> <span class="p">{</span><span class="s2">"inputs"</span><span class="p">:</span> <span class="s2">"El servicio ha sido excelente"</span><span class="p">})</span>
+<span class="n">result</span><span class="o">.</span><span class="n">value</span>        <span class="c1"># [{"label": "POSITIVE", "score": 0.9783}]  -- a LIST, not a dict</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">predict</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+    <span class="s2">"von-decide"</span><span class="p">,</span>
+    <span class="p">{</span><span class="s2">"inputs"</span><span class="p">:</span> <span class="s2">"Me cobraron dos veces la misma factura"</span><span class="p">,</span>
+     <span class="s2">"parameters"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"candidate_labels"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"cargo duplicado"</span><span class="p">,</span> <span class="s2">"cliente satisfecho"</span><span class="p">]}},</span>
+<span class="p">)</span>
+<span class="n">result</span><span class="o">.</span><span class="n">value</span><span class="p">[</span><span class="s2">"labels"</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>   <span class="c1"># "cargo duplicado"</span></code></pre></div>
+<div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="nx">result</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">Predict</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="s">"sst2-clf"</span><span class="p">,</span>
+<span class="w">	</span><span class="kt">map</span><span class="p">[</span><span class="kt">string</span><span class="p">]</span><span class="kt">any</span><span class="p">{</span><span class="s">"inputs"</span><span class="p">:</span><span class="w"> </span><span class="s">"El servicio ha sido excelente"</span><span class="p">},</span><span class="w"> </span><span class="nx">axonium</span><span class="p">.</span><span class="nx">PredictOptions</span><span class="p">{})</span>
+
+<span class="kd">var</span><span class="w"> </span><span class="nx">labels</span><span class="w"> </span><span class="p">[]</span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<span class="w">	</span><span class="nx">Label</span><span class="w"> </span><span class="kt">string</span><span class="w">  </span><span class="s">`json:"label"`</span>
+<span class="w">	</span><span class="nx">Score</span><span class="w"> </span><span class="kt">float64</span><span class="w"> </span><span class="s">`json:"score"`</span>
+<span class="p">}</span>
+<span class="nx">err</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">result</span><span class="p">.</span><span class="nx">Into</span><span class="p">(</span><span class="o">&amp;</span><span class="nx">labels</span><span class="p">)</span></code></pre></div>
+<div class="code" data-language="rust" data-label="Rust"><pre><code class="language-rust"><span class="kd">let</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">client</span>
+<span class="w">    </span><span class="p">.</span><span class="n">predict</span><span class="p">(</span>
+<span class="w">        </span><span class="s">"sst2-clf"</span><span class="p">,</span>
+<span class="w">        </span><span class="o">&amp;</span><span class="n">serde_json</span><span class="p">::</span><span class="n">json</span><span class="o">!</span><span class="p">({</span><span class="s">"inputs"</span><span class="p">:</span><span class="w"> </span><span class="s">"El servicio ha sido excelente"</span><span class="p">}),</span>
+<span class="w">        </span><span class="o">&amp;</span><span class="n">PredictOptions</span><span class="p">::</span><span class="n">default</span><span class="p">(),</span>
+<span class="w">    </span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="k">await</span><span class="o">?</span><span class="p">;</span>
+<span class="kd">let</span><span class="w"> </span><span class="n">labels</span><span class="p">:</span><span class="w"> </span><span class="nb">Vec</span><span class="o">&lt;</span><span class="n">Label</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">decode</span><span class="p">()</span><span class="o">?</span><span class="p">;</span></code></pre></div>
+</div><p><strong>The body goes to the engine verbatim and its answer comes back verbatim.</strong> Inventing a body for
+these would be the gateway deciding, on the engine's behalf, what the engine's API should look like.</p>
+<p><strong>So the answer is handed back undecoded, and that is not defensive typing.</strong> <code>sst2-clf</code> answers a
+top-level <strong>array</strong>; <code>von-decide</code> and <code>laya-decide</code> answer objects. A client that modelled this as a
+dictionary would report &quot;this is not JSON&quot; about valid JSON, for the first engine the platform
+shipped on the route.</p>
+<p><strong>Dispatch on <code>payload_schema</code>, not on <code>modality</code>.</strong> <code>sst2-clf</code> and <code>von-decide</code> are both
+classifiers and want different bodies, so there is no <code>classify(text)</code> here — a typed method would
+promise a stability the endpoint does not offer. The catalog says which contract a model speaks:</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>model</th>
+<th><code>modality</code></th>
+<th><code>payload_schema</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sst2-clf</code></td>
+<td><code>classification</code></td>
+<td><code>hf-inference.text-classification.v1</code></td>
+</tr>
+<tr>
+<td><code>von-decide</code></td>
+<td><code>zero_shot</code></td>
+<td><code>hf-inference.zero-shot-classification.v1</code></td>
+</tr>
+<tr>
+<td><code>laya-decide</code></td>
+<td><code>typed_decision</code></td>
+<td><code>typed-decision.v1</code></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>What does not pass through is the policy.</strong> The model still resolves, <code>inference:read</code> plus the
+specific <code>model:&lt;id&gt;</code> scope is still required, a dead replica is still skipped, and the request is
+still metered and still counts against a spend cap. All three modalities share <strong>one</strong> rate-limit
+budget, named <code>predict</code> — so classification requests and typed decisions eat the same 60 RPM.</p>
+<p><strong>A model that has an OpenAI endpoint is refused here</strong> with <code>400 modality-mismatch</code>, the inverse of
+every other handler's check. Without it the same model would be reachable two ways, with two billing
+paths, and the one that billed correctly would be whichever you did not use.</p>
 <h2>The catalog</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">client</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">list</span><span class="p">()</span>    <span class="c1"># what this token may call</span>
 <span class="n">client</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">mine</span><span class="p">()</span>    <span class="c1"># the subset your token is scoped to, cached</span></code></pre></div>

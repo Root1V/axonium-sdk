@@ -141,6 +141,11 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 	var mu sync.Mutex
 	served := 0
 	var sentHeaders http.Header
+	// This server answers every path, so until predict arrived nothing checked WHICH path a case
+	// reached. On predict the model is a path segment rather than a body field, so the path is part
+	// of the contract: an SDK that put the model in the body would be answered anyway here and the
+	// case would pass.
+	var sentPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth2/token" && c.Operation != "token.fetch" {
 			writeToken(w, "contract", 300)
@@ -161,6 +166,7 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 		index := served
 		served++
 		sentHeaders = r.Header.Clone()
+		sentPath = r.URL.Path
 		mu.Unlock()
 		if index >= len(replies) {
 			index = len(replies) - 1
@@ -191,6 +197,15 @@ func runContractCase(t *testing.T, spec string, c contractCase) {
 
 		if c.Expect.Requests != nil && got != *c.Expect.Requests {
 			t.Errorf("%d requests reached the server, want %d", got, *c.Expect.Requests)
+		}
+
+		if c.Operation == "predict.create" {
+			mu.Lock()
+			path := sentPath
+			mu.Unlock()
+			if want := "/v1/models/" + stringField(c.Request, "model") + "/predict"; path != want {
+				t.Errorf("path: got %q, want %q -- the model belongs in the path on this route", path, want)
+			}
 		}
 
 		if len(c.Expect.RequestHeaders) == 0 && len(c.Expect.RequestHeadersAbsent) == 0 &&
@@ -299,6 +314,12 @@ func invokeUnary(t *testing.T, client *Client, c contractCase) map[string]any {
 		if out != nil {
 			value, meta = out, out.Meta
 		}
+	case "predict.create":
+		var out *PredictResult
+		out, err = client.Predict.Create(ctx, stringField(c.Request, "model"), c.Request["body"], PredictOptions{})
+		if out != nil {
+			value, meta = out, out.Meta
+		}
 	case "embeddings.create":
 		var out *EmbeddingList
 		out, err = client.Embeddings.Create(ctx, embeddingRequestFrom(c.Request))
@@ -317,6 +338,18 @@ func invokeUnary(t *testing.T, client *Client, c contractCase) map[string]any {
 
 	if err != nil {
 		t.Fatalf("%s: %v", c.Operation, err)
+	}
+
+	// predict is the one operation whose top level is not an object, so its view is built around a
+	// "value" key rather than being the payload itself. Decoded through Into, the accessor a caller
+	// uses, so the path walks what they would actually read.
+	if result, ok := value.(*PredictResult); ok {
+		var decoded any
+		if err := result.Into(&decoded); err != nil {
+			t.Fatalf("predict value: %v", err)
+		}
+		view := map[string]any{"value": decoded, "meta": toGeneric(t, metaAsMap(meta))}
+		return view
 	}
 
 	generic := toGeneric(t, value)
@@ -429,6 +462,9 @@ func invokeExpectingError(t *testing.T, client *Client, c contractCase) error {
 		return err
 	case "usage.retrieve":
 		_, err := client.Usage.Retrieve(ctx, stringField(c.Request, "request_id"))
+		return err
+	case "predict.create":
+		_, err := client.Predict.Create(ctx, stringField(c.Request, "model"), c.Request["body"], PredictOptions{})
 		return err
 	case "token.fetch":
 		// Any authenticated call drives the exchange; the failure under test is the token's.
