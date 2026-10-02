@@ -97,7 +97,7 @@ func (s *RerankService) Create(ctx context.Context, req RerankRequest) (*RerankR
 	if err := req.validate(); err != nil {
 		return nil, err
 	}
-	if err := s.client.checkModality(ctx, req.Model, []string{"rerank"}); err != nil {
+	if err := s.client.checkModality(ctx, req.Model, modalitiesRerank); err != nil {
 		return nil, err
 	}
 

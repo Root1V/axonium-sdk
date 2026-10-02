@@ -70,9 +70,14 @@ func TestRemoteImageURLIsRefusedWithTheReason(t *testing.T) {
 	}
 }
 
-// The gateway's modality check is one-directional: an embedding model on /v1/chat/completions
-// returns 200 with degenerate output that is billed. This is the client-side closing of that gap.
-func TestModalityCheckCatchesTheGatewaysOneDirectionalGap(t *testing.T) {
+// The modality check refuses before the wire, and only when it knows enough to.
+//
+// It was named for the gateway's one-directional check, which no longer exists: RM-66 made the
+// server-side check hold in every direction. The test survives the premise because what it asserts
+// is the request COUNT -- 0 for a wrong modality, exactly 1 for a model absent from the catalog --
+// and that is still the behaviour worth pinning now that the saving is a round trip rather than a
+// billed generation.
+func TestModalityCheckRefusesBeforeTheWire(t *testing.T) {
 	var chatCalls atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth2/token" {

@@ -17,7 +17,13 @@ from pydantic import ValidationError
 from axonium.errors import APIError, TimeoutError, TransportError, error_from_response
 from axonium.models.common import APIObject, RateLimitSnapshot, ResponseMeta
 
-__all__ = ["parse", "raise_for_status", "retry_after_seconds", "translate_transport_error"]
+__all__ = [
+    "parse",
+    "parse_value",
+    "raise_for_status",
+    "retry_after_seconds",
+    "translate_transport_error",
+]
 
 logger = logging.getLogger("axonium.http")
 
@@ -128,6 +134,31 @@ def parse(response: httpx.Response, model: type[ModelT]) -> ModelT:
 
     parsed._attach(ResponseMeta.from_response(response))
     return parsed
+
+
+def parse_value(response: httpx.Response) -> tuple[Any, ResponseMeta]:
+    """Decode a successful response whose shape is not this SDK's to know.
+
+    For the pass-through route only, where the gateway forwards the engine's body verbatim. Returns
+    the decoded JSON as-is --- a list, an object, or a scalar --- because the engine decides, and
+    `sst2-clf` decides on a list.
+
+    :func:`parse` cannot serve this: it validates against a pydantic model, and there is no model
+    to validate against.
+    """
+    raise_for_status(response)
+
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise APIError(
+            "The gateway returned a response that is not JSON.",
+            status=response.status_code,
+            request_id=response.headers.get("X-Request-ID"),
+            trace_id=response.headers.get("X-Trace-ID"),
+        ) from exc
+
+    return payload, ResponseMeta.from_response(response)
 
 
 def translate_transport_error(exc: httpx.HTTPError) -> TransportError:

@@ -46,6 +46,7 @@ from axonium.resources.chat import AsyncChat, Chat
 from axonium.resources.embeddings import AsyncEmbeddings, Embeddings
 from axonium.resources.images import AsyncImages, Images
 from axonium.resources.models import AsyncModels, Models
+from axonium.resources.predict import AsyncPredict, Predict
 from axonium.resources.rerank import AsyncRerank, Rerank
 from axonium.resources.usage import AsyncUsage, Usage
 from axonium.streaming import StreamOpen
@@ -449,6 +450,7 @@ class Axonium(_BaseAxonium):
         self.chat = Chat(self)
         self.embeddings = Embeddings(self)
         self.rerank = Rerank(self)
+        self.predict = Predict(self)
         self.usage = Usage(self)
         self.images = Images(self)
 
@@ -613,6 +615,7 @@ class AsyncAxonium(_BaseAxonium):
         self.chat = AsyncChat(self)
         self.embeddings = AsyncEmbeddings(self)
         self.rerank = AsyncRerank(self)
+        self.predict = AsyncPredict(self)
         self.usage = AsyncUsage(self)
         self.images = AsyncImages(self)
 
