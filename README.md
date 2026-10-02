@@ -31,7 +31,7 @@ equivalent.
 
 | Language | Install | Version |
 |---|---|---|
-| Python | `pip install axonium` | [`1.0.0rc5`](https://pypi.org/project/axonium/) on PyPI |
+| Python | `pip install axonium` | [`1.0.0rc6`](https://pypi.org/project/axonium/) on PyPI |
 | Go | `go get github.com/Root1V/axonium-sdk/go@v0.4.0` | `v0.4.0` |
 | Rust | `axonium = "0.4"` | [`0.4.0`](https://crates.io/crates/axonium) on crates.io |
 

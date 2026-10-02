@@ -7,6 +7,65 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+Nothing yet.
+
+### 1.0.0rc6 — 2026-10-02
+
+**`1.0.0rc5` on PyPI cannot list the catalog. This release is that fix, and it is the reason to
+upgrade.** `client.models.list()` raised `MissingCredentialsError` from a published version, because
+Python passed `authenticate=False` to the one endpoint the vendored guide named as public — and
+`PRM-167` closed it. Go, Rust and Swift carried the same false comment and survived by accident:
+their code sent the token anyway.
+
+#### Announced, as the surface diff requires: `Modality` widened, and the preflight now refuses more
+
+`Model.modality`'s `Literal` gains `rerank`, `classification`, `zero_shot` and `typed_decision`. The
+annotation is `Literal[...] | str`, so nothing a caller passes or reads becomes invalid — **but the
+behaviour behind it changed, and that is the part worth knowing**:
+
+With `verify_modality=True`, these pairings used to reach the gateway and come back `400
+modality-mismatch`. They are now refused locally as `ModalityMismatchError`, before the request:
+
+    a rerank model on chat            a classification model on chat
+    a chat model on /v1/rerank        anything with its own endpoint on /predict
+
+Same failure, different exception, one round trip earlier. A caller catching `APIError` for this and
+not `AxoniumError` will stop catching it. The flag is off by default, so a caller who never set it
+sees nothing.
+
+The reason it changed is that the check was **not working at all** for `rerank`: the accepted set was
+right, the separate hand-kept list of *known* modalities had never heard of it, and the check returns
+early on a modality it does not recognise. `qwen3-reranker` on chat was allowed. The known set is now
+derived from the per-endpoint sets, so the two cannot drift again.
+
+And the reason the check exists has expired, which is corrected in its prose but changes nothing
+about its behaviour: the gateway used to answer chat on an embedding model with `200` and degenerate
+billable output. `RM-66` closed it, measured on all six combinations. The check stays — it saves a
+request and a rate-limit unit — and no longer claims to save money.
+
+#### New
+
+- **`client.predict.create(model, body)`** — the pass-through route, `POST
+  /v1/models/{model}/predict`, for `classification`, `zero_shot` and `typed_decision`.
+  `PredictResult.value` is typed `Any` because `sst2-clf` answers a **top-level array**.
+- **`PredictResult`**, **`PredictBackendRejectedError`**, **`CapacityExhaustedError`**,
+  **`UnknownParameterError`**.
+- **`Model.payload_schema`** — the field that identifies which body a model takes. Dispatch on it
+  rather than on `modality`: `sst2-clf` and `von-decide` are both classifiers and want different
+  bodies.
+- **`ChatCompletionRequest.response_format`** — structured output. The allowlist had been warning
+  that the gateway did not support it, which was false in both halves and stripped the field.
+
+#### Also
+
+The preflight no longer refuses a model missing from the catalog. Since `PRM-167` the catalog holds
+only the models the token has a grant for, so absence has two causes this SDK cannot tell apart — not
+registered (`400 unknown-model`) or not granted (`403 forbidden`) — and refusing locally pre-empted
+the `403` whose whole job is to name the missing scope.
+
+Streams retry once when rejected *before* the first byte, matching Go and Rust. All three documented
+"never" and did 1, 3 and 3.
+
 **The pass-through route: `client.predict.create(model, body)`.**
 
 `POST /v1/models/{model}/predict` serves three modalities the OpenAI surface has no shape for ---
