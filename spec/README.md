@@ -1,12 +1,13 @@
 # Contract specification
 
-This directory is the shared source of truth for every language SDK in this repository. Behavior
-that must be identical across Python, Go and Rust is defined here once, in language-neutral form,
-rather than reimplemented three times from prose.
+This directory is the shared source of truth for every language SDK that replays it. Behavior that
+must be identical across Python, Go, Rust and Swift is defined here once, in language-neutral form,
+rather than reimplemented four times from prose. Swift lives in its own repository and vendors this
+directory wholesale.
 
 | Path | What it is |
 |---|---|
-| `prometheus-gateway.md` | Vendored copy of the platform team's integration guide — the API contract. **Revision 2026-09-16a · `f8cf34d`** |
+| `prometheus-gateway.md` | Vendored copy of the platform team's integration guide — the API contract. **The revision is the one in that file's own header, and is not repeated here.** |
 | `errors.json` | The error catalog: HTTP status × `type` suffix × retryability |
 | `cases/manifest.json` | Contract-test case index, replayed by each SDK's test suite |
 | `fixtures/` | Golden response bodies (`*.json`) and literal SSE wire captures (`*.sse`) |
@@ -67,11 +68,28 @@ against the gateway source. Every SDK should follow these.
 
 ## Open questions for the platform team
 
-- **422 breaks the error envelope.** Request-schema validation failures return FastAPI's default
-  422 body — `application/json`, a list of pydantic errors under `detail` — rather than the RFC
-  9457 envelope §5.1 describes, and they carry **no `request_id` or `trace_id`**. A client that
-  hits one has nothing to give support. 422 is also absent from the §5.2 catalog. Observed against
-  a live deployment; SDKs currently fall back by status code.
+None. The one that was here is answered below, kept rather than deleted because the SDKs still
+carry the fallback it caused.
+
+### Closed: 422 broke the error envelope (PRM-157)
+
+Request-schema validation failures used to return FastAPI's default 422 body — `application/json`,
+a list of pydantic errors under `detail` — rather than the RFC 9457 envelope §5.1 describes, with
+**no `request_id` or `trace_id`** in the body, so a client that hit one had nothing to give support.
+
+`PRM-157` wrapped it. Measured 2026-10-02 on `POST /v1/models/von-decide/predict`: a proper
+`application/problem+json` envelope, `type` suffix `predict-backend-rejected`, both correlation ids
+in the body, and the engine's own failure preserved verbatim under `backend_error`. Pinned by the
+case `predict-engine-rejects-the-payload-and-the-gateway-wraps-it`.
+
+**The fallback stays, and this section is why.** `error-correlation-ids-only-in-the-headers` replays
+the pre-`PRM-157` bytes, because a body with no `type` still arrives from elsewhere — a `404` for a
+route the gateway does not serve, an HTML page from a proxy that never reached it. The status-keyed
+fallback and the header fallback for the ids were never specific to 422 and are still load-bearing.
+
+**This question sat here as open for the six days after it was answered**, which is the same shape
+as the revision line above: a hand-maintained statement about somebody else's state, with nothing
+able to check it.
 
 ## Updating the vendored guide
 
