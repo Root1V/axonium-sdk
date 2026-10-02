@@ -7,6 +7,37 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+Re-vendored at `2026-10-01 · PRM-164/167/173`. §2.7 is rewritten and renamed, from "Client types
+--- who may hold a credential" to "Credentials --- whose they are, and who issues them".
+
+**The axis moved.** The old section's rule was *confidential clients only*, with a distributed app
+refused because it cannot keep a secret. The new rule is that **a credential identifies whoever pays
+for consumption**, and the device stops being the question:
+
+- An *integrator's* credential must never ship inside a distributed application --- a copy on every
+  user's device is a copy of the identity that is granted models and billed.
+- An *end client's own* credential may live on that client's own devices, phone and laptop alike.
+  The principal, the grants and the bill are theirs, so a leak costs them their own account.
+
+An app with a pasted secret is still a public client in RFC 8252's terms; it is accepted here when
+the secret and the bill belong to the same person. That is the distinction the old §2.7 did not
+separate, and it is the one that answers `A-34`.
+
+Also now stated as a rule rather than an absence: **issuance is always a human administrator**.
+There is no registration endpoint and no API an integrator can call to mint credentials for its
+users, because issuing one opens a billing account. An application therefore has to treat **"no
+credential yet"** as a first-class state rather than an error, and the request goes to the platform
+rather than to the integrator. One credential per client, used on as many of that client's own
+devices as they have --- per-device credentials are not issued, so an app assuming one install per
+credential is wrong for any user with a phone and a laptop.
+
+**Nothing in these three SDKs changes.** They take a token, or a callback that returns one, and
+nothing about who obtained it is theirs to know. The section matters for the Swift SDK, whose
+documented example reads a secret from the Keychain --- which the new §2.7 permits when that
+credential is the end client's own, and still refuses when it is the integrator's.
+
+`PRM-170` is superseded in substance rather than relaxed or tightened.
+
 Re-vendored at `2026-09-29 · PRM-164/167/170`, which adds §2.7, "Client types — who may hold a
 credential".
 
@@ -682,6 +713,37 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+Re-vendored at `2026-10-01 · PRM-164/167/173`. §2.7 is rewritten and renamed, from "Client types
+--- who may hold a credential" to "Credentials --- whose they are, and who issues them".
+
+**The axis moved.** The old section's rule was *confidential clients only*, with a distributed app
+refused because it cannot keep a secret. The new rule is that **a credential identifies whoever pays
+for consumption**, and the device stops being the question:
+
+- An *integrator's* credential must never ship inside a distributed application --- a copy on every
+  user's device is a copy of the identity that is granted models and billed.
+- An *end client's own* credential may live on that client's own devices, phone and laptop alike.
+  The principal, the grants and the bill are theirs, so a leak costs them their own account.
+
+An app with a pasted secret is still a public client in RFC 8252's terms; it is accepted here when
+the secret and the bill belong to the same person. That is the distinction the old §2.7 did not
+separate, and it is the one that answers `A-34`.
+
+Also now stated as a rule rather than an absence: **issuance is always a human administrator**.
+There is no registration endpoint and no API an integrator can call to mint credentials for its
+users, because issuing one opens a billing account. An application therefore has to treat **"no
+credential yet"** as a first-class state rather than an error, and the request goes to the platform
+rather than to the integrator. One credential per client, used on as many of that client's own
+devices as they have --- per-device credentials are not issued, so an app assuming one install per
+credential is wrong for any user with a phone and a laptop.
+
+**Nothing in these three SDKs changes.** They take a token, or a callback that returns one, and
+nothing about who obtained it is theirs to know. The section matters for the Swift SDK, whose
+documented example reads a secret from the Keychain --- which the new §2.7 permits when that
+credential is the end client's own, and still refuses when it is the integrator's.
+
+`PRM-170` is superseded in substance rather than relaxed or tightened.
+
 Re-vendored at `2026-09-29 · PRM-164/167/170`, which adds §2.7, "Client types — who may hold a
 credential".
 
@@ -1247,6 +1309,37 @@ No third-party dependencies: standard library only.
 ## Rust
 
 ### Unreleased
+
+Re-vendored at `2026-10-01 · PRM-164/167/173`. §2.7 is rewritten and renamed, from "Client types
+--- who may hold a credential" to "Credentials --- whose they are, and who issues them".
+
+**The axis moved.** The old section's rule was *confidential clients only*, with a distributed app
+refused because it cannot keep a secret. The new rule is that **a credential identifies whoever pays
+for consumption**, and the device stops being the question:
+
+- An *integrator's* credential must never ship inside a distributed application --- a copy on every
+  user's device is a copy of the identity that is granted models and billed.
+- An *end client's own* credential may live on that client's own devices, phone and laptop alike.
+  The principal, the grants and the bill are theirs, so a leak costs them their own account.
+
+An app with a pasted secret is still a public client in RFC 8252's terms; it is accepted here when
+the secret and the bill belong to the same person. That is the distinction the old §2.7 did not
+separate, and it is the one that answers `A-34`.
+
+Also now stated as a rule rather than an absence: **issuance is always a human administrator**.
+There is no registration endpoint and no API an integrator can call to mint credentials for its
+users, because issuing one opens a billing account. An application therefore has to treat **"no
+credential yet"** as a first-class state rather than an error, and the request goes to the platform
+rather than to the integrator. One credential per client, used on as many of that client's own
+devices as they have --- per-device credentials are not issued, so an app assuming one install per
+credential is wrong for any user with a phone and a laptop.
+
+**Nothing in these three SDKs changes.** They take a token, or a callback that returns one, and
+nothing about who obtained it is theirs to know. The section matters for the Swift SDK, whose
+documented example reads a secret from the Keychain --- which the new §2.7 permits when that
+credential is the end client's own, and still refuses when it is the integrator's.
+
+`PRM-170` is superseded in substance rather than relaxed or tightened.
 
 Re-vendored at `2026-09-29 · PRM-164/167/170`, which adds §2.7, "Client types — who may hold a
 credential".
