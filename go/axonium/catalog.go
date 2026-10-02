@@ -31,6 +31,15 @@ type Model struct {
 	Family       string `json:"family"`
 	Quantization string `json:"quantization"`
 
+	// PayloadSchema is a versioned identifier for the request body's contract, e.g.
+	// "prometheus.chat.v1" or "hf-inference.text-classification.v1".
+	//
+	// This, not Modality, is what identifies the shape to send. It matters most on the
+	// pass-through route, where the body belongs to the engine and two engines serving the same
+	// modality can want different ones: sst2-clf and von-decide are both classifiers and their
+	// payloads differ. Dispatch on this.
+	PayloadSchema string `json:"payload_schema"`
+
 	// Aliases is not populated by the current gateway, which advertises only canonical slugs.
 	// Older names still resolve on request; they are simply no longer listed.
 	Aliases []string `json:"aliases,omitempty"`
@@ -146,22 +155,46 @@ func (s *ModelsService) Mine(ctx context.Context) (*ModelList, error) {
 }
 
 // Modality sets accepted by each endpoint.
-// knownModalities is every modality this SDK can place. Anything outside it is newer than this
-// build and is not ours to reject.
-var knownModalities = map[string]bool{"text": true, "vision": true, "embedding": true, "image": true}
-
 var (
 	modalitiesChat       = []string{"text", "vision"}
 	modalitiesEmbeddings = []string{"embedding"}
 	modalitiesImages     = []string{"image"}
+	modalitiesRerank     = []string{"rerank"}
+
+	// The three pass-through modalities (spec §3.10). They share one endpoint and one rate-limit
+	// budget, and the check is useful in one direction only: the gateway refuses a chat model on
+	// /predict itself with 400 modality-mismatch, but forwards a classification model to the chat
+	// endpoint without complaint.
+	modalitiesPredict = []string{"classification", "zero_shot", "typed_decision"}
 )
+
+// knownModalities is every modality this SDK can place. Anything outside it is newer than this
+// build and is not ours to reject.
+//
+// **Derived from the sets above rather than written out, because it was written out and drifted.**
+// RerankService.Create has always passed []string{"rerank"}, "rerank" was never in the hand-kept
+// map, and checkModality returns early on a modality it does not know -- so the call refused
+// nothing for months, including the case its own doc comment promised to catch. The two lists were
+// one truth in two places and only one of them was updated when rerank shipped. There is now one.
+var knownModalities = func() map[string]bool {
+	known := map[string]bool{}
+	for _, set := range [][]string{
+		modalitiesChat, modalitiesEmbeddings, modalitiesImages, modalitiesRerank, modalitiesPredict,
+	} {
+		for _, m := range set {
+			known[m] = true
+		}
+	}
+	return known
+}()
 
 // checkModality verifies a model's modality against the endpoint before sending.
 //
-// The gateway's own check is one-directional: calling /v1/embeddings with a text model is
-// rejected, but calling /v1/chat/completions with an embedding model is not -- it returns 200 with
-// degenerate output that is billed. This closes that gap, and catches typos, before the request is
-// sent.
+// The gateway USED TO accept chat on an embedding model and answer 200 with degenerate, billable
+// output; it now rejects it. RM-66 made the server-side check hold in every direction, and all six
+// wrong-modality combinations measured against a live deployment answer 400 modality-mismatch. So
+// this is a typo-catcher and a saved round trip rather than a correctness guard: what it saves is a
+// request and a rate-limit unit, not a wasted generation.
 //
 // Off unless Config.VerifyModality is set, because it costs one catalog request per client and the
 // SDK otherwise makes no request a caller did not ask for. If the catalog cannot be loaded the
@@ -198,6 +231,6 @@ func (c *Client) checkModality(ctx context.Context, model string, accepted []str
 			return nil
 		}
 	}
-	return fmt.Errorf("%w: model %q has modality %q, which this endpoint does not accept (it takes %s); the gateway would answer 200 with degenerate output and bill for it",
+	return fmt.Errorf("%w: model %q has modality %q, which this endpoint does not accept (it takes %s); the gateway refuses this combination too, with the same 400 modality-mismatch -- this was refused locally to save the request and the rate-limit unit",
 		ErrInvalidRequest, model, found.Modality, strings.Join(accepted, " or "))
 }

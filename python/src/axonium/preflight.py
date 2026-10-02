@@ -1,14 +1,21 @@
 """Client-side checks run before a request is sent.
 
-The gateway's modality validation is one-directional: calling ``/v1/embeddings`` with a
-text model is rejected, but calling ``/v1/chat/completions`` with an *embedding* model is not —
-it returns ``200`` with degenerate output, which the caller pays for. A mistyped model ID that
-happens to land on the wrong kind of model therefore costs money and produces nonsense instead of
-an error.
+The gateway **used to** accept chat on an embedding model and answer ``200`` with degenerate,
+billable output, while ``/v1/embeddings`` rejected the wrong modality outright. That asymmetry is
+why this check exists, and it is gone: RM-66 made the server-side check hold in every direction, and
+measuring all six wrong-modality combinations against a live deployment now returns
+``400 modality-mismatch`` for each of them.
 
-Since the catalog already says what modality each model has, that mistake can be caught before the
-request leaves. Off by default: this is a guard rail, not a correctness requirement, and enabling
-it costs one catalog request per client.
+So this is a **typo-catcher and a saved round trip**, not a correctness guard, and what it saves is
+a request and a rate-limit unit rather than a wasted generation. The spec says as much where it
+records the fix: a client-side check of this kind "can stay", because the server-side guarantee now
+holds without it. Still off by default, and more clearly so than before: enabling it costs one
+catalog request per client to avoid one refused request.
+
+This file is also the standing reminder that a guard whose *premise* expires does not fail — the
+code stayed correct and every test stayed green while the reason in the docstring became false. The
+guide documenting RM-66 was vendored into this repo and read for its error-catalog rows; this prose
+was not re-read against it.
 """
 
 from __future__ import annotations
@@ -22,10 +29,25 @@ __all__ = ["ENDPOINT_MODALITIES", "check_model"]
 
 #: Which model modalities each endpoint can serve. Vision models are called on the chat endpoint
 #: like text models, which is why chat accepts both.
+#:
+#: **Every endpoint that calls :func:`check_model` must appear here**, and this is not a style
+#: rule. The check below ignores a modality it does not recognise, and it recognises exactly the
+#: union of these sets -- so an endpoint missing from this table does not get a weaker check, it
+#: gets none, and neither does any modality only that endpoint accepts. ``rerank`` shipped that
+#: way: :meth:`Rerank.create` has always called ``_preflight(model, "rerank")``, there was no
+#: ``"rerank"`` key, and so for months the call could not refuse anything -- including the case its
+#: own docstring promised to catch. ``test_preflight.py`` now fails if an endpoint calls in without
+#: a row.
 ENDPOINT_MODALITIES: dict[str, frozenset[str]] = {
     "chat": frozenset({"text", "vision"}),
     "embeddings": frozenset({"embedding"}),
     "images": frozenset({"image"}),
+    "rerank": frozenset({"rerank"}),
+    # The three pass-through modalities (spec §3.10). They share one endpoint and one rate-limit
+    # budget, and the check here is the useful direction: the gateway refuses a chat model on
+    # /predict itself with 400 modality-mismatch, but sends a classification model to the chat
+    # endpoint without complaint.
+    "predict": frozenset({"classification", "zero_shot", "typed_decision"}),
 }
 
 
@@ -78,8 +100,9 @@ def check_model(catalog: ModelList | None, model_id: str, *, endpoint: str) -> N
     if modality not in allowed:
         raise ModalityMismatchError(
             f"Model {model_id!r} has modality {modality!r}, which the {endpoint} endpoint cannot "
-            f"serve (it needs {' or '.join(sorted(allowed))}). The gateway does not reject this "
-            f"combination itself — it would return a billable response containing nonsense.",
+            f"serve (it needs {' or '.join(sorted(allowed))}). The gateway refuses this "
+            f"combination too, with the same 400 modality-mismatch; this was refused locally to "
+            f"save the request and the rate-limit unit.",
             status=400,
             type_suffix="modality-mismatch",
         )

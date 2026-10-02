@@ -216,7 +216,7 @@
       "meaning": "The replicas serving one model disagree about their modality, so the gateway refuses the whole group rather than quietly dropping the odd one. The detail names each instance and what it claims.",
       "retryable": false,
       "remedy": "Requires operator action; retrying cannot help.",
-      "$comment": "Added from guide 2026-09-16a. Refusing the group is the right call and worth knowing why: answering a chat request from an embedding backend produces confident nonsense rather than an error, which is the expensive failure."
+      "$comment": "Added from guide 2026-09-16a. Refusing the group is the right call and worth knowing why: answering a chat request from an embedding backend produces confident nonsense rather than an error, which is the expensive failure. AND THIS IS STILL TRUE AFTER RM-66, unlike the nearly identical sentence that used to justify the SDKs' own modality preflight. RM-66 made the gateway's check hold in every direction, but that check reads ONE modality for a model -- the group's. It cannot see a replica inside the group claiming a different one, which is exactly what this error is about. Measured 2026-10-02: all six wrong-modality combinations a CALLER can pick now answer 400 modality-mismatch; this row is about the case a caller cannot pick wrong and the per-model check cannot catch. Written out so the next reader correcting RM-66 prose does not correct this too."
     },
     {
       "status": 401,

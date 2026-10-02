@@ -12,8 +12,23 @@ from axonium.models.common import APIObject, _Passthrough
 __all__ = ["Modality", "Model", "ModelList"]
 
 #: What kind of input a model consumes, which determines the endpoint it can be called on.
-#: Typed loosely on purpose — a gateway that adds a modality must not break an older SDK.
-Modality = Literal["text", "vision", "embedding", "image"] | str
+#: Typed loosely on purpose — a gateway that adds a modality must not break an older SDK. Every
+#: value listed here was measured in a live catalog; the ``| str`` is what keeps the next one from
+#: being a validation error. The last three route to ``/v1/models/{model}/predict`` and nowhere
+#: else.
+Modality = (
+    Literal[
+        "text",
+        "vision",
+        "embedding",
+        "image",
+        "rerank",
+        "classification",
+        "zero_shot",
+        "typed_decision",
+    ]
+    | str
+)
 
 
 class Model(_Passthrough):
@@ -26,6 +41,15 @@ class Model(_Passthrough):
     family: str | None = None
     quantization: str | None = None
     modality: Modality | None = None
+
+    #: A versioned identifier for the request body's contract, e.g. ``"prometheus.chat.v1"`` or
+    #: ``"hf-inference.text-classification.v1"``.
+    #:
+    #: **This, not :attr:`modality`, is what identifies the shape to send.** It matters most on the
+    #: pass-through route, where the body belongs to the engine and two engines serving the same
+    #: modality can want different ones: ``sst2-clf`` and ``von-decide`` are both classifiers and
+    #: their payloads differ. Dispatch on this.
+    payload_schema: str | None = None
 
 
 class ModelList(APIObject):

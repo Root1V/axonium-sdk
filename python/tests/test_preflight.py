@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import pathlib
+
 import httpx
 import pytest
 import respx
 
+import axonium
 from axonium import AsyncAxonium, Axonium
 from axonium.errors import ModalityMismatchError
 from axonium.models.catalog import ModelList
@@ -22,6 +25,10 @@ CATALOG_BODY = {
         {"id": "vision-model", "object": "model", "modality": "vision"},
         {"id": "embed-model", "object": "model", "modality": "embedding"},
         {"id": "image-model", "object": "model", "modality": "image"},
+        {"id": "rerank-model", "object": "model", "modality": "rerank"},
+        {"id": "clf-model", "object": "model", "modality": "classification"},
+        {"id": "zero-shot-model", "object": "model", "modality": "zero_shot"},
+        {"id": "decision-model", "object": "model", "modality": "typed_decision"},
         {"id": "mystery-model", "object": "model", "modality": "hologram"},
         {"id": "unreported-model", "object": "model"},
     ],
@@ -51,14 +58,21 @@ class TestCheckModel:
             ("vision-model", "chat"),
             ("embed-model", "embeddings"),
             ("image-model", "images"),
+            ("rerank-model", "rerank"),
+            # All three pass-through modalities share one endpoint, which is also why they share
+            # one rate-limit budget.
+            ("clf-model", "predict"),
+            ("zero-shot-model", "predict"),
+            ("decision-model", "predict"),
         ],
     )
     def test_accepts_a_model_the_endpoint_can_serve(self, model: str, endpoint: str) -> None:
         check_model(catalog(), model, endpoint=endpoint)
 
     def test_rejects_chat_on_an_embedding_model(self) -> None:
-        # The gateway does not reject this: it answers 200 with degenerate output the caller pays
-        # for. Catching it here is the whole reason this check exists.
+        # The pairing this check was built for. The gateway used to answer 200 with degenerate
+        # billable output here; since RM-66 it refuses too, so what this saves is the request and
+        # the rate-limit unit rather than a wasted generation.
         with pytest.raises(ModalityMismatchError, match="embedding"):
             check_model(catalog(), "embed-model", endpoint="chat")
 
@@ -69,6 +83,17 @@ class TestCheckModel:
             ("chat-model", "images"),
             ("image-model", "chat"),
             ("vision-model", "embeddings"),
+            # Every one of these was ALLOWED until the known-modality set was derived from the
+            # rows instead of kept by hand. The first two are the rerank gap that shipped: the
+            # endpoint passed "rerank" as its accepted set, nothing knew "rerank" was a modality,
+            # and so the check returned before it could compare anything.
+            ("rerank-model", "chat"),
+            ("chat-model", "rerank"),
+            ("clf-model", "chat"),
+            ("chat-model", "predict"),
+            ("embed-model", "predict"),
+            ("rerank-model", "predict"),
+            ("decision-model", "rerank"),
         ],
     )
     def test_rejects_every_other_wrong_pairing(self, model: str, endpoint: str) -> None:
@@ -98,14 +123,22 @@ class TestCheckModel:
         check_model(catalog(), "CHAT-MODEL", endpoint="chat")
 
     def test_a_visible_model_with_the_wrong_modality_is_still_refused(self) -> None:
-        """What the preflight can still prove, and the reason it exists.
+        """What the preflight can still prove, and what it is now worth.
 
-        A model the catalog *does* show carries its modality, so a mismatch is a fact rather than
-        an inference — and this is the case the gateway will not catch: it rejects a text model on
-        ``/v1/embeddings`` but answers ``/v1/chat/completions`` with an embedding model, returning
-        billable nonsense.
+        A model the catalog *does* show carries its modality, so a mismatch is a fact rather than an
+        inference, and refusing it locally costs nothing and saves a round trip.
+
+        **The premise this test was written on has expired, and the assertion moved with it.** It
+        matched on the word ``billable``, because the gateway used to answer
+        ``/v1/chat/completions`` with an embedding model and bill for the nonsense. RM-66 closed
+        that; all six wrong-modality combinations measured live now answer ``400
+        modality-mismatch``. Nothing went red when the premise died --- the code was still correct
+        and the message was still produced --- which is why a mutation could never have found this
+        and only a live measurement did. What is asserted now is that the message tells the caller
+        the gateway refuses it too, so nobody reads a local refusal as the only thing standing
+        between them and a bill.
         """
-        with pytest.raises(ModalityMismatchError, match="billable"):
+        with pytest.raises(ModalityMismatchError, match="refuses this combination too"):
             check_model(catalog(), "embed-model", endpoint="chat")
 
     def test_allows_a_modality_this_sdk_does_not_know(self) -> None:
@@ -358,8 +391,71 @@ def test_config_flag_reads_from_the_environment(
     assert AxoniumConfig(**config_kwargs).verify_modality is True
 
 
-def test_every_endpoint_has_a_modality_mapping() -> None:
+def test_every_endpoint_that_calls_the_preflight_has_a_modality_mapping() -> None:
+    """Every ``_preflight(model, "x")`` in the package must have an ``"x"`` row.
+
+    **This test used to assert its own answer** --- ``set(ENDPOINT_MODALITIES) == {"chat",
+    "embeddings", "images"}`` --- which is not the invariant its name claims. A literal typed into a
+    test cannot notice a new call site, so when :meth:`Rerank.create` shipped with
+    ``_preflight(model, "rerank")`` and no ``"rerank"`` row, this test passed. :func:`check_model`
+    returns silently for an endpoint it has no row for, so the call refused nothing --- including
+    the pairing its own docstring promised to catch --- and the one test standing guard over that
+    had been given the wrong answer key.
+
+    It now reads the call sites out of the source. A new endpoint whose row is missing fails here,
+    and so does a row that exists for no endpoint, which is how a mapping goes stale in the other
+    direction.
+    """
+    import re
+
     from axonium.preflight import ENDPOINT_MODALITIES
 
-    assert set(ENDPOINT_MODALITIES) == {"chat", "embeddings", "images"}
+    package = pathlib.Path(axonium.__file__).parent
+    calls = re.compile(r"""_preflight\(\s*[^,()]+,\s*["']([a-z_.]+)["']""")
+
+    called: dict[str, set[str]] = {}
+    for source in package.rglob("*.py"):
+        for endpoint in calls.findall(source.read_text()):
+            called.setdefault(endpoint, set()).add(source.relative_to(package).as_posix())
+
+    assert called, "found no _preflight call sites; the pattern stopped matching, not the code"
+
+    missing = {e: sorted(w) for e, w in called.items() if e not in ENDPOINT_MODALITIES}
+    assert not missing, (
+        f"these endpoints call the preflight with no row in ENDPOINT_MODALITIES, so the check "
+        f"silently refuses nothing for them: {missing}"
+    )
+
+    unused = set(ENDPOINT_MODALITIES) - set(called)
+    assert not unused, (
+        f"these rows exist for no caller, so whatever they claim to guard is unguarded: "
+        f"{sorted(unused)}"
+    )
+
     assert all(isinstance(v, frozenset) and v for v in ENDPOINT_MODALITIES.values())
+
+
+def test_the_known_modality_set_is_derived_from_the_endpoint_rows() -> None:
+    """A modality only one endpoint accepts is still *known*, or that endpoint has no check.
+
+    :func:`check_model` ignores a modality outside the union of the rows, which is deliberate --- a
+    guard rail that rejected valid requests each time the platform added a modality would be worse
+    than none. The consequence is that the union has to be derived rather than kept by hand: a
+    second hand-kept list is how ``rerank`` ended up accepted everywhere. Go and Rust had exactly
+    two lists and the same bug; both now derive theirs too.
+    """
+    from axonium.preflight import ENDPOINT_MODALITIES
+
+    for endpoint, accepted in ENDPOINT_MODALITIES.items():
+        for modality in accepted:
+            catalog_with = ModelList.model_validate(
+                {"object": "list", "data": [{"id": "m", "object": "model", "modality": modality}]}
+            )
+            # Accepted where it belongs...
+            check_model(catalog_with, "m", endpoint=endpoint)
+            # ...and refused everywhere it does not, which only holds if it is in the known set.
+            for other, others_accepted in ENDPOINT_MODALITIES.items():
+                if modality in others_accepted:
+                    continue
+                with pytest.raises(ModalityMismatchError):
+                    check_model(catalog_with, "m", endpoint=other)

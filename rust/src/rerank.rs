@@ -94,7 +94,8 @@ impl Client {
                 "documents must contain at least one document".into(),
             ));
         }
-        self.check_modality(&request.model, &["rerank"]).await?;
+        self.check_modality(&request.model, crate::catalog::RERANK_MODALITIES)
+            .await?;
 
         let body = serde_json::to_value(request)
             .map_err(|e| Error::InvalidRequest(format!("could not encode the request: {e}")))?;

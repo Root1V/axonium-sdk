@@ -1,6 +1,6 @@
 {
   "$comment": "Language-neutral contract cases. Every SDK replays these against its own HTTP mock and asserts the stated expectations, so identical behavior is enforced by construction rather than by parallel hand-written suites that drift. The error taxonomy itself lives in ../errors.json and is asserted separately; these cases cover behavior that only concrete wire data can express.",
-  "version": 25,
+  "version": 26,
   "field_paths": "Dotted, with integer segments indexing into lists: 'choices.0.finish_reason'. A path resolves against the parsed result object, using the SDK's own accessors where it exposes them (for example 'content' and 'usage.total_tokens').",
   "cases": [
     {
@@ -981,6 +981,152 @@
       }
     },
     {
+      "id": "predict-classification-answers-a-top-level-array",
+      "$comment": "Recorded live 2026-10-02 against POST /v1/models/sst2-clf/predict. THE CASE THIS ROUTE EXISTS FOR: the body is a top-level ARRAY, so an SDK that models the pass-through answer as an object/dict/map fails here and only here -- the other two engines on the route answer objects and would let that design pass. The value is reached as `value.0.label`, which only resolves if the SDK handed the body back undecoded instead of fitting it to a type. X-RateLimit-Scope is asserted because it is `predict` rather than one scope per modality: all three pass-through modalities share this budget, so a caller pacing against it has to know that classification requests eat the same 60 RPM as typed decisions. Nothing in the corpus pinned a scope value before, in any case, on any route.",
+      "operation": "predict.create",
+      "request": {
+        "model": "sst2-clf",
+        "body": {
+          "inputs": "El servicio ha sido excelente"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Request-ID": "984ff308-9b0d-4f89-bc8f-8ba24e9b7faf",
+          "X-Trace-ID": "6c59ec765da9096b2fc70eb44ae06211",
+          "X-RateLimit-Scope": "predict",
+          "X-RateLimit-Limit-Requests": "60",
+          "X-RateLimit-Remaining-Requests": "59",
+          "X-RateLimit-Reset-Requests": "1790921880",
+          "X-RateLimit-Limit-Tokens": "40000",
+          "X-RateLimit-Remaining-Tokens": "40000",
+          "X-RateLimit-Reset-Tokens": "1790921880"
+        },
+        "body_file": "predict_classification.json"
+      },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "value.0.label": "POSITIVE",
+          "value.0.score": 0.9783037304878235,
+          "meta.request_id": "984ff308-9b0d-4f89-bc8f-8ba24e9b7faf",
+          "meta.rate_limit.scope": "predict",
+          "meta.rate_limit.limit_requests": 60
+        },
+        "request_headers_absent": [
+          "Idempotency-Key",
+          "X-Prometheus-Instance"
+        ]
+      }
+    },
+    {
+      "id": "predict-zero-shot-scores-the-labels-it-was-given",
+      "$comment": "Recorded live 2026-10-02 against POST /v1/models/von-decide/predict. The same modality family as sst2-clf and a DIFFERENT body and a different answer -- candidate_labels go in under `parameters`, and the answer is an object with parallel `labels`/`scores` arrays rather than a list of {label,score} pairs. That is the whole argument against a typed classify(text): two classifiers, two shapes, and payload_schema is what tells them apart (hf-inference.text-classification.v1 vs hf-inference.zero-shot-classification.v1). `labels.0` is asserted and the SCORE is not, for the same reason rerank-scores-documents does not pin one: the ordering is the contract, the float is the model.",
+      "operation": "predict.create",
+      "request": {
+        "model": "von-decide",
+        "body": {
+          "inputs": "Me cobraron dos veces la misma factura",
+          "parameters": {
+            "candidate_labels": [
+              "hubo un cargo duplicado",
+              "el cliente está satisfecho"
+            ]
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json",
+          "X-RateLimit-Scope": "predict"
+        },
+        "body_file": "predict_zero_shot.json"
+      },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "value.labels.0": "hubo un cargo duplicado",
+          "value.sequence": "Me cobraron dos veces la misma factura"
+        }
+      }
+    },
+    {
+      "id": "predict-typed-decision-answers-several-questions-at-once",
+      "$comment": "Recorded live 2026-10-02 against POST /v1/models/laya-decide/predict. Two questions in one forward pass, each with its own distribution AND a separate confidence, plus a `routing` block naming which sub-model answered and why. Nothing here is OpenAI-shaped and nothing here is shaped like the other two engines on the same route, which is why the SDK interprets none of it. `usage.input_tokens` is asserted under its own name: this engine does not say prompt_tokens, and an SDK that normalised the pass-through body to its own Usage type would have to invent the mapping. It does not -- the usage row for billing comes from GET /v1/usage/{id}, not from here.",
+      "operation": "predict.create",
+      "request": {
+        "model": "laya-decide",
+        "body": {
+          "state": {
+            "email": "Me cobraron dos veces y necesito el reembolso hoy o cancelamos el plan"
+          },
+          "questions": {
+            "category": {
+              "type": "choice",
+              "instructions": "¿Qué equipo debe atenderlo?",
+              "criteria": [
+                "facturación",
+                "soporte",
+                "ventas"
+              ]
+            },
+            "churn_risk": {
+              "type": "noul",
+              "instructions": "¿El cliente amenaza con cancelar?"
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json",
+          "X-RateLimit-Scope": "predict"
+        },
+        "body_file": "predict_typed_decision.json"
+      },
+      "expect": {
+        "kind": "ok",
+        "fields": {
+          "value.answers.category.choice": "facturación",
+          "value.answers.churn_risk.type": "noul",
+          "value.usage.input_tokens": 94,
+          "value.routing.model": "multilingual"
+        }
+      }
+    },
+    {
+      "id": "predict-engine-rejects-the-payload-and-the-gateway-wraps-it",
+      "$comment": "Recorded live 2026-10-02: von-decide called WITHOUT the `parameters` the engine requires. The first recorded predict-backend-rejected in this corpus, and the first evidence for the catalog row that says the status is the engine's rather than the gateway's -- a 422 stays a 422, which is why errors.json gives this suffix status \"4xx\" and probe_statuses instead of a number. It is NOT retryable even though 422 is a 4xx that some policies retry, and the engine's own error survives verbatim under `backend_error`: the pydantic failure naming `body.parameters` is the only thing that tells the caller which field is missing, since the gateway cannot know. An SDK that keeps only the modelled envelope members throws that away and leaves the caller with \"the backend rejected this request\" and no field. NOT the same case as err_predict_engine_validation.json, which is the PRE-PRM-157 raw 422 with no envelope at all and both ids in headers only; that one still earns its place as the header-fallback case.",
+      "operation": "predict.create",
+      "request": {
+        "model": "von-decide",
+        "body": {
+          "inputs": "x"
+        }
+      },
+      "response": {
+        "status": 422,
+        "headers": {
+          "Content-Type": "application/problem+json",
+          "X-Request-ID": "1b14e210-25b0-4b66-bf31-87904dfa7279",
+          "X-Trace-ID": "f7b2b7483f3f5bb38ea2c8035b6a603d",
+          "X-RateLimit-Scope": "predict"
+        },
+        "body_file": "err_predict_backend_rejected.json"
+      },
+      "expect": {
+        "kind": "error",
+        "error_type_suffix": "predict-backend-rejected",
+        "retryable": false,
+        "has_request_id": true,
+        "has_trace_id": true
+      }
+    },
+    {
       "id": "error-rate-limit-scope-comes-from-the-body",
       "$comment": "Recorded 2026-09-19, BEFORE the platform put X-RateLimit-Scope and trace_id on this envelope (PRM-130, guide 2026-09-19b). Kept deliberately: a deployment predating that fix still answers exactly this way, and this is the only case that exercises reading the scope out of the body. Its companion, error-rate-limit-current-envelope, records what a current deployment sends. Two edits, both declared: ids are sanitised as elsewhere in this corpus, and retry_after was reduced from the observed 49 to 1 so three test suites do not sleep through a real window.",
       "operation": "embeddings.create",
@@ -1078,7 +1224,7 @@
         "has_request_id": true,
         "has_trace_id": true
       },
-      "$comment": "An error whose body is not a problem+json envelope at all, with both correlation ids present only in the headers. The body is the exact 422 measured on 2026-09-27 against POST /v1/models/{model}/predict, where the engine's validation failure is passed through verbatim; the X-Request-ID is the one that response actually carried. It is replayed here through chat.completions.create because predict has no SDK method yet, and because the envelope handling under test is not route-specific -- a 404 for an unserved route and an HTML page from a proxy that never reached the gateway both arrive the same way. WHY IT EXISTS: all three SDKs read the ids from the body only until AXO-108 fixed them on 2026-09-27, with one hand-written test per language and nothing added here. Removing the header fallback from a fourth SDK and replaying the whole corpus passed every case, which is how the bug would come back. error_type_suffix is null on purpose: the body carries no `type`, so an SDK that invents one, or that refuses to parse a body without one, fails."
+      "$comment": "An error whose body is not a problem+json envelope at all, with both correlation ids present only in the headers. The body is the exact 422 measured on 2026-09-27 against POST /v1/models/{model}/predict, where the engine's validation failure is passed through verbatim; the X-Request-ID is the one that response actually carried. It is replayed here through chat.completions.create -- originally because predict had no SDK method, and it STAYS here now that it does (v26) because the envelope handling under test is not route-specific -- a 404 for an unserved route and an HTML page from a proxy that never reached the gateway both arrive the same way. WHY IT EXISTS: all three SDKs read the ids from the body only until AXO-108 fixed them on 2026-09-27, with one hand-written test per language and nothing added here. Removing the header fallback from a fourth SDK and replaying the whole corpus passed every case, which is how the bug would come back. error_type_suffix is null on purpose: the body carries no `type`, so an SDK that invents one, or that refuses to parse a body without one, fails."
     },
     {
       "id": "stream-retried-when-rejected-before-it-begins",
@@ -1214,6 +1360,6 @@
   ],
   "$recording": "Every case states in its own $comment whether its bytes were recorded from a live deployment or authored, and an authored one says why it could not be recorded. Only the recorded ones are evidence about the gateway; the rest pin the SDKs to each other. This used to carry a tally -- \"21 of 25 cases\" -- which nothing enforced and every bump was supposed to update. By v20 the file held 42. A count maintained by hand in the document it describes is the one guard a bump edits on its way past, so it is stated as a rule instead, and a test holds every case to it.",
   "$request_counts": "A case asserting expect.requests is asserting a number whose denominator is the SDK's retry policy, so the runner must build its client with that SDK's DEFAULT policy and no per-case override. Python, Go and Rust all do (3 attempts, 1s initial backoff, 60s cap, jitter on), and nothing here said so: a harness that disables retries to keep its error cases fast -- a reasonable thing to want -- sends one request and fails stream-retried-when-rejected-before-it-begins on its own configuration rather than on the SDK. Measured by a fourth SDK whose runner uses no retries at all and who asked before starting. WHAT IT COSTS: a case whose fixture carries Retry-After is bounded by that header, which the policy honours verbatim rather than applying its own backoff -- the 429 here waits ~1s. A retryable case with NO Retry-After falls to the exponential backoff and spends the whole attempt budget, which is why stream-rejected-before-it-begins-is-retryable-when-the-backend-is-unavailable takes ~3s per suite. That is the price of not inventing a backoff signal the gateway does not send.",
-  "$version_note": "Version 25 (2026-09-29): the catalog call carries a credential. `GET /v1/models` stopped being public that day and the corpus had no opinion about what any SDK sent there -- so a fix landed in four SDKs and was pinned in zero, which is the shape this corpus exists to prevent. Adds `request_headers_present`, a name-only form, because the token value belongs to each runner. Version 24 (2026-09-29): stream-idempotent-replay re-recorded with complete headers, which closes the gap v23 declared -- meta.idempotent_replay_of and meta.request_id are asserted because they were finally measured on a stream, rather than assumed from a guide sentence that read true. The complete capture also shows two things a partial one hid: a replay names no instance, and a replay consumes request budget. Version 23 (2026-09-28): a stream case can assert a field. Nine of them could not -- the streaming branch of all three runners read the stream-shaped keys and ignored `fields` in silence -- so nothing about a stream's `meta` was expressible: correlation ids, rate-limit budget, or the two idempotent-replay flags its non-streaming twin had pinned all along. Version 22 (2026-09-28): the request side. Six cases supplied an Idempotency-Key and not one asked whether it was sent; the only assertions about what went OUT were on the token endpoint. An SDK that accepted a key and dropped it passed all six. Version 21 (2026-09-27): the two cases pinning that a stream rejected before it begins is RECOGNISED as a rejection, which the retry pinned in v20 silently assumed. Removing the status check that precedes SSE parsing passed all 40 cases of v19: the corpus asserted what a recognised rejection leads to and never that it is recognised. Version 20 (2026-09-27): the two stream-retry cases. Three SDKs retried a stream rejected before it began 1, 3 and 3 times and all three documented never retrying; nothing in the corpus had an opinion, so a fourth SDK would have inherited whichever it read. Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame.",
+  "$version_note": "Version 26 (2026-10-02): the pass-through route, which the corpus had never touched. Four cases: the three live engine shapes and the first recorded predict-backend-rejected. The first of them is the one that matters -- sst2-clf answers a TOP-LEVEL ARRAY, so an SDK that types the pass-through answer as an object fails there and nowhere else, and the other two engines would have let that design ship. The 422 with `backend_error` is the first evidence for the one catalog row whose status is \"4xx\" rather than a number. Also the first case in the corpus to assert a rate-limit SCOPE, which here is `predict` for all three modalities rather than one each. Written in the commit that implemented the route in Python, Go and Rust, so the cases and the code arrived together. Version 25 (2026-09-29): the catalog call carries a credential. `GET /v1/models` stopped being public that day and the corpus had no opinion about what any SDK sent there -- so a fix landed in four SDKs and was pinned in zero, which is the shape this corpus exists to prevent. Adds `request_headers_present`, a name-only form, because the token value belongs to each runner. Version 24 (2026-09-29): stream-idempotent-replay re-recorded with complete headers, which closes the gap v23 declared -- meta.idempotent_replay_of and meta.request_id are asserted because they were finally measured on a stream, rather than assumed from a guide sentence that read true. The complete capture also shows two things a partial one hid: a replay names no instance, and a replay consumes request budget. Version 23 (2026-09-28): a stream case can assert a field. Nine of them could not -- the streaming branch of all three runners read the stream-shaped keys and ignored `fields` in silence -- so nothing about a stream's `meta` was expressible: correlation ids, rate-limit budget, or the two idempotent-replay flags its non-streaming twin had pinned all along. Version 22 (2026-09-28): the request side. Six cases supplied an Idempotency-Key and not one asked whether it was sent; the only assertions about what went OUT were on the token endpoint. An SDK that accepted a key and dropped it passed all six. Version 21 (2026-09-27): the two cases pinning that a stream rejected before it begins is RECOGNISED as a rejection, which the retry pinned in v20 silently assumed. Removing the status check that precedes SSE parsing passed all 40 cases of v19: the corpus asserted what a recognised rejection leads to and never that it is recognised. Version 20 (2026-09-27): the two stream-retry cases. Three SDKs retried a stream rejected before it began 1, 3 and 3 times and all three documented never retrying; nothing in the corpus had an opinion, so a fourth SDK would have inherited whichever it read. Version 8 (2026-09-13): re-recorded after the platform fixed the double terminal frame. Streams now carry ONE [DONE]; catalog entries carry family. The double sentinel was the visible end of a defect that left streaming generations unbilled for any client that stopped at the first frame.",
   "$token_cases": "Token-endpoint cases. Deliberately a subset of what each SDK tests about tokens: only what is observable by replaying bytes belongs here. The timing and concurrency rules -- refresh-ahead, single-flight, lifetime clamping -- cannot be expressed against a recorded exchange and stay per-language. What is here is the shape that goes out and the two envelopes that come back."
 }

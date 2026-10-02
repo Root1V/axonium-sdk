@@ -7,6 +7,62 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+**The pass-through route: `client.predict.create(model, body)`.**
+
+`POST /v1/models/{model}/predict` serves three modalities the OpenAI surface has no shape for ---
+`classification`, `zero_shot` and `typed_decision`. The body goes to the engine verbatim and its
+answer comes back verbatim, so `PredictResult.value` is typed `Any`.
+
+**Not defensive typing --- a measured constraint.** The three live engines answer:
+
+    sst2-clf     [{"label":"POSITIVE","score":0.978}]        <- a top-level ARRAY
+    von-decide   {"sequence":...,"labels":[...],"scores":[...]}
+    laya-decide  {"model":...,"answers":{...},"routing":{...}}
+
+A type that assumed an object would have failed on the first engine the platform shipped here, and
+would have reported "this is not JSON" about valid JSON. There is no `classify(text)` either:
+`sst2-clf` and `von-decide` are both classifiers and want different bodies, so a typed method would
+promise a stability the route does not have.
+
+`payload_schema` is now modelled on ``Model``. The spec names it as the field that identifies
+the body shape, it is populated on all ten live models, and without it the route ships with no way
+for a caller to know what to send.
+
+Four contract cases, recorded live, replayed by all four SDKs --- including the first recorded
+`predict-backend-rejected`, the one catalog row whose status is the engine's rather than the
+gateway's, with the engine's own `backend_error` preserved.
+
+**The modality guard refused nothing on `/v1/rerank`, and had not since rerank shipped.**
+
+The endpoint passed its accepted set correctly. The separate, hand-kept list of *known* modalities
+had never heard of `rerank`, and the check returns early on a modality it does not recognise --- so
+the call could not compare anything. Measured:
+
+    qwen3-reranker  on chat    -> ALLOWED   (the doc comment promised 400)
+    qwen3-embedding on rerank  -> ALLOWED   (same)
+    qwen3-embedding on chat    -> refused   <- the only pairing that worked
+
+One truth in two places, and only one of them was updated. The known set is now **derived** from the
+per-endpoint sets, so there is one. Adding the three predict modalities would have been dead on
+arrival for the same reason, which is why this came first.
+
+The test standing guard over exactly this had been given the wrong answer key: it asserted
+``set(ENDPOINT_MODALITIES) == {"chat", "embeddings", "images"}``, a literal typed into the test rather than the invariant its name claimed. A literal cannot
+notice a new call site, so it passed throughout. It now reads the call sites out of the source, and
+fails if an endpoint calls in without a row, or a row exists for no endpoint.
+
+**The reason the guard exists had expired, and nothing could have told us but a measurement.**
+
+Every justification --- module prose, the error message, a test name, a test's `match` --- said the
+gateway accepts chat on an embedding model and answers `200` with degenerate billable output. All six
+wrong-modality combinations measured against a live deployment answer `400 modality-mismatch`.
+`RM-66` closed it, **the guide documenting `RM-66` is vendored in this repo**, and we read it for
+error-catalog rows without re-reading the prose against the code.
+
+The guard stays: it saves a request and a rate-limit unit, and the spec says a client-side check of
+this kind can stay. It no longer claims to save money. Mutation testing could never have found this
+--- mutating the code turns the tests red correctly, because the code was never wrong. Only
+comparing a claim against a live deployment finds a premise that died.
 Re-vendored at `2026-10-01 · PRM-164/167/173`. §2.7 is rewritten and renamed, from "Client types
 --- who may hold a credential" to "Credentials --- whose they are, and who issues them".
 
@@ -73,9 +129,10 @@ hardest to make useful. So the request now goes, and the gateway answers a quest
 answer. A typo costs one round trip; a missing grant gets diagnosed. That is the right way round.
 
 What the preflight still does is the thing it was built for and can still prove: a model the
-catalog **does** show carries its modality, and the gateway will not catch that mismatch —
-`/v1/embeddings` rejects a text model, but `/v1/chat/completions` answers an embedding model with
-billable nonsense.
+catalog **does** show carries its modality, so a mismatch is a fact rather than an inference.
+
+*Corrected further down in these same notes: this paragraph claimed the gateway would not catch that
+mismatch, which stopped being true at `RM-66` and was measured false on 2026-10-02.*
 
 Three tests pinned the old behaviour and were correct when written. The Go one now asserts the
 boundary with a request count rather than a server-side rejection, because only a number can tell
@@ -713,6 +770,62 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+**The pass-through route: `client.Predict.Create(ctx, model, body, PredictOptions{})`.**
+
+`POST /v1/models/{model}/predict` serves three modalities the OpenAI surface has no shape for ---
+`classification`, `zero_shot` and `typed_decision`. The body goes to the engine verbatim and its
+answer comes back verbatim, so `PredictResult.Value` is a `json.RawMessage`, read through `Into(&dest)`.
+
+**Not defensive typing --- a measured constraint.** The three live engines answer:
+
+    sst2-clf     [{"label":"POSITIVE","score":0.978}]        <- a top-level ARRAY
+    von-decide   {"sequence":...,"labels":[...],"scores":[...]}
+    laya-decide  {"model":...,"answers":{...},"routing":{...}}
+
+A type that assumed an object would have failed on the first engine the platform shipped here, and
+would have reported "this is not JSON" about valid JSON. There is no `classify(text)` either:
+`sst2-clf` and `von-decide` are both classifiers and want different bodies, so a typed method would
+promise a stability the route does not have.
+
+`payload_schema` is now modelled on ``Model``. The spec names it as the field that identifies
+the body shape, it is populated on all ten live models, and without it the route ships with no way
+for a caller to know what to send.
+
+Four contract cases, recorded live, replayed by all four SDKs --- including the first recorded
+`predict-backend-rejected`, the one catalog row whose status is the engine's rather than the
+gateway's, with the engine's own `backend_error` preserved.
+
+**The modality guard refused nothing on `/v1/rerank`, and had not since rerank shipped.**
+
+The endpoint passed its accepted set correctly. The separate, hand-kept list of *known* modalities
+had never heard of `rerank`, and the check returns early on a modality it does not recognise --- so
+the call could not compare anything. Measured:
+
+    qwen3-reranker  on chat    -> ALLOWED   (the doc comment promised 400)
+    qwen3-embedding on rerank  -> ALLOWED   (same)
+    qwen3-embedding on chat    -> refused   <- the only pairing that worked
+
+One truth in two places, and only one of them was updated. The known set is now **derived** from the
+per-endpoint sets, so there is one. Adding the three predict modalities would have been dead on
+arrival for the same reason, which is why this came first.
+
+The test standing guard over exactly this had been given the wrong answer key: it asserted
+`an equality against a hand-written map`, a literal typed into the test rather than the invariant its name claimed. A literal cannot
+notice a new call site, so it passed throughout. It now reads the call sites out of the source, and
+fails if an endpoint calls in without a row, or a row exists for no endpoint.
+
+**The reason the guard exists had expired, and nothing could have told us but a measurement.**
+
+Every justification --- module prose, the error message, a test name, a test's `match` --- said the
+gateway accepts chat on an embedding model and answers `200` with degenerate billable output. All six
+wrong-modality combinations measured against a live deployment answer `400 modality-mismatch`.
+`RM-66` closed it, **the guide documenting `RM-66` is vendored in this repo**, and we read it for
+error-catalog rows without re-reading the prose against the code.
+
+The guard stays: it saves a request and a rate-limit unit, and the spec says a client-side check of
+this kind can stay. It no longer claims to save money. Mutation testing could never have found this
+--- mutating the code turns the tests red correctly, because the code was never wrong. Only
+comparing a claim against a live deployment finds a premise that died.
 Re-vendored at `2026-10-01 · PRM-164/167/173`. §2.7 is rewritten and renamed, from "Client types
 --- who may hold a credential" to "Credentials --- whose they are, and who issues them".
 
@@ -779,9 +892,10 @@ hardest to make useful. So the request now goes, and the gateway answers a quest
 answer. A typo costs one round trip; a missing grant gets diagnosed. That is the right way round.
 
 What the preflight still does is the thing it was built for and can still prove: a model the
-catalog **does** show carries its modality, and the gateway will not catch that mismatch —
-`/v1/embeddings` rejects a text model, but `/v1/chat/completions` answers an embedding model with
-billable nonsense.
+catalog **does** show carries its modality, so a mismatch is a fact rather than an inference.
+
+*Corrected further down in these same notes: this paragraph claimed the gateway would not catch that
+mismatch, which stopped being true at `RM-66` and was measured false on 2026-10-02.*
 
 Three tests pinned the old behaviour and were correct when written. The Go one now asserts the
 boundary with a request count rather than a server-side rejection, because only a number can tell
@@ -1310,6 +1424,62 @@ No third-party dependencies: standard library only.
 
 ### Unreleased
 
+**The pass-through route: `client.predict(model, &body, &PredictOptions::default())`.**
+
+`POST /v1/models/{model}/predict` serves three modalities the OpenAI surface has no shape for ---
+`classification`, `zero_shot` and `typed_decision`. The body goes to the engine verbatim and its
+answer comes back verbatim, so `PredictResult::value` is a `serde_json::Value`, read through `decode()`.
+
+**Not defensive typing --- a measured constraint.** The three live engines answer:
+
+    sst2-clf     [{"label":"POSITIVE","score":0.978}]        <- a top-level ARRAY
+    von-decide   {"sequence":...,"labels":[...],"scores":[...]}
+    laya-decide  {"model":...,"answers":{...},"routing":{...}}
+
+A type that assumed an object would have failed on the first engine the platform shipped here, and
+would have reported "this is not JSON" about valid JSON. There is no `classify(text)` either:
+`sst2-clf` and `von-decide` are both classifiers and want different bodies, so a typed method would
+promise a stability the route does not have.
+
+`payload_schema` is now modelled on ``Model``. The spec names it as the field that identifies
+the body shape, it is populated on all ten live models, and without it the route ships with no way
+for a caller to know what to send.
+
+Four contract cases, recorded live, replayed by all four SDKs --- including the first recorded
+`predict-backend-rejected`, the one catalog row whose status is the engine's rather than the
+gateway's, with the engine's own `backend_error` preserved.
+
+**The modality guard refused nothing on `/v1/rerank`, and had not since rerank shipped.**
+
+The endpoint passed its accepted set correctly. The separate, hand-kept list of *known* modalities
+had never heard of `rerank`, and the check returns early on a modality it does not recognise --- so
+the call could not compare anything. Measured:
+
+    qwen3-reranker  on chat    -> ALLOWED   (the doc comment promised 400)
+    qwen3-embedding on rerank  -> ALLOWED   (same)
+    qwen3-embedding on chat    -> refused   <- the only pairing that worked
+
+One truth in two places, and only one of them was updated. The known set is now **derived** from the
+per-endpoint sets, so there is one. Adding the three predict modalities would have been dead on
+arrival for the same reason, which is why this came first.
+
+The test standing guard over exactly this had been given the wrong answer key: it asserted
+`an equality against a hand-written list`, a literal typed into the test rather than the invariant its name claimed. A literal cannot
+notice a new call site, so it passed throughout. It now reads the call sites out of the source, and
+fails if an endpoint calls in without a row, or a row exists for no endpoint.
+
+**The reason the guard exists had expired, and nothing could have told us but a measurement.**
+
+Every justification --- module prose, the error message, a test name, a test's `match` --- said the
+gateway accepts chat on an embedding model and answers `200` with degenerate billable output. All six
+wrong-modality combinations measured against a live deployment answer `400 modality-mismatch`.
+`RM-66` closed it, **the guide documenting `RM-66` is vendored in this repo**, and we read it for
+error-catalog rows without re-reading the prose against the code.
+
+The guard stays: it saves a request and a rate-limit unit, and the spec says a client-side check of
+this kind can stay. It no longer claims to save money. Mutation testing could never have found this
+--- mutating the code turns the tests red correctly, because the code was never wrong. Only
+comparing a claim against a live deployment finds a premise that died.
 Re-vendored at `2026-10-01 · PRM-164/167/173`. §2.7 is rewritten and renamed, from "Client types
 --- who may hold a credential" to "Credentials --- whose they are, and who issues them".
 
@@ -1376,9 +1546,10 @@ hardest to make useful. So the request now goes, and the gateway answers a quest
 answer. A typo costs one round trip; a missing grant gets diagnosed. That is the right way round.
 
 What the preflight still does is the thing it was built for and can still prove: a model the
-catalog **does** show carries its modality, and the gateway will not catch that mismatch —
-`/v1/embeddings` rejects a text model, but `/v1/chat/completions` answers an embedding model with
-billable nonsense.
+catalog **does** show carries its modality, so a mismatch is a fact rather than an inference.
+
+*Corrected further down in these same notes: this paragraph claimed the gateway would not catch that
+mismatch, which stopped being true at `RM-66` and was measured false on 2026-10-02.*
 
 Three tests pinned the old behaviour and were correct when written. The Go one now asserts the
 boundary with a request count rather than a server-side rejection, because only a number can tell

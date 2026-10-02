@@ -85,6 +85,7 @@ from axonium.models.inference import (
     RerankResponse,
     RerankResult,
 )
+from axonium.models.predict import PredictResult
 from axonium.models.requests import (
     ChatCompletionRequest,
     ContentPart,
@@ -151,6 +152,7 @@ __all__ = [
     "NotFoundError",
     "OAuthError",
     "PredictBackendRejectedError",
+    "PredictResult",
     "RangeTooLargeError",
     "RateLimitError",
     "RateLimitSnapshot",
