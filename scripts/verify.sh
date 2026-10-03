@@ -27,6 +27,7 @@ step() {
 # is the divergence this script exists to prevent, pointing the other way.
 cd "$root" || exit 1
 step "spec: catalog matches guide" ./scripts/check_catalog_matches_guide.py
+step "roadmap: ids are unique" ./scripts/check_roadmap_ids.py
 
 # --- python-ci.yml ---
 cd "$root/python" || exit 1

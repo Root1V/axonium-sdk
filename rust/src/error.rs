@@ -47,6 +47,13 @@ pub enum ErrorKind {
     /// third case behind it and it is the common one: the id belongs to a replay, which is
     /// not billed and has no row.
     NotFound,
+    /// No route at that URL: a mistake in the calling code rather than a fact about the caller's
+    /// data. Deliberately **not** [`Self::NotFound`] -- the platform split them for this crate's
+    /// benefit, because `not-found` is a statement about data that a caller may read as an empty
+    /// result or retry, and a bad URL is neither.
+    UnknownRoute,
+    /// The URL exists, the verb does not. The `Allow` response header lists the ones that do.
+    MethodNotAllowed,
     /// The replicas serving one model disagree about their modality. The gateway refuses the
     /// group rather than dropping the odd one: answering a chat request from an embedding
     /// backend produces confident nonsense, which is the expensive failure.
@@ -123,6 +130,8 @@ impl ErrorKind {
             "rate-limiting-unavailable" => Self::RateLimitingUnavailable,
             "usage-store-unavailable" => Self::UsageStoreUnavailable,
             "not-found" => Self::NotFound,
+            "unknown-route" => Self::UnknownRoute,
+            "method-not-allowed" => Self::MethodNotAllowed,
             "inconsistent-model-group" => Self::InconsistentModelGroup,
             "unauthorized" => Self::UnauthorizedRequest,
             "invalid-date" => Self::InvalidDate,

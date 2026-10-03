@@ -42,6 +42,20 @@ var (
 	// it is the common one -- the id belongs to a replay, which is not billed and has no row.
 	ErrNotFound = errors.New("axonium: not-found")
 
+	// ErrUnknownRoute reports no route at that URL: a mistake in the calling code rather than a
+	// fact about the caller's data. Deliberately NOT ErrNotFound, and the platform split them for
+	// this SDK's benefit -- not-found is a statement about data, which a caller may read as an
+	// empty result or retry, and a bad URL is neither. Sharing one sentinel would have made every
+	// SDK that dispatches on it do the wrong thing with one of the two.
+	//
+	// Before PRM-174 this arrived as Starlette's bare {"detail":"Not Found"}, with no type and no
+	// correlation ids in the body. It now carries the full envelope.
+	ErrUnknownRoute = errors.New("axonium: unknown-route")
+
+	// ErrMethodNotAllowed reports a URL that exists with a verb that does not. The Allow response
+	// header lists the verbs that do, and survives the gateway's re-wrapping.
+	ErrMethodNotAllowed = errors.New("axonium: method-not-allowed")
+
 	// ErrInconsistentModelGroup reports replicas of one model disagreeing about their modality.
 	// The gateway refuses the group rather than dropping the odd one: answering a chat request
 	// from an embedding backend produces confident nonsense, which is the expensive failure.
@@ -160,6 +174,8 @@ var suffixSentinels = map[string]error{
 	"context-exceeded":                  ErrContextExceeded,
 	"validation-error":                  ErrValidation,
 	"not-found":                         ErrNotFound,
+	"unknown-route":                     ErrUnknownRoute,
+	"method-not-allowed":                ErrMethodNotAllowed,
 	"inconsistent-model-group":          ErrInconsistentModelGroup,
 	"unauthorized":                      ErrUnauthorizedRequest,
 	"invalid-date":                      ErrInvalidDate,

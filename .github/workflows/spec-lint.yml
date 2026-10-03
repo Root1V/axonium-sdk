@@ -1,14 +1,20 @@
 name: spec-lint
 
-# The spec directory is the contract all three SDKs are built against, so a malformed file there
+# The spec directory is the contract all four SDKs are built against, so a malformed file there
 # breaks every language at once. This validates it independently of any SDK's test suite.
+#
+# ROADMAP.md is in the paths below, which looks out of place and is not. Every other workflow here
+# is scoped to a language directory, so a commit touching only ROADMAP.md ran NO ci at all -- which
+# is how two rows ended up numbered AXO-118, each referenced from a different published commit. The
+# ids are the vocabulary the changelog and the channel messages to other teams are written in, so
+# they are closer to a contract than to prose. This is the only workflow with no language of its own.
 
 on:
   push:
     branches: [main]
-    paths: ["spec/**", ".github/workflows/spec-lint.yml"]
+    paths: ["spec/**", "ROADMAP.md", "scripts/check_roadmap_ids.py", ".github/workflows/spec-lint.yml"]
   pull_request:
-    paths: ["spec/**", ".github/workflows/spec-lint.yml"]
+    paths: ["spec/**", "ROADMAP.md", "scripts/check_roadmap_ids.py", ".github/workflows/spec-lint.yml"]
 
 jobs:
   validate:
@@ -24,6 +30,12 @@ jobs:
         # the platform documents a new error, the guide is re-vendored, and nothing notices that
         # the catalog did not grow. That is how 400 unknown-parameter sat here for days.
         run: python scripts/check_catalog_matches_guide.py
+
+      - name: Roadmap ids are unique
+        # They are referenced from commit messages, changelog entries and messages to other teams,
+        # so a collision cannot be repaired by renumbering after the fact -- a published commit
+        # keeps the wrong id forever. The only affordable remedy is not making a second one.
+        run: python scripts/check_roadmap_ids.py
 
       - name: Every JSON file parses
         run: |
