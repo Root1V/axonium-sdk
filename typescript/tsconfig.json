@@ -1,0 +1,43 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
+    // Source imports carry the real `.ts` extension and the compiler rewrites them to `.js` on
+    // emit. One spelling then serves both consumers: `node --test` strips types in place and needs
+    // the extension that is actually on disk, while the published package must reference `.js`.
+    // The usual alternative -- writing `./errors.js` in a `.ts` file -- cannot be run by Node
+    // directly, so the test suite would need a bundler to exist at all.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+
+    // Refuses every TypeScript construct that EMITS code -- parameter properties, enums,
+    // namespaces, decorators, `import =`. Those cannot be stripped, only compiled, so using one
+    // means `node --test` can no longer run this package's own source and the suite needs a build
+    // step to exist at all. Discovered by writing two parameter properties and watching Node refuse
+    // the file; a compiler flag is cheaper than remembering.
+    "erasableSyntaxOnly": true,
+
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    // Only for the test suite and the build script, which are the sole places that touch node:*.
+    // The published source uses the platform's fetch and nothing else, so no @types/node leaks into
+    // the .d.ts a consumer installs.
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src", "test", "scripts"]
+}

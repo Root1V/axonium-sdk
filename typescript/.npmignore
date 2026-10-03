@@ -1,0 +1,6 @@
+# package.json's "files" allowlist is what actually governs the tarball. This file exists only so
+# that a tool reading .npmignore instead does not ship the working tree.
+*
+!dist/**
+!README.md
+!LICENSE

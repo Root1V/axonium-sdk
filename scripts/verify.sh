@@ -29,6 +29,18 @@ cd "$root" || exit 1
 step "spec: catalog matches guide" ./scripts/check_catalog_matches_guide.py
 step "roadmap: ids are unique" ./scripts/check_roadmap_ids.py
 
+# --- ts-ci.yml ---
+# Skipped rather than failed when the package is not installed: a Rust-only change should not oblige
+# somebody to have run npm install. It says which, because a check that stays quiet about being
+# skipped is how a green run comes to mean less than it looks.
+if [ -d "$root/typescript/node_modules" ]; then
+  cd "$root/typescript" || exit 1
+  step "ts: lint and typecheck" npm run --silent lint
+  step "ts: tests" npm test --silent
+else
+  printf '  %s\n' "ts: skipped -- run 'npm install' in typescript/ to include it"
+fi
+
 # --- python-ci.yml ---
 cd "$root/python" || exit 1
 # CI runs this before any of the checks below, and leaving it out let this script disagree with CI:

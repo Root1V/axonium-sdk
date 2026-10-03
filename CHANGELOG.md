@@ -3,6 +3,56 @@
 Each language SDK versions independently. Entries are grouped by language and use tags of the
 form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
+## TypeScript
+
+### Unreleased
+
+**Scaffolding, configuration and the error taxonomy.** No transport yet, so nothing talks to a
+gateway. Requested by Apeiron on 2026-10-03; the scope and the dates live in that channel.
+
+**In the monorepo, under `typescript/`.** Swift is the one SDK in a repository of its own, and that
+was argued badly at the time — the claim that SwiftPM forced it was measured false afterwards. The
+price is real and gets paid on every contract change: its corpus is a submodule whose pointer
+somebody has to remember to move. npm has no such constraint, so `spec/` is a relative path here and
+cannot fall behind.
+
+**All 34 catalogued error types, asserted against `spec/errors.json` in both directions.** The second
+direction is the one nothing else would report: a suffix this SDK *invented* leaves a caller with a
+`catch` block that can never run, and reading this package alone would never show it.
+
+Two shapes carried over from the other four because they were learned the hard way:
+
+- `OAuthError` does **not** extend `APIError`. The token endpoint answers RFC 6749, not problem+json,
+  and a credential failure is never worth retrying with the same credential.
+- `PredictBackendRejectedError.retryable` is derived from the status, because the pass-through route
+  keeps the **engine's** status — one suffix covering a `422` that will never succeed and a `429`
+  that will.
+
+**Zero runtime dependencies, and three tests that enforce it** rather than a line in a README: no
+`dependencies`, no `peerDependencies`, and nothing under `src/` importing a `node:` module. The last
+one matters because a `node:crypto` import would pass every test and fail only on an edge deployment.
+
+**`fetch` is injected, not patched**, so the contract corpus will replay against a function. A test
+refuses an HTTP-mocking dev dependency: with one, what the suite exercises stops being the transport.
+
+**The source is erasable TypeScript** (`erasableSyntaxOnly`), so Node runs it with
+`--experimental-strip-types` and the suite needs no build step and no test runner. Discovered by
+writing two parameter properties and watching Node refuse the file — a compiler flag is cheaper than
+remembering, and this is the whole reason there is no vitest here.
+
+**The browser guard looks for a server, not for a window.** Apeiron's request asked for
+`typeof window !== "undefined"`; jsdom defines `window`, so that fires in anyone's vitest suite, and a
+guard with false positives in CI is a guard somebody disables. More importantly the platform's rule
+changed axis on 2026-10-02: it is about **whose** credential it is, not where the code runs. An
+integrator's must never reach a machine its users control; an end client's own may live on their own
+device. A bundle cannot tell those apart, so the default refuses and `allowInsecureCredential` is how
+a caller states which case theirs is.
+
+**The non-streaming timeout defaults to 600 s and that is not an oversight** — it matches what the
+gateway allows its backends, because a client timeout shorter than the server's plus a retry queues a
+second expensive generation on top of one still running. An edge runtime cannot wait that long, which
+is a real conflict rather than a tuning question and is written down as one.
+
 ## Python
 
 ### Unreleased

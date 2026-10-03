@@ -1,0 +1,69 @@
+name: ts-ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["typescript/**", "spec/**", ".github/workflows/ts-ci.yml"]
+  pull_request:
+    paths: ["typescript/**", "spec/**", ".github/workflows/ts-ci.yml"]
+
+defaults:
+  run:
+    working-directory: typescript
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22 is the floor that can run this package's own TypeScript source: `node --test` strips
+        # types from 22.18 on, and the suite uses no compiler. 24 is what most consumers will be on.
+        node: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  # The package claims Node 20+, which cannot strip types, so the suite above proves nothing about
+  # it. This runs the BUILT output there instead -- the artifact a consumer on 20 actually installs.
+  node20:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+      - name: The built package imports and works on the oldest supported Node
+        run: |
+          node --version
+          node -e '
+            const { resolveConfig, errorFromProblem, VERSION } = require("./dist/cjs/index.cjs");
+            const cfg = resolveConfig({ gatewayBaseURL: "https://g.test", clientId: "a", clientSecret: "b" });
+            if (!cfg.gatewayBaseURL) throw new Error("config did not resolve");
+            const err = errorFromProblem({ status: 403, typeSuffix: "forbidden", title: "", detail: "d",
+              instance: "", retryAfter: undefined, raw: {},
+              meta: { requestId: undefined, traceId: undefined, instance: undefined, instanceId: undefined,
+                      idempotentReplay: false, idempotentReplayOf: undefined, rateLimit: undefined } });
+            if (err.name !== "ForbiddenError") throw new Error("taxonomy lost in the cjs build: " + err.name);
+            console.log("cjs on node 20:", VERSION, err.name);
+          '
+      - name: And as ESM, which is the half a require() check cannot reach
+        run: |
+          node --input-type=module -e '
+            const { VERSION } = await import("./dist/esm/index.js");
+            console.log("esm on node 20:", VERSION);
+          '
