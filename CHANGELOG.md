@@ -7,6 +7,57 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+**Transport and auth.** The SDK talks to a gateway now: OAuth2 `client_credentials`, the retry loop,
+per-model cooldowns, typed errors off the wire, and the correlation metadata on every response.
+Verified through the installed package against a live deployment — the catalog, `predict`, chat, a
+`400 unknown-model` and a `404 unknown-route`, which is the first time any SDK in this family has
+exercised `PRM-174`'s new type against a deployment rather than a fixture.
+
+**The token's lifetime is anchored to the server's clock.** When the response's `Date` header and the
+token's own `exp` are both present, their difference is a second reading of the same lifetime and a
+skew-free one, because both come from the server. The shorter wins: an early refresh costs one
+request, believing a token lives longer than it does costs every request after it expires.
+
+**Concurrent callers share one in-flight token request**, through a kept promise rather than a lock.
+Without it a cold client answering ten simultaneous requests sends ten token requests and nine are
+charged against the rate-limit budget for nothing.
+
+**The granted scope is read back from the response, never assumed from the request.** Asking for a
+subset is honoured, so what came back is what the token can do; a caller trusting their own request
+would diagnose a `403` as a platform fault.
+
+**`fetch` is injected, so the whole test harness is a function.** 62 tests, no mocking library, and
+nothing to restore afterwards — what they exercise is the real transport rather than a seam around it.
+
+#### One defect found by measuring, which no test would have caught
+
+`decodeClaims` read a `client_id` claim. **No token carries one**: the guide documents `sub` and
+`azp`, the other four SDKs read `sub`, and this one invented a name. The accessor returned `undefined`
+for every real token, which reads exactly like a gateway that had not sent it. Found by printing the
+claims of a live token. It is now `subject` and `authorizedParty`, matching the other four, and a test
+pins the measured shape — including that an unmodelled claim stays reachable through `raw`.
+
+#### One real bug, found by a test hanging
+
+The reactive `401` refresh had no bound. Its condition compares the rejected token with the one just
+used, which is false again after every refresh, so a gateway answering `401` to every token looped
+forever fetching new ones. The test written to assert "raised rather than looped" found it by never
+finishing.
+
+#### And four cases of the instrument being wrong rather than the code
+
+Worth writing down together, because the pattern is the expensive part:
+
+| what looked broken | what was actually wrong |
+|---|---|
+| the decoder mangled a non-ASCII claim | the test's JWT helper encoded latin1; a real issuer encodes UTF-8 |
+| a 40s token was not refreshed early | 40s is above the 30s floor, so reuse was correct |
+| a refresh did not replace the token | the stub issued one constant string, so the assertion compared a value with itself |
+| a 20ms `Retry-After` was not honoured | the test's policy capped backoff at 10ms, so refusing it was correct |
+
+Each would have been "fixed" into a worse SDK. The first is the clearest: matching the decoder to the
+helper would have broken every real token with an accent in it.
+
 **Scaffolding, configuration and the error taxonomy.** No transport yet, so nothing talks to a
 gateway. Requested by Apeiron on 2026-10-03; the scope and the dates live in that channel.
 

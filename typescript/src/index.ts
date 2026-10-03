@@ -9,6 +9,15 @@ export { VERSION, USER_AGENT } from "./version.ts";
 export type { AxoniumOptions, ResolvedConfig, Timeouts, TokenProvider } from "./config.ts";
 export { DEFAULT_TIMEOUTS, resolveConfig } from "./config.ts";
 
+export type { TokenClaims, TokenSet } from "./auth.ts";
+export { TokenManager, decodeClaims } from "./auth.ts";
+
+export type { RetryPolicy } from "./retry.ts";
+export { DEFAULT_RETRY, NO_RETRY } from "./retry.ts";
+
+export type { Attempts, CallOptions, RawResponse } from "./transport.ts";
+export { MAX_IDEMPOTENCY_KEY_LENGTH, Transport } from "./transport.ts";
+
 export type { ProblemDetails, RateLimitSnapshot, ResponseMeta } from "./errors.ts";
 export {
   APIError,
