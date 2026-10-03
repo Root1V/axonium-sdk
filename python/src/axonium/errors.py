@@ -44,6 +44,7 @@ __all__ = [
     "InvalidRequestError",
     "InvalidScopeError",
     "InvalidTokenError",
+    "MethodNotAllowedError",
     "MissingCredentialsError",
     "ModalityMismatchError",
     "ModelNotLoadedError",
@@ -69,6 +70,7 @@ __all__ = [
     "UnknownInstanceError",
     "UnknownModelError",
     "UnknownParameterError",
+    "UnknownRouteError",
     "UnsupportedFieldWarning",
     "UnsupportedGrantTypeError",
     "UnusedCredentialWarning",
@@ -287,6 +289,29 @@ class NotFoundError(APIError):
     """
 
     type_suffix = "not-found"
+    retryable = False
+
+
+class UnknownRouteError(APIError):
+    """No route at that URL — a mistake in the calling code, not a fact about the data.
+
+    **Deliberately not :class:`NotFoundError`**, and the platform split them for this SDK's benefit:
+    ``not-found`` is a statement about data, which a caller may reasonably read as an empty result
+    or retry. A bad URL is neither. Sharing one suffix would have made every SDK that dispatches on
+    it — all four of them — do the wrong thing with one of the two.
+
+    Before ``PRM-174`` this arrived as Starlette's bare ``{"detail": "Not Found"}``, with no
+    ``type`` and no correlation ids in the body. It now carries the full envelope.
+    """
+
+    type_suffix = "unknown-route"
+    retryable = False
+
+
+class MethodNotAllowedError(APIError):
+    """The URL exists, the verb does not. The ``Allow`` response header lists the ones that do."""
+
+    type_suffix = "method-not-allowed"
     retryable = False
 
 
@@ -742,6 +767,8 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         CapacityExhaustedError,
         PredictBackendRejectedError,
         NotFoundError,
+        UnknownRouteError,
+        MethodNotAllowedError,
         InconsistentModelGroupError,
         UnauthorizedRequestError,
         InvalidDateError,

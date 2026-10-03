@@ -195,6 +195,22 @@
       "$comment": "Verified live 2026-09-14, the day the endpoint shipped. NOT in the platform's own error table: their guide documents the 404 in the endpoint's prose but the taxonomy table has no 404 row and the `not-found` suffix appears nowhere. Reported to them; recorded here because our mapping is keyed on the suffix."
     },
     {
+      "status": 404,
+      "suffix": "unknown-route",
+      "meaning": "No route at that URL. A mistake in the caller's code, not a fact about their data -- which is why PRM-174 gave it a type of its own rather than reusing not-found. The detail names the method and the path.",
+      "retryable": false,
+      "remedy": "Fix the URL. Retrying cannot help.",
+      "$comment": "Added from guide 2026-10-02 (PRM-174). THE REASON IT IS NOT not-found, in the platform's own words: not-found is a condition about data -- no usage row with that id belonging to this client -- which an SDK may reasonably retry or read as an empty result. A bad URL is neither. The four SDKs dispatch on the suffix, so sharing one would have made them retry the wrong thing. Measured 2026-10-03 against the restarted stack: GET /admin/clients answers application/problem+json with this type, request_id, trace_id and instance. BEFORE PRM-174 it was Starlette's bare {\"detail\":\"Not Found\"} with no type and no ids in the body, which is the shape err_predict_engine_validation.json and the corpus case error-correlation-ids-only-in-the-headers still replay -- those stay, because a proxy returning HTML still loses the ids the same way and that is not the gateway's to fix."
+    },
+    {
+      "status": 405,
+      "suffix": "method-not-allowed",
+      "meaning": "The URL exists, the verb does not. The Allow response header lists the verbs that do.",
+      "retryable": false,
+      "remedy": "Fix the method. The Allow header says which ones are accepted.",
+      "$comment": "Added from guide 2026-10-02 (PRM-174). Measured 2026-10-03: POST /admin/clients and PUT /health both answer problem+json with this type, and Starlette's Allow header survives the re-wrapping -- so a 405 still answers \"then which verb\". This is the row behind the 405 that A-34 probed and nearly read as a self-service credential endpoint: it is the SPA's static mount refusing a verb, with nothing behind it."
+    },
+    {
       "status": 503,
       "suffix": "upstream-unavailable",
       "meaning": "Only on POST /oauth2/token -- the gateway could not reach the auth-service. The ONLY problem+json a token request can produce; every other token outcome uses the RFC 6749 OAuth2 error shape.",
@@ -295,7 +311,7 @@
   "notes": [
     "There is no 404 for 'model not found' on the inference endpoints; that is 400 unknown-model. Reserve 404 handling for genuinely unmapped routes.",
     "Unknown type suffixes must not raise a parse error: fall back to a status-keyed base error, since the catalog will grow.",
-    "A 404 for a route this gateway does not serve is NOT this envelope: it answers {\"detail\": \"Not Found\"} as application/json, with no type and no request_id in the body -- the header still carries one. Measured 2026-09-27. Same class as the predict 422 before PRM-157, a different site. It also spends a request from the `default` rate-limit budget, so a mistyped path costs one.",
+    "A 404 for a route this gateway does not serve IS this envelope now, since PRM-174: `unknown-route`, with type, request_id, trace_id and instance, and a wrong verb arrives the same way as `method-not-allowed`. Measured 2026-10-03 against the restarted stack. THIS NOTE SAID THE OPPOSITE AND WAS CORRECT WHEN WRITTEN (2026-09-27): it answered {\"detail\": \"Not Found\"} as application/json, with no type and no request_id in the body while the header carried one. It is kept as a correction rather than replaced, because the SDKs still carry the fallback that shape forced and the reason to keep it has changed: it is no longer the gateway's 404, it is a proxy returning HTML before the request ever reaches the gateway -- which is not the platform's to fix and so will not be fixed. A mistyped path still spends a request from the `default` rate-limit budget.",
     "Every gateway error observed on a live deployment carries the full RFC 9457 envelope including request_id and trace_id, 422 included. Fall back by status regardless: an SDK that hard-fails on an error without a `type` would break the moment one appears, and one did for a while.",
     "Idempotency-Key covers /v1/chat/completions, /v1/embeddings and /v1/images/generations, AND streaming -- with a boundary that matters. If the gateway's stream from the model completed and it was the client's connection that dropped, the key replays the stored SSE body byte for byte, arriving as one flush rather than paced out. If the model's own stream broke mid-generation there is nothing complete to replay and the key frees itself, so a retry is a genuine new generation. 24h window, scoped per client, 255-character keys, 1 MiB retention cap.",
     "A stream that breaks mid-answer is now BILLED for what it generated; it used to be billed as zero by defect, because token counts arrive only on a final frame a broken stream never sends. Every usage row now carries an `interrupted` flag, exported in the CSV, so a charge for an answer never fully received is disputable with evidence. A stream that broke before producing anything is still not charged."

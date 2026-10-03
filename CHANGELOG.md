@@ -7,7 +7,26 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
-Nothing yet.
+Re-vendored at `2026-10-02 · PRM-167/173/174`, which adds **two error types** and takes one away.
+
+- **`404 unknown-route`** → ``UnknownRouteError``
+- **`405 method-not-allowed`** → ``MethodNotAllowedError``
+
+`unknown-route` is deliberately **not** `not-found`, and the platform split them for these SDKs'
+benefit: `not-found` is a statement about *data* — no usage row with that id belonging to this client
+— which a caller may reasonably read as an empty result or retry. A bad URL is neither. All four SDKs
+dispatch on the suffix, so one shared type would have made them do the wrong thing with one of the
+two. `method-not-allowed` keeps Starlette's `Allow` header through the re-wrapping, so a `405` still
+answers "then which verb".
+
+**And it retires a claim this repository made about the gateway.** `spec/errors.json` carried, since
+2026-09-27 and correctly then, that a `404` for an unserved route was *not* the problem+json envelope
+— a bare `{"detail": "Not Found"}` with no `type` and no correlation ids in the body. `PRM-174`
+fixed it; measured 2026-10-03 against the restarted stack. The note is corrected in place rather than
+deleted, because **the fallback it forced stays and its reason has changed**: a body with no `type`
+still arrives, but from a proxy returning HTML before the request ever reaches the gateway, which is
+not the platform's to fix. One sentence of the corpus case that replays it said the same thing and is
+corrected the same way.
 
 ### 1.0.0rc6 — 2026-10-02
 
@@ -829,7 +848,26 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
-Nothing yet.
+Re-vendored at `2026-10-02 · PRM-167/173/174`, which adds **two error types** and takes one away.
+
+- **`404 unknown-route`** → ``ErrUnknownRoute``
+- **`405 method-not-allowed`** → ``ErrMethodNotAllowed``
+
+`unknown-route` is deliberately **not** `not-found`, and the platform split them for these SDKs'
+benefit: `not-found` is a statement about *data* — no usage row with that id belonging to this client
+— which a caller may reasonably read as an empty result or retry. A bad URL is neither. All four SDKs
+dispatch on the suffix, so one shared type would have made them do the wrong thing with one of the
+two. `method-not-allowed` keeps Starlette's `Allow` header through the re-wrapping, so a `405` still
+answers "then which verb".
+
+**And it retires a claim this repository made about the gateway.** `spec/errors.json` carried, since
+2026-09-27 and correctly then, that a `404` for an unserved route was *not* the problem+json envelope
+— a bare `{"detail": "Not Found"}` with no `type` and no correlation ids in the body. `PRM-174`
+fixed it; measured 2026-10-03 against the restarted stack. The note is corrected in place rather than
+deleted, because **the fallback it forced stays and its reason has changed**: a body with no `type`
+still arrives, but from a proxy returning HTML before the request ever reaches the gateway, which is
+not the platform's to fix. One sentence of the corpus case that replays it said the same thing and is
+corrected the same way.
 
 ### 0.5.0 — 2026-10-02
 
@@ -1536,7 +1574,26 @@ No third-party dependencies: standard library only.
 
 ### Unreleased
 
-Nothing yet.
+Re-vendored at `2026-10-02 · PRM-167/173/174`, which adds **two error types** and takes one away.
+
+- **`404 unknown-route`** → ``ErrorKind::UnknownRoute``
+- **`405 method-not-allowed`** → ``ErrorKind::MethodNotAllowed``
+
+`unknown-route` is deliberately **not** `not-found`, and the platform split them for these SDKs'
+benefit: `not-found` is a statement about *data* — no usage row with that id belonging to this client
+— which a caller may reasonably read as an empty result or retry. A bad URL is neither. All four SDKs
+dispatch on the suffix, so one shared type would have made them do the wrong thing with one of the
+two. `method-not-allowed` keeps Starlette's `Allow` header through the re-wrapping, so a `405` still
+answers "then which verb".
+
+**And it retires a claim this repository made about the gateway.** `spec/errors.json` carried, since
+2026-09-27 and correctly then, that a `404` for an unserved route was *not* the problem+json envelope
+— a bare `{"detail": "Not Found"}` with no `type` and no correlation ids in the body. `PRM-174`
+fixed it; measured 2026-10-03 against the restarted stack. The note is corrected in place rather than
+deleted, because **the fallback it forced stays and its reason has changed**: a body with no `type`
+still arrives, but from a proxy returning HTML before the request ever reaches the gateway, which is
+not the platform's to fix. One sentence of the corpus case that replays it said the same thing and is
+corrected the same way.
 
 ### 0.5.0 — 2026-10-02
 
