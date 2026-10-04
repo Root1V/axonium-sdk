@@ -2,10 +2,16 @@
 
 The Axonium SDK for the Prometheus inference platform, for Node, Bun, Deno and edge runtimes.
 
-> **Status: transport and auth.** It talks to a gateway: OAuth2 `client_credentials`, the retry loop,
-> per-model cooldowns, typed errors and response metadata, with the 34 catalogued error types asserted
-> against [`spec/errors.json`](../spec/errors.json) in both directions. **No resource methods yet** —
-> `chat`, `embeddings`, `predict` and the rest are next, as is replaying the contract corpus.
+> **Status: `0.1.0`, ready to publish and not yet published.** Every resource, streaming, vision, tool
+> calling and structured output; **49 of 49** shared contract cases; 77 unit tests and 16 integration
+> tests against a live gateway; five runnable [examples](examples/) and an
+> [API reference](docs/api.md). **9.5 KB** minified and gzipped, against a 50 KB budget.
+>
+> Not here yet: OpenTelemetry and a logging hook (`0.2.0`), `usage.export` (in no SDK of this family),
+> and `X-Prometheus-Ignored-Parameters` on a success (held until all five SDKs agree on the shape). Bun,
+> Deno and edge are **untested** — only Node 20, 22 and 24 are in CI, and claiming the rest because this
+> only uses `fetch` would be the kind of unmeasured assertion this repository keeps catching.
+>
 > Requested in
 > `apeiron_axonium_prometheus/solicitud-axonium-sdk-typescript.md`; see that channel for scope and
 > dates.
@@ -62,7 +68,7 @@ a deployment that cannot afford it should say so instead of meeting it as a trun
 ## What the transport does
 
 **Retries only what the contract says reached no model.** This API deduplicates nothing server-side,
-so a retried generation is a *new billable one* rather than a replay — which makes an over-eager
+so a retried generation is a _new billable one_ rather than a replay — which makes an over-eager
 policy expensive rather than merely noisy. Three attempts, 1s base, 60s cap, full jitter. An
 `idempotencyKey` is what turns a repeat into a replay, and every call accepts one.
 
@@ -74,7 +80,7 @@ the breaker's expected recovery. It is still capped: a wait longer than `maxBack
 caller rather than slept through, since blocking for ten minutes is a scheduling decision that belongs
 to the application.
 
-**Cooldowns are keyed by model, not by gateway.** `backend-unavailable` means every replica of *that*
+**Cooldowns are keyed by model, not by gateway.** `backend-unavailable` means every replica of _that_
 model is out while others on the same gateway keep serving.
 
 **A 401 refreshes the token once, then gives up.** Bounded deliberately: the condition compares the
@@ -106,17 +112,46 @@ Two deliberate shapes:
   worth retrying with the same credential, a credential failure never is. Both extend `AxoniumError`,
   so one `catch` still covers the package.
 - **`PredictBackendRejectedError.retryable` is derived from the status**, because the pass-through
-  route keeps the *engine's* status: one suffix covers a `422` that will never succeed and a `429`
+  route keeps the _engine's_ status: one suffix covers a `422` that will never succeed and a `429`
   that will.
+
+## Documentation
+
+- **[`docs/api.md`](docs/api.md)** — every export, including all 34 error classes against their `type`
+  suffix. A test asserts that nothing is exported without an entry.
+- **[`docs/migrating-from-python.md`](docs/migrating-from-python.md)** — call by call, including the three
+  things Python has that this does not and why.
+- **[`examples/`](examples/)** — chat, streaming from a Next.js Route Handler, vision, tool calling, and
+  governed mode. They import `axonium` by name, so they typecheck against the **published** `.d.ts`
+  rather than against `src/`.
+
+## A custom certificate authority
+
+There is no `caBundle` option and there cannot be one: `fetch` has no option for a CA, and reaching one
+means either an `undici` dependency or a `node:` import — each breaking a requirement this package was
+built to. Use the runtime's own mechanism:
+
+```bash
+NODE_EXTRA_CA_CERTS=/path/to/ca.pem node app.js   # Node, Bun
+deno run --cert /path/to/ca.pem app.ts            # Deno
+```
 
 ## Development
 
 ```bash
 npm install
-npm test          # node --test, no runner, no build step (needs Node 22+)
-npm run build     # ESM + CJS + .d.ts
-npm run lint      # prettier --check and tsc --noEmit
+npm test               # node --test, no runner, no build step (needs Node 22+)
+npm run build          # ESM + CJS + .d.ts
+npm run lint           # prettier --check, plus tsc on the package and on the examples
+
+AXONIUM_INTEGRATION=1 AXONIUM_GATEWAY_BASE_URL=… AXONIUM_CLIENT_ID=… AXONIUM_CLIENT_SECRET=… \
+  npm run test:integration
 ```
+
+The integration suite is **skipped without credentials and never runs in CI** — it spends real
+inference, so a contributor who has not opted in must not pay for it. It picks models by **modality**
+from the live catalogue rather than hardcoding ids, because a fixed id fails on every deployment that
+does not serve it and that failure reads as a broken SDK.
 
 The published package supports Node 20+. Node 20 cannot strip types, so the suite above proves
 nothing about it — CI runs the **built** artifact there instead, which is what a consumer on 20

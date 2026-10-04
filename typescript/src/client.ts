@@ -67,16 +67,74 @@ function checkParts(messages: readonly Message[]): void {
   }
 }
 
+/** A function the model may call. The gateway forwards `tools` as-is and validates no schemas. */
+export interface Tool {
+  type: "function";
+  function: {
+    name: string;
+    description?: string;
+    /** A JSON Schema object. Typed loosely because the gateway does not validate it either. */
+    parameters?: Record<string, unknown>;
+  };
+}
+
+/** How the model should choose. `"auto"` lets it decide; a named function forces one. */
+export type ToolChoice =
+  "auto" | "none" | "required" | { type: "function"; function: { name: string } };
+
+/**
+ * How the answer should be shaped.
+ *
+ * With `json_schema` the content comes back as a JSON **string** in the message, not as a nested
+ * object — parse it. The engine enforces the schema rather than the prompt asking nicely.
+ *
+ * **There is no Zod overload here, and that is deliberate.** Apeiron's request asked for one and it
+ * contradicts the same request's zero-runtime-dependency requirement, since Zod is one. The seam is
+ * {@link jsonSchema}: anything exposing `toJSONSchema()` is accepted without this package knowing what
+ * Zod is, so `jsonSchema("name", z.toJSONSchema(schema))` works today and a `zod/v4` import never has
+ * to appear here.
+ */
+export type ResponseFormat =
+  | { type: "text" }
+  | { type: "json_object" }
+  | {
+      type: "json_schema";
+      json_schema: { name: string; schema: Record<string, unknown>; strict?: boolean };
+    };
+
+/** Builds a `json_schema` response format from anything that can produce a JSON Schema. */
+export function jsonSchema(
+  name: string,
+  schema: Record<string, unknown> | { toJSONSchema(): Record<string, unknown> },
+  options: { strict?: boolean } = {},
+): ResponseFormat {
+  const resolved =
+    typeof (schema as { toJSONSchema?: unknown }).toJSONSchema === "function"
+      ? (schema as { toJSONSchema(): Record<string, unknown> }).toJSONSchema()
+      : (schema as Record<string, unknown>);
+  return {
+    type: "json_schema",
+    json_schema: {
+      name,
+      schema: resolved,
+      ...(options.strict === undefined ? {} : { strict: options.strict }),
+    },
+  };
+}
+
 export interface ChatRequest {
   model: string;
   messages: Message[];
   max_tokens?: number;
   temperature?: number;
   top_p?: number;
+  stop?: string | string[];
+  /** Set by {@link Axonium.chat}`.completions.stream()`; passing it to `create` is a type error. */
   stream?: never;
-  tools?: unknown[];
-  tool_choice?: unknown;
-  response_format?: Record<string, unknown>;
+  tools?: Tool[];
+  tool_choice?: ToolChoice;
+  response_format?: ResponseFormat;
+  /** The gateway silently drops a field it does not support; `requireParameters` makes it say so. */
   [key: string]: unknown;
 }
 

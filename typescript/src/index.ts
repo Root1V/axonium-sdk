@@ -6,7 +6,7 @@
  */
 export { VERSION, USER_AGENT } from "./version.ts";
 
-export { Axonium, imageFromBytes } from "./client.ts";
+export { Axonium, imageFromBytes, jsonSchema } from "./client.ts";
 export type {
   ChatRequest,
   ContentPart,
@@ -14,6 +14,9 @@ export type {
   ImageRequest,
   Message,
   RerankRequest,
+  ResponseFormat,
+  Tool,
+  ToolChoice,
 } from "./client.ts";
 
 export { ChatStream, dataOf, events } from "./sse.ts";

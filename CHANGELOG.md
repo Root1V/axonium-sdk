@@ -7,6 +7,72 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+Nothing yet.
+
+### 0.1.0 — ready to publish, not yet published
+
+Apeiron's `H2` scope, plus the three acceptance criteria that were missing.
+
+**Integration tests, 16 of them, against a live gateway.** Skipped without `AXONIUM_INTEGRATION=1` and
+credentials, and never in CI: they spend real inference, so a contributor who has not opted in must not
+pay for them, and a suite that failed on a missing credential would train everyone to ignore a red run.
+
+They pick models by **modality from the live catalogue** rather than hardcoding ids. A fixed id fails on
+every deployment that does not serve it, and that failure reads as a broken SDK rather than as a
+different catalogue. What they cover that the corpus cannot: the corpus replays recorded bytes, so it
+proves agreement with four other SDKs about a *past* response. Only a live gateway proves the contract
+still holds — which is how a premise that quietly expired gets found, and this repository has found
+several.
+
+**Five runnable examples**, the five that were asked for: chat, streaming from a Next.js Route Handler,
+vision, tool calling, governed mode. They import `axonium` by name, which self-resolves to `dist/`, so
+they typecheck against the **published** `.d.ts` rather than against `src/` — which makes them a check on
+the published surface and not only documentation. Four were run against a live gateway.
+
+**An API reference and a migration guide from Python.** The reference lists all 34 error classes against
+their `type` suffix, in a table derived from `errors.json` and `src/errors.ts` together. A test asserts
+every export has an entry.
+
+#### Three defects the new checks found immediately
+
+**The generator for that error table had a greedy regex** that spanned class boundaries, so it named
+`AxoniumError` as the class for `unknown-model` and `ServerError` for `upstream-error`. The
+every-export-is-documented test caught it, because the two real classes then appeared nowhere.
+
+**A `.npmignore` was silently overriding the `files` allowlist**, and `docs/` never reached the tarball.
+Two statements of the same truth with one of them winning quietly — so the `.npmignore` is gone and
+`files` is the only one.
+
+**Every sourcemap pointed at `../../src/*.ts` with `src/` excluded from the package.** A map pointing at a
+file that is not there is worse than no map: a debugger reports "file not found" instead of falling back
+to the compiled output. `src/` now ships, and the release workflow extracts the tarball and asserts that
+every map's sources resolve inside it.
+
+#### Also
+
+`tools`, `tool_choice` and `response_format` are typed rather than `unknown`, since tool calling is in
+`H2`. `jsonSchema(name, schema)` accepts anything with a `toJSONSchema()` method — which is how a Zod
+schema works without this package depending on Zod, resolving the contradiction in the original request.
+
+**`ts-release.yml`**: npm with `--provenance` via OIDC, no stored token, behind an `npm` environment with
+a required reviewer. The build job packs, lists the tarball, installs it into a clean directory, exercises
+both ESM and CJS, checks the sourcemaps, and **measures the bundle** — 9.5 KB minified and gzipped
+against the 50 KB budget, asserted rather than assumed, because a transitive dependency is how that
+budget quietly becomes 400 KB.
+
+#### Deliberately absent
+
+- **A `caBundle` option, which cannot exist.** `fetch` has no option for a CA, and reaching one means an
+  `undici` dependency or a `node:` import — each breaking a stated requirement. Documented per runtime
+  instead: `NODE_EXTRA_CA_CERTS` on Node and Bun, `--cert` on Deno.
+- **`usage.export`** — in no SDK of this family.
+- **`X-Prometheus-Ignored-Parameters` on a success** — doing it in one SDK first is the divergence the
+  shared corpus exists to prevent.
+- **OpenTelemetry and the logging hook** — `H3`.
+
+**Bun, Deno and edge are untested.** CI runs Node 20, 22 and 24. Claiming the other three because this
+only uses `fetch` would be exactly the unmeasured assertion this repository keeps catching.
+
 **Resource methods and the contract corpus: 49 of 49.** `models`, `chat` (including `stream`),
 `embeddings`, `images`, `rerank`, `predict` and `usage`, plus an SSE parser written over
 `ReadableStream` with no dependency. 75 tests. Exercised end to end through the installed package

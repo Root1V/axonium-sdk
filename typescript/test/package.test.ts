@@ -69,3 +69,33 @@ test("the dev dependencies do not include an HTTP mocking library", () => {
   const mockers = dev.filter((name) => /nock|msw|fetch-mock|undici-mock|sinon/i.test(name));
   assert.deepEqual(mockers, [], `HTTP mocking library in devDependencies: ${mockers.join(", ")}`);
 });
+
+test("every exported symbol appears in the API reference", async () => {
+  // The test that adds the most and that nobody writes. Documenting only what somebody remembered to
+  // document is how a symbol ends up discoverable solely by reading the source — and this reference
+  // claims to be complete, so the claim is checked rather than trusted.
+  const reference = readFileSync(join(root, "docs/api.md"), "utf8");
+  const surface = (await import("../src/index.ts")) as Record<string, unknown>;
+
+  const missing = Object.keys(surface)
+    .filter((name) => name !== "default")
+    .filter((name) => !new RegExp(`\\b${name}\\b`).test(reference));
+  assert.deepEqual(missing, [], `exported but absent from docs/api.md: ${missing.join(", ")}`);
+});
+
+test("every example compiles against the published types", () => {
+  // The examples import "axonium" by name, which self-resolves to dist/ -- so they typecheck against the
+  // .d.ts a consumer installs rather than against src/. That makes them a check on the published
+  // surface, not just documentation. Asserted here as a list so a deleted example is noticed.
+  const expected = [
+    "1-chat.ts",
+    "2-nextjs-route-handler.ts",
+    "3-vision.ts",
+    "4-tool-calling.ts",
+    "5-governed.ts",
+  ];
+  const present = readdirSync(join(root, "examples"))
+    .filter((f) => f.endsWith(".ts"))
+    .sort();
+  assert.deepEqual(present, expected, "the examples Apeiron asked for are not all here");
+});

@@ -1,6 +1,6 @@
 {
   "name": "axonium",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "TypeScript SDK for the Prometheus inference platform",
   "license": "MIT",
   "author": "Emeric Espiritu Santiago",
@@ -35,6 +35,8 @@
   "types": "./dist/esm/index.d.ts",
   "files": [
     "dist",
+    "src",
+    "docs",
     "README.md",
     "LICENSE"
   ],
@@ -44,8 +46,9 @@
     "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/rename-cjs.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --experimental-strip-types test/*.test.ts",
-    "lint": "prettier --check src test scripts && tsc -p tsconfig.json --noEmit",
-    "format": "prettier --write src test scripts"
+    "lint": "prettier --check src test scripts examples docs && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.examples.json --noEmit",
+    "format": "prettier --write src test scripts examples docs",
+    "test:integration": "node --test --test-timeout=120000 --experimental-strip-types test/integration/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
