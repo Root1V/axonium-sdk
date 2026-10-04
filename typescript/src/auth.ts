@@ -338,6 +338,7 @@ function tokenError(response: Response, payload: Record<string, unknown>, text: 
         idempotentReplay: false,
         idempotentReplayOf: undefined,
         rateLimit: undefined,
+        ignoredParameters: undefined,
       },
       raw: payload,
     });

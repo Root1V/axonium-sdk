@@ -86,6 +86,22 @@ export interface ResponseMeta {
   readonly idempotentReplay: boolean;
   readonly idempotentReplayOf: string | undefined;
   readonly rateLimit: RateLimitSnapshot | undefined;
+  /**
+   * Request fields the gateway accepted, ignored, and named back.
+   *
+   * `undefined` when there were none --- the header is absent then, so **its presence always means
+   * something** and an empty array would blur that into "it looked and found nothing".
+   *
+   * The endpoint takes an OpenAI-compatible *subset*: `n`, `presence_penalty`, `logit_bias`, `seed` and
+   * the like neither fail the request nor reach the engine. Until `PRM-127` they were dropped in
+   * silence, and the guide's own words on fixing that are the reason this is exposed rather than read
+   * and discarded --- *a setting that does nothing and says nothing is indistinguishable from one that
+   * works*. An SDK that swallowed the header would restore exactly that silence.
+   *
+   * Pass `requireParameters: true` to get a `400 unknown-parameter` instead, when being quietly given
+   * something else is worse than failing.
+   */
+  readonly ignoredParameters: readonly string[] | undefined;
 }
 
 /**

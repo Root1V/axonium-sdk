@@ -157,15 +157,16 @@ Three differences:
 
 ## What Python has and this does not
 
-- **`usage.export`** — in no SDK of this family yet. `GET /v1/usage/export` is in the contract.
 - **OpenTelemetry** — Python has it behind an extra; here it is planned for `0.2.0`.
-- **`X-Prometheus-Ignored-Parameters` on the response.** `requireParameters: true` makes the gateway
-  refuse a dropped field instead of silently dropping it, and that works here; reading the header back
-  on a success does not. Deliberately held: none of the five SDKs expose it, and doing it in one first
-  would be the divergence the shared corpus exists to prevent.
+- **`usage.export`** — neither has it, and neither should: the contract says _"Requires `admin:read`.
+  Not something an SDK calls."_ An integrator's token does not hold that scope.
 
 ## What this has and Python does not
 
-- **`ChatStream.reasoning`** exists in both, but was missing here until it was measured — see `AXO-130`.
+- **`meta.ignoredParameters`** — the fields the gateway accepted, ignored and named back. Python warns
+  about its _own_ allowlist; this reads the gateway's report. The first of the five SDKs to expose it, so
+  the name is the one the others will copy.
+- **`jsonSchema()`** — accepts anything with `toJSONSchema()`, so a Zod schema works without this package
+  depending on Zod.
 - **Zero runtime dependencies**, which is why there is no Zod overload and no HTTP client.
 - **An injected `fetch`**, so tests replay the corpus against a function rather than a patched global.

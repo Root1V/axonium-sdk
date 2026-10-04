@@ -87,7 +87,27 @@ export function metaFrom(headers: Headers): ResponseMeta {
     idempotentReplay: headers.get("Idempotent-Replay") === "true",
     idempotentReplayOf: headers.get("X-Idempotent-Replay-Of") ?? undefined,
     rateLimit: rateLimitFrom(headers),
+    ignoredParameters: ignoredParametersFrom(headers),
   };
+}
+
+/**
+ * The fields the gateway dropped, from `X-Prometheus-Ignored-Parameters: logit_bias, seed`.
+ *
+ * `undefined` rather than `[]` when the header is absent, because the contract says the header is only
+ * present when there is something to report --- so an empty array would claim the gateway looked and
+ * found nothing, which is a different statement from the gateway not having said.
+ */
+function ignoredParametersFrom(headers: Headers): readonly string[] | undefined {
+  const raw = headers.get("X-Prometheus-Ignored-Parameters");
+  if (raw === null) return undefined;
+  const names = raw
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+  // A present-but-empty header is the gateway contradicting itself. Reported as an empty list rather
+  // than as absence, so it reads as "said nothing" instead of "did not say".
+  return names;
 }
 
 /**
