@@ -1,0 +1,4 @@
+data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"Se cay"},"finish_reason":null}],"id":"chatcmpl-x","model":"qwen3-0.6b","object":"chat.completion.chunk"}
+
+data: {"error":{"code":"backend_disconnected","message":"upstream closed the connection"}}
+

@@ -3,6 +3,233 @@
 Each language SDK versions independently. Entries are grouped by language and use tags of the
 form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
+## TypeScript
+
+### Unreleased
+
+Nothing yet.
+
+### 0.1.0 — ready to publish, not yet published
+
+Apeiron's `H2` scope, plus the three acceptance criteria that were missing.
+
+**Integration tests, 16 of them, against a live gateway.** Skipped without `AXONIUM_INTEGRATION=1` and
+credentials, and never in CI: they spend real inference, so a contributor who has not opted in must not
+pay for them, and a suite that failed on a missing credential would train everyone to ignore a red run.
+
+They pick models by **modality from the live catalogue** rather than hardcoding ids. A fixed id fails on
+every deployment that does not serve it, and that failure reads as a broken SDK rather than as a
+different catalogue. What they cover that the corpus cannot: the corpus replays recorded bytes, so it
+proves agreement with four other SDKs about a *past* response. Only a live gateway proves the contract
+still holds — which is how a premise that quietly expired gets found, and this repository has found
+several.
+
+**Five runnable examples**, the five that were asked for: chat, streaming from a Next.js Route Handler,
+vision, tool calling, governed mode. They import `axonium` by name, which self-resolves to `dist/`, so
+they typecheck against the **published** `.d.ts` rather than against `src/` — which makes them a check on
+the published surface and not only documentation. Four were run against a live gateway.
+
+**An API reference and a migration guide from Python.** The reference lists all 34 error classes against
+their `type` suffix, in a table derived from `errors.json` and `src/errors.ts` together. A test asserts
+every export has an entry.
+
+#### Three defects the new checks found immediately
+
+**The generator for that error table had a greedy regex** that spanned class boundaries, so it named
+`AxoniumError` as the class for `unknown-model` and `ServerError` for `upstream-error`. The
+every-export-is-documented test caught it, because the two real classes then appeared nowhere.
+
+**A `.npmignore` was silently overriding the `files` allowlist**, and `docs/` never reached the tarball.
+Two statements of the same truth with one of them winning quietly — so the `.npmignore` is gone and
+`files` is the only one.
+
+**Every sourcemap pointed at `../../src/*.ts` with `src/` excluded from the package.** A map pointing at a
+file that is not there is worse than no map: a debugger reports "file not found" instead of falling back
+to the compiled output. `src/` now ships, and the release workflow extracts the tarball and asserts that
+every map's sources resolve inside it.
+
+#### Also
+
+`tools`, `tool_choice` and `response_format` are typed rather than `unknown`, since tool calling is in
+`H2`. `jsonSchema(name, schema)` accepts anything with a `toJSONSchema()` method — which is how a Zod
+schema works without this package depending on Zod, resolving the contradiction in the original request.
+
+**`ts-release.yml`**: npm with `--provenance` via OIDC, no stored token, behind an `npm` environment with
+a required reviewer. The build job packs, lists the tarball, installs it into a clean directory, exercises
+both ESM and CJS, checks the sourcemaps, and **measures the bundle** — 9.5 KB minified and gzipped
+against the 50 KB budget, asserted rather than assumed, because a transitive dependency is how that
+budget quietly becomes 400 KB.
+
+#### Deliberately absent
+
+- **A `caBundle` option, which cannot exist.** `fetch` has no option for a CA, and reaching one means an
+  `undici` dependency or a `node:` import — each breaking a stated requirement. Documented per runtime
+  instead: `NODE_EXTRA_CA_CERTS` on Node and Bun, `--cert` on Deno.
+- **`usage.export`** — in no SDK of this family.
+- **`X-Prometheus-Ignored-Parameters` on a success** — doing it in one SDK first is the divergence the
+  shared corpus exists to prevent.
+- **OpenTelemetry and the logging hook** — `H3`.
+
+**Bun, Deno and edge are untested.** CI runs Node 20, 22 and 24. Claiming the other three because this
+only uses `fetch` would be exactly the unmeasured assertion this repository keeps catching.
+
+**Resource methods and the contract corpus: 49 of 49.** `models`, `chat` (including `stream`),
+`embeddings`, `images`, `rerank`, `predict` and `usage`, plus an SSE parser written over
+`ReadableStream` with no dependency. 75 tests. Exercised end to end through the installed package
+against a live deployment — catalogue, chat, a 120-chunk stream, vision from bytes, embeddings, rerank,
+predict and the usage row.
+
+**The corpus passed on its first complete run**, which is not a boast about the code: the four SDKs
+before it had already paid for every case. What it did find is below.
+
+#### Three things mutation found that the corpus could not
+
+The runner reaching 49/49 proves agreement with four other SDKs. It does not prove the cases have
+teeth, so five mutations were applied. Two survived, and a third gap turned up while measuring:
+
+| mutation | why the corpus let it pass |
+|---|---|
+| detect the in-band stream error by matching `"stream interrupted"` | the one fixture with an in-band error carries that one message, so "detect the key" and "match the string" are indistinguishable |
+| build `rerank`'s `ranking` from positions rather than indices | **zero** cases assert `ranking` — and `rerank.json`'s indices are `[2,0,1]`, so the data to catch it is right there |
+| *(not a mutation)* a stream with no `reasoning` accessor at all | no case asserts streamed reasoning; four SDKs having it was a coincidence |
+
+The first is **fixed in the corpus**, as manifest v27: a second in-band failure whose payload is an
+object with a code and a message, so the only reading that satisfies both cases is the one the platform
+asked for. Authored rather than recorded, and the case says why — it cannot be recorded until the
+gateway emits a second shape, and waiting leaves five SDKs free to hardcode a string meanwhile. It
+reuses the `stream_error` kind, so no runner changed and Python, Go and Rust picked it up on the next
+run.
+
+The other two are covered locally and recorded as `AXO-129` and `AXO-130`. Both need a new expectation
+key, which means a resolver in all five runners rather than a manifest edit.
+
+**The reasoning gap matters more than it sounds.** Measured live on `qwen3-0.6b`: a stream was 120
+chunks with `content` empty and every delta carrying `reasoning_content`. A UI showing only `content`
+displays nothing, which looks exactly like a broken SDK. `ChatStream.reasoning` now accumulates it and
+`finalMessage()` hands it over.
+
+#### Shapes worth naming
+
+**`chat.completions.stream()` is a separate method**, not `create({stream: true})`. It keeps the return
+type honest — no union of a completion and an iterable — makes the `inference:stream` scope requirement
+explicit, and gives one place to say that a stream is never retried once it has begun.
+
+**`ToolCall` carries the wire nesting**, `function: {name, arguments}`, with flat `name`/`arguments`
+shortcuts over it. That is what the other four expose, so one contract case resolves
+`tool_calls.0.function.name` across all five. Arguments stay a **string**: a generation stopped by
+`max_tokens` leaves them truncated, and parsing eagerly would fail the whole response and lose the
+correlation ids with it.
+
+**Tool calls are reassembled by `index`.** Appending to whichever call was last concatenates two
+interleaved calls' arguments into one unparseable string — the corpus catches that one.
+
+**There is no helper for a remote image URL**, because the gateway refuses `http(s)://` as an SSRF
+mitigation: an API accepting one would accept something that always fails. `imageFromBytes` produces a
+data URI, and an `http(s)` part is refused before the round trip.
+
+**`usage.get` documents the third cause of its `404`** and it is the common one: the id belongs to a
+**replay**, which reached no model and has no row. `meta.idempotentReplayOf` is the id that was charged.
+
+**The SSE buffer is flushed at end of stream.** A final event with no trailing blank line is otherwise
+dropped silently, and a truncated stream is exactly when a caller most needs what did arrive.
+
+**Transport and auth.** The SDK talks to a gateway now: OAuth2 `client_credentials`, the retry loop,
+per-model cooldowns, typed errors off the wire, and the correlation metadata on every response.
+Verified through the installed package against a live deployment — the catalog, `predict`, chat, a
+`400 unknown-model` and a `404 unknown-route`, which is the first time any SDK in this family has
+exercised `PRM-174`'s new type against a deployment rather than a fixture.
+
+**The token's lifetime is anchored to the server's clock.** When the response's `Date` header and the
+token's own `exp` are both present, their difference is a second reading of the same lifetime and a
+skew-free one, because both come from the server. The shorter wins: an early refresh costs one
+request, believing a token lives longer than it does costs every request after it expires.
+
+**Concurrent callers share one in-flight token request**, through a kept promise rather than a lock.
+Without it a cold client answering ten simultaneous requests sends ten token requests and nine are
+charged against the rate-limit budget for nothing.
+
+**The granted scope is read back from the response, never assumed from the request.** Asking for a
+subset is honoured, so what came back is what the token can do; a caller trusting their own request
+would diagnose a `403` as a platform fault.
+
+**`fetch` is injected, so the whole test harness is a function.** 62 tests, no mocking library, and
+nothing to restore afterwards — what they exercise is the real transport rather than a seam around it.
+
+#### One defect found by measuring, which no test would have caught
+
+`decodeClaims` read a `client_id` claim. **No token carries one**: the guide documents `sub` and
+`azp`, the other four SDKs read `sub`, and this one invented a name. The accessor returned `undefined`
+for every real token, which reads exactly like a gateway that had not sent it. Found by printing the
+claims of a live token. It is now `subject` and `authorizedParty`, matching the other four, and a test
+pins the measured shape — including that an unmodelled claim stays reachable through `raw`.
+
+#### One real bug, found by a test hanging
+
+The reactive `401` refresh had no bound. Its condition compares the rejected token with the one just
+used, which is false again after every refresh, so a gateway answering `401` to every token looped
+forever fetching new ones. The test written to assert "raised rather than looped" found it by never
+finishing.
+
+#### And four cases of the instrument being wrong rather than the code
+
+Worth writing down together, because the pattern is the expensive part:
+
+| what looked broken | what was actually wrong |
+|---|---|
+| the decoder mangled a non-ASCII claim | the test's JWT helper encoded latin1; a real issuer encodes UTF-8 |
+| a 40s token was not refreshed early | 40s is above the 30s floor, so reuse was correct |
+| a refresh did not replace the token | the stub issued one constant string, so the assertion compared a value with itself |
+| a 20ms `Retry-After` was not honoured | the test's policy capped backoff at 10ms, so refusing it was correct |
+
+Each would have been "fixed" into a worse SDK. The first is the clearest: matching the decoder to the
+helper would have broken every real token with an accent in it.
+
+**Scaffolding, configuration and the error taxonomy.** No transport yet, so nothing talks to a
+gateway. Requested by Apeiron on 2026-10-03; the scope and the dates live in that channel.
+
+**In the monorepo, under `typescript/`.** Swift is the one SDK in a repository of its own, and that
+was argued badly at the time — the claim that SwiftPM forced it was measured false afterwards. The
+price is real and gets paid on every contract change: its corpus is a submodule whose pointer
+somebody has to remember to move. npm has no such constraint, so `spec/` is a relative path here and
+cannot fall behind.
+
+**All 34 catalogued error types, asserted against `spec/errors.json` in both directions.** The second
+direction is the one nothing else would report: a suffix this SDK *invented* leaves a caller with a
+`catch` block that can never run, and reading this package alone would never show it.
+
+Two shapes carried over from the other four because they were learned the hard way:
+
+- `OAuthError` does **not** extend `APIError`. The token endpoint answers RFC 6749, not problem+json,
+  and a credential failure is never worth retrying with the same credential.
+- `PredictBackendRejectedError.retryable` is derived from the status, because the pass-through route
+  keeps the **engine's** status — one suffix covering a `422` that will never succeed and a `429`
+  that will.
+
+**Zero runtime dependencies, and three tests that enforce it** rather than a line in a README: no
+`dependencies`, no `peerDependencies`, and nothing under `src/` importing a `node:` module. The last
+one matters because a `node:crypto` import would pass every test and fail only on an edge deployment.
+
+**`fetch` is injected, not patched**, so the contract corpus will replay against a function. A test
+refuses an HTTP-mocking dev dependency: with one, what the suite exercises stops being the transport.
+
+**The source is erasable TypeScript** (`erasableSyntaxOnly`), so Node runs it with
+`--experimental-strip-types` and the suite needs no build step and no test runner. Discovered by
+writing two parameter properties and watching Node refuse the file — a compiler flag is cheaper than
+remembering, and this is the whole reason there is no vitest here.
+
+**The browser guard looks for a server, not for a window.** Apeiron's request asked for
+`typeof window !== "undefined"`; jsdom defines `window`, so that fires in anyone's vitest suite, and a
+guard with false positives in CI is a guard somebody disables. More importantly the platform's rule
+changed axis on 2026-10-02: it is about **whose** credential it is, not where the code runs. An
+integrator's must never reach a machine its users control; an end client's own may live on their own
+device. A bundle cannot tell those apart, so the default refuses and `allowInsecureCredential` is how
+a caller states which case theirs is.
+
+**The non-streaming timeout defaults to 600 s and that is not an oversight** — it matches what the
+gateway allows its backends, because a client timeout shorter than the server's plus a retry queues a
+second expensive generation on top of one still running. An edge runtime cannot wait that long, which
+is a real conflict rather than a tuning question and is written down as one.
+
 ## Python
 
 ### Unreleased

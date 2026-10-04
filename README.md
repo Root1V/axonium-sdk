@@ -35,8 +35,9 @@ equivalent.
 | Go | `go get github.com/Root1V/axonium-sdk/go@v0.5.0` | `v0.5.0` |
 | Rust | `axonium = "0.5"` | [`0.5.0`](https://crates.io/crates/axonium) on crates.io |
 | Swift | `.package(url: "…/axonium-sdk-swift", from: "0.2.0")` | [`0.2.0`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
+| TypeScript | `npm install axonium` | `0.1.0` **ready, not yet published** — see [`typescript/`](typescript/) |
 
-All four are published and implement the same surface. Python was built first as the reference
+Four are published and implement the same surface; TypeScript is being built. Python was built first as the reference
 implementation; every behaviour they share is pinned by the contract corpus in
 [`spec/`](https://github.com/Root1V/axonium-sdk/tree/main/spec) — one manifest, one set of recorded wire bytes, four runners that share no code,
 so identical behaviour is verified rather than intended. Swift vendors `spec/` as a submodule and
