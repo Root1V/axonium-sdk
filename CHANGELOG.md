@@ -13,6 +13,25 @@ Nothing yet.
 
 Apeiron's `H2` scope, plus the three acceptance criteria that were missing.
 
+#### Two things the first release rehearsals found, both about leftover state
+
+**`npm run lint` needed a build that only existed on my machine.** The examples import `axonium` by name,
+which self-resolves to `dist/`, so checking them needs the build to exist — and it did here, left over
+from an earlier run, and did not in a clean checkout. CI failed on the exact command that passed locally.
+`lint` now builds what it checks rather than assuming somebody built it, verified with `dist/` **and**
+`node_modules/` removed.
+
+**The test stub deadlocked the event loop on Node 22.** `AbortSignal.timeout` schedules an *unref'd*
+timer there, so with nothing else pending the loop drained before the abort fired and the stub's promise
+never settled — reported as *"Promise resolution is still pending but the event loop has already
+resolved"*. A real `fetch` cannot hit it, because an open socket holds the loop; a stub has to hold it
+deliberately, which it now does with a ref'd backstop.
+
+**The CI matrix is what found it**: Node 24 and 26 pass, Node 22 does not. The suite was green on the
+runtime I happened to have and red on the floor the package claims — the same shape as every other
+instrument failure in this repository, one layer out. Reproduced locally against Node 22 before fixing,
+and both versions are green now.
+
 **`meta.ignoredParameters`** — the request fields the gateway accepted, **ignored**, and named back in
 `X-Prometheus-Ignored-Parameters`. `undefined` when there were none, because the header is present only
 when there is something to report: an empty array would claim the gateway looked and found nothing, which

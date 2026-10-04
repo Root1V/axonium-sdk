@@ -98,12 +98,25 @@ export class Stub {
       if (reply.hang) {
         return new Promise<Response>((_resolve, reject) => {
           const signal = init?.signal;
-          if (!signal) return;
+          // A ref'd timer, and it is load-bearing rather than a safety net. `AbortSignal.timeout`
+          // schedules an UNREF'D timer on Node 22, so with nothing else pending the event loop drains
+          // before the abort fires and this promise never settles -- which Node reports as "Promise
+          // resolution is still pending but the event loop has already resolved". A real `fetch` cannot
+          // hit that, because an open socket holds the loop; a stub has to hold it deliberately.
+          //
+          // Found by the CI matrix: Node 24 and 26 pass and Node 22 does not, so the suite was green on
+          // the runtime I happened to have and red on the floor the package claims.
+          const backstop = setTimeout(() => {
+            reject(new Error("the stubbed request hung and nothing aborted it"));
+          }, 30_000);
+
           const fail = (): void => {
+            clearTimeout(backstop);
             const error = new Error("aborted");
-            error.name = signal.reason instanceof Error ? signal.reason.name : "AbortError";
+            error.name = signal?.reason instanceof Error ? signal.reason.name : "AbortError";
             reject(error);
           };
+          if (!signal) return;
           if (signal.aborted) fail();
           else signal.addEventListener("abort", fail, { once: true });
         });
