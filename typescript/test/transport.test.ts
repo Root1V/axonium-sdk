@@ -19,6 +19,8 @@ import {
   TransportError,
   UnknownModelError,
 } from "../src/errors.ts";
+import { Axonium, imageFromBytes } from "../src/client.ts";
+import { StreamInterruptedError } from "../src/errors.ts";
 import { Stub, problemBody } from "./stub.ts";
 
 const CHAT = "/v1/chat/completions";
@@ -406,4 +408,156 @@ test("a cooldown never shortens under a concurrent, smaller wait", () => {
   registry.record("k", 1_000, 0);
   assert.ok((registry.remaining("k", 0) ?? 0) > 5_000, "the larger wait was overwritten");
   assert.equal(registry.remaining("k", 20_000), 0, "an elapsed cooldown was not forgotten");
+});
+
+/* --- what the shared corpus cannot assert, and says so ------------------------------------- */
+
+test("rerank's ranking reads the indices, not the positions in results", async () => {
+  // NOT COVERED BY THE CORPUS, and it has the data to cover it: rerank.json's indices are [2,0,1], so
+  // "position in results" and "index into your documents" genuinely differ there -- and zero cases
+  // assert `ranking`. Mutating it to return positions left all 49 green.
+  //
+  // It is the accessor whose entire purpose is that the index points into the array YOU sent, which is
+  // what keeps a reordered result attributable to its input. Every SDK in this family exposes it and
+  // none of them pin it. Recorded as AXO-129 rather than fixed in the corpus here, because adding
+  // `expect.fields` for it needs an accessor in the Go and Rust runners too.
+  const stub = new Stub().token().on("/v1/rerank", {
+    body: JSON.stringify({
+      model: "qwen3-reranker",
+      results: [
+        { index: 2, relevance_score: 0.9 },
+        { index: 0, relevance_score: 0.5 },
+        { index: 1, relevance_score: 0.1 },
+      ],
+    }),
+  });
+  const api = new Axonium({
+    gatewayBaseURL: "https://gw.test",
+    clientId: "id",
+    clientSecret: "secret",
+    fetch: stub.fetch,
+  });
+  const ranked = await api.rerank.create({
+    model: "qwen3-reranker",
+    query: "q",
+    documents: ["a", "b", "c"],
+  });
+  assert.deepEqual(
+    [...ranked.ranking],
+    [2, 0, 1],
+    "ranking returned positions rather than indices",
+  );
+});
+
+test("an in-band stream error is detected by the key, whatever its payload", async () => {
+  // The corpus now carries a second shape for this (v27), added because mutating the detection to
+  // match the literal string "stream interrupted" left every case green. Kept here as well because
+  // this is the one place the three payload shapes sit side by side.
+  for (const payload of ['"stream interrupted"', '{"code":"x","message":"y"}', "null", "123"]) {
+    const stub = new Stub().token().on("/v1/chat/completions", {
+      headers: { "Content-Type": "text/event-stream" },
+      body: `data: {"choices":[{"delta":{"content":"hola"}}]}\n\ndata: {"error":${payload}}\n\n`,
+    });
+    const api = new Axonium({
+      gatewayBaseURL: "https://gw.test",
+      clientId: "id",
+      clientSecret: "secret",
+      fetch: stub.fetch,
+    });
+    const stream = await api.chat.completions.stream({
+      model: "m",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    await assert.rejects(stream.finalMessage(), (err: unknown) => {
+      assert.ok(err instanceof StreamInterruptedError, `payload ${payload} was not detected`);
+      assert.equal(err.partialContent, "hola", "the partial text was lost");
+      return true;
+    });
+  }
+});
+
+test("a stream cannot be consumed twice", async () => {
+  // A one-shot sequence over a socket. Iterating again would silently yield nothing, which reads as a
+  // model that produced no output.
+  const stub = new Stub().token().on("/v1/chat/completions", {
+    headers: { "Content-Type": "text/event-stream" },
+    body: `data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n`,
+  });
+  const api = new Axonium({
+    gatewayBaseURL: "https://gw.test",
+    clientId: "id",
+    clientSecret: "secret",
+    fetch: stub.fetch,
+  });
+  const stream = await api.chat.completions.stream({
+    model: "m",
+    messages: [{ role: "user", content: "hi" }],
+  });
+  assert.equal((await stream.finalMessage()).content, "ok");
+  await assert.rejects(stream.finalMessage(), StreamInterruptedError);
+});
+
+test("an http(s) image part is refused before the round trip", async () => {
+  // The gateway refuses it as an SSRF mitigation, so an API that accepted one would accept something
+  // that always fails.
+  const stub = new Stub().token().on("/v1/chat/completions", { body: "{}" });
+  const api = new Axonium({
+    gatewayBaseURL: "https://gw.test",
+    clientId: "id",
+    clientSecret: "secret",
+    fetch: stub.fetch,
+  });
+  await assert.rejects(
+    api.chat.completions.create({
+      model: "qwen3-vl-8b",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "¿qué ves?" },
+            { type: "image_url", image_url: { url: "https://example.com/a.png" } },
+          ],
+        },
+      ],
+    }),
+    InvalidRequestError,
+  );
+  assert.equal(stub.countFor("/v1/chat/completions"), 0, "the request was sent anyway");
+});
+
+test("imageFromBytes produces a data URI the gateway accepts", () => {
+  const part = imageFromBytes(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), "image/png");
+  assert.equal(part.type, "image_url");
+  assert.match(part.image_url.url, /^data:image\/png;base64,/);
+  assert.ok(!/https?:/.test(part.image_url.url));
+});
+
+test("a stream assembles reasoning separately from content", async () => {
+  // NOT COVERED BY THE CORPUS either, and the four other SDKs all have it: the manifest pins a
+  // stream's content through `expect.content` and has no key for reasoning, so five SDKs agreeing was
+  // a coincidence. Measured live on qwen3-0.6b: 120 chunks, content empty, every delta reasoning --
+  // a UI showing only `content` displays nothing, which looks like a broken SDK. AXO-130.
+  const stub = new Stub().token().on("/v1/chat/completions", {
+    headers: { "Content-Type": "text/event-stream" },
+    body:
+      `data: {"choices":[{"delta":{"role":"assistant","content":null}}]}\n\n` +
+      `data: {"choices":[{"delta":{"reasoning_content":"Pien"}}]}\n\n` +
+      `data: {"choices":[{"delta":{"reasoning_content":"so…"}}]}\n\n` +
+      `data: {"choices":[{"delta":{"content":"listo"},"finish_reason":"stop"}]}\n\n` +
+      `data: [DONE]\n\n`,
+  });
+  const api = new Axonium({
+    gatewayBaseURL: "https://gw.test",
+    clientId: "id",
+    clientSecret: "secret",
+    fetch: stub.fetch,
+  });
+  const stream = await api.chat.completions.stream({
+    model: "m",
+    messages: [{ role: "user", content: "hi" }],
+  });
+  const final = await stream.finalMessage();
+  assert.equal(final.content, "listo");
+  assert.equal(final.reasoning, "Pienso…", "the reasoning deltas were dropped");
+  assert.equal(stream.finish, "stop");
 });

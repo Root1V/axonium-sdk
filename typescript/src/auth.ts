@@ -322,8 +322,17 @@ function tokenError(response: Response, payload: Record<string, unknown>, text: 
       instance: typeof payload["instance"] === "string" ? payload["instance"] : "",
       retryAfter: undefined,
       meta: {
-        requestId: response.headers.get("X-Request-ID") ?? undefined,
-        traceId: response.headers.get("X-Trace-ID") ?? undefined,
+        // Body first, then the headers. Same fallback as every other error path, and load-bearing for
+        // the same reason: these envelopes carry the ids in the body and some non-gateway answers
+        // carry them only in the headers.
+        requestId:
+          (typeof payload["request_id"] === "string" ? payload["request_id"] : undefined) ??
+          response.headers.get("X-Request-ID") ??
+          undefined,
+        traceId:
+          (typeof payload["trace_id"] === "string" ? payload["trace_id"] : undefined) ??
+          response.headers.get("X-Trace-ID") ??
+          undefined,
         instance: undefined,
         instanceId: undefined,
         idempotentReplay: false,

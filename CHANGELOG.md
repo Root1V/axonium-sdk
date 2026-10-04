@@ -7,6 +7,66 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+**Resource methods and the contract corpus: 49 of 49.** `models`, `chat` (including `stream`),
+`embeddings`, `images`, `rerank`, `predict` and `usage`, plus an SSE parser written over
+`ReadableStream` with no dependency. 75 tests. Exercised end to end through the installed package
+against a live deployment — catalogue, chat, a 120-chunk stream, vision from bytes, embeddings, rerank,
+predict and the usage row.
+
+**The corpus passed on its first complete run**, which is not a boast about the code: the four SDKs
+before it had already paid for every case. What it did find is below.
+
+#### Three things mutation found that the corpus could not
+
+The runner reaching 49/49 proves agreement with four other SDKs. It does not prove the cases have
+teeth, so five mutations were applied. Two survived, and a third gap turned up while measuring:
+
+| mutation | why the corpus let it pass |
+|---|---|
+| detect the in-band stream error by matching `"stream interrupted"` | the one fixture with an in-band error carries that one message, so "detect the key" and "match the string" are indistinguishable |
+| build `rerank`'s `ranking` from positions rather than indices | **zero** cases assert `ranking` — and `rerank.json`'s indices are `[2,0,1]`, so the data to catch it is right there |
+| *(not a mutation)* a stream with no `reasoning` accessor at all | no case asserts streamed reasoning; four SDKs having it was a coincidence |
+
+The first is **fixed in the corpus**, as manifest v27: a second in-band failure whose payload is an
+object with a code and a message, so the only reading that satisfies both cases is the one the platform
+asked for. Authored rather than recorded, and the case says why — it cannot be recorded until the
+gateway emits a second shape, and waiting leaves five SDKs free to hardcode a string meanwhile. It
+reuses the `stream_error` kind, so no runner changed and Python, Go and Rust picked it up on the next
+run.
+
+The other two are covered locally and recorded as `AXO-129` and `AXO-130`. Both need a new expectation
+key, which means a resolver in all five runners rather than a manifest edit.
+
+**The reasoning gap matters more than it sounds.** Measured live on `qwen3-0.6b`: a stream was 120
+chunks with `content` empty and every delta carrying `reasoning_content`. A UI showing only `content`
+displays nothing, which looks exactly like a broken SDK. `ChatStream.reasoning` now accumulates it and
+`finalMessage()` hands it over.
+
+#### Shapes worth naming
+
+**`chat.completions.stream()` is a separate method**, not `create({stream: true})`. It keeps the return
+type honest — no union of a completion and an iterable — makes the `inference:stream` scope requirement
+explicit, and gives one place to say that a stream is never retried once it has begun.
+
+**`ToolCall` carries the wire nesting**, `function: {name, arguments}`, with flat `name`/`arguments`
+shortcuts over it. That is what the other four expose, so one contract case resolves
+`tool_calls.0.function.name` across all five. Arguments stay a **string**: a generation stopped by
+`max_tokens` leaves them truncated, and parsing eagerly would fail the whole response and lose the
+correlation ids with it.
+
+**Tool calls are reassembled by `index`.** Appending to whichever call was last concatenates two
+interleaved calls' arguments into one unparseable string — the corpus catches that one.
+
+**There is no helper for a remote image URL**, because the gateway refuses `http(s)://` as an SSRF
+mitigation: an API accepting one would accept something that always fails. `imageFromBytes` produces a
+data URI, and an `http(s)` part is refused before the round trip.
+
+**`usage.get` documents the third cause of its `404`** and it is the common one: the id belongs to a
+**replay**, which reached no model and has no row. `meta.idempotentReplayOf` is the id that was charged.
+
+**The SSE buffer is flushed at end of stream.** A final event with no trailing blank line is otherwise
+dropped silently, and a truncated stream is exactly when a caller most needs what did arrive.
+
 **Transport and auth.** The SDK talks to a gateway now: OAuth2 `client_credentials`, the retry loop,
 per-model cooldowns, typed errors off the wire, and the correlation metadata on every response.
 Verified through the installed package against a live deployment — the catalog, `predict`, chat, a

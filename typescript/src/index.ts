@@ -6,6 +6,37 @@
  */
 export { VERSION, USER_AGENT } from "./version.ts";
 
+export { Axonium, imageFromBytes } from "./client.ts";
+export type {
+  ChatRequest,
+  ContentPart,
+  EmbeddingRequest,
+  ImageRequest,
+  Message,
+  RerankRequest,
+} from "./client.ts";
+
+export { ChatStream, dataOf, events } from "./sse.ts";
+export type { Chunk, StreamedToolCall } from "./sse.ts";
+
+export { decodedArguments, usageFrom } from "./resources.ts";
+export type {
+  ChatCompletion,
+  Embedding,
+  EmbeddingList,
+  Envelope,
+  GeneratedImage,
+  ImageList,
+  Model,
+  ModelList,
+  PredictResult,
+  RequestUsage,
+  RerankList,
+  RerankResult,
+  ToolCall,
+  Usage,
+} from "./resources.ts";
+
 export type { AxoniumOptions, ResolvedConfig, Timeouts, TokenProvider } from "./config.ts";
 export { DEFAULT_TIMEOUTS, resolveConfig } from "./config.ts";
 
