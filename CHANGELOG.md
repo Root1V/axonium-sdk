@@ -13,6 +13,31 @@ Nothing yet.
 
 Apeiron's `H2` scope, plus the three acceptance criteria that were missing.
 
+**`meta.ignoredParameters`** — the request fields the gateway accepted, **ignored**, and named back in
+`X-Prometheus-Ignored-Parameters`. `undefined` when there were none, because the header is present only
+when there is something to report: an empty array would claim the gateway looked and found nothing, which
+is a different statement from the gateway not having said.
+
+The first of the five SDKs to expose it, and the guide's own words on why `PRM-127` added the header are
+the argument — *a setting that does nothing and says nothing is indistinguishable from one that works*.
+An SDK that read the header and discarded it would restore that silence one layer down. The name is now
+the one the other four will copy, which is why it is going to the channel rather than only here.
+
+**`usage.export` is not missing, it is declined**, and the contract says why: *"Requires `admin:read`.
+Not something an SDK calls; documented because consumers parse the file."* An integrator's token does not
+hold `admin:read`, and the answer is a CSV whose column rules are themselves a contract. The thing to read
+is §3.9, not a method here.
+
+**A `tokenProvider` now discards credentials that merely happen to be in the environment**, and only a
+pair passed explicitly beside it is a contradiction. The first version read both the same way, so a caller
+supplying a provider on a machine with `AXONIUM_CLIENT_SECRET` exported was refused outright — which is
+the governed multi-tenant shape on any host where ops set those variables. Rust had already decided this
+and said so in a doc comment; this one had not read it.
+
+Found by running `verify.sh` in a shell with a `.env` sourced, which is what a developer does. The
+reading also turns the guarantee into a fact rather than a claim: with a provider, this SDK holds no
+long-lived secret whatever the environment contains.
+
 **Integration tests, 16 of them, against a live gateway.** Skipped without `AXONIUM_INTEGRATION=1` and
 credentials, and never in CI: they spend real inference, so a contributor who has not opted in must not
 pay for them, and a suite that failed on a missing credential would train everyone to ignore a red run.

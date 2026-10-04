@@ -561,3 +561,110 @@ test("a stream assembles reasoning separately from content", async () => {
   assert.equal(final.reasoning, "Pienso…", "the reasoning deltas were dropped");
   assert.equal(stream.finish, "stop");
 });
+
+test("the gateway's ignored-parameter report is exposed, not swallowed", async () => {
+  // The endpoint takes an OpenAI-compatible SUBSET and names back what it dropped. Until PRM-127 these
+  // vanished in silence, and the guide's own words on fixing it are why this is exposed: a setting that
+  // does nothing and says nothing is indistinguishable from one that works. Reading the header and
+  // discarding it would restore that silence inside the SDK.
+  const stub = new Stub().token().on("/v1/chat/completions", {
+    headers: { "X-Prometheus-Ignored-Parameters": "logit_bias, seed" },
+    body: JSON.stringify({ choices: [{ message: { content: "ok" } }] }),
+  });
+  const api = new Axonium({
+    gatewayBaseURL: "https://gw.test",
+    clientId: "id",
+    clientSecret: "secret",
+    fetch: stub.fetch,
+  });
+  const answer = await api.chat.completions.create({
+    model: "m",
+    messages: [{ role: "user", content: "hi" }],
+    seed: 7,
+    logit_bias: { "1": 2 },
+  });
+  assert.deepEqual(answer.meta.ignoredParameters, ["logit_bias", "seed"]);
+});
+
+test("no ignored-parameter header means undefined, which is not an empty list", async () => {
+  // The contract says the header is present only when there is something to report, so its presence
+  // always means something. An empty array would claim the gateway looked and found nothing, which is a
+  // different statement from the gateway not having said.
+  const stub = new Stub().token().on("/v1/chat/completions", {
+    body: JSON.stringify({ choices: [{ message: { content: "ok" } }] }),
+  });
+  const api = new Axonium({
+    gatewayBaseURL: "https://gw.test",
+    clientId: "id",
+    clientSecret: "secret",
+    fetch: stub.fetch,
+  });
+  const answer = await api.chat.completions.create({
+    model: "m",
+    messages: [{ role: "user", content: "hi" }],
+  });
+  assert.equal(answer.meta.ignoredParameters, undefined);
+});
+
+test("requireParameters asks the gateway to refuse instead of dropping", async () => {
+  const stub = new Stub().token().on("/v1/chat/completions", {
+    status: 400,
+    body: problemBody("unknown-parameter", { status: 400 }),
+  });
+  const api = new Axonium({
+    gatewayBaseURL: "https://gw.test",
+    clientId: "id",
+    clientSecret: "secret",
+    fetch: stub.fetch,
+    retry: NO_RETRY,
+  });
+  await assert.rejects(
+    api.chat.completions.create(
+      { model: "m", messages: [{ role: "user", content: "hi" }], seed: 7 },
+      { requireParameters: true },
+    ),
+    (err: unknown) => {
+      assert.ok(err instanceof APIError);
+      assert.equal(err.typeSuffix, "unknown-parameter");
+      return true;
+    },
+  );
+  assert.equal(
+    stub.lastFor("/v1/chat/completions")?.headers.get("X-Prometheus-Require-Parameters"),
+    "true",
+  );
+});
+
+test("a tokenProvider discards environment credentials rather than colliding with them", () => {
+  // The governed shape on any machine where ops exported AXONIUM_CLIENT_SECRET. Refusing here would
+  // make the multi-tenant mode unusable on exactly the hosts it is for -- and the reading also makes the
+  // guarantee a fact rather than a claim: with a provider, this SDK holds no long-lived secret whatever
+  // the environment contains. Found by running verify.sh in a shell with a `.env` sourced.
+  const restore = { ...process.env };
+  try {
+    process.env["AXONIUM_CLIENT_ID"] = "from-the-environment";
+    process.env["AXONIUM_CLIENT_SECRET"] = "also-from-the-environment";
+    const config = resolveConfig({
+      gatewayBaseURL: "https://gw.test",
+      tokenProvider: { token: async () => "t", refresh: async () => "u" },
+    });
+    assert.equal(config.clientSecret, "", "an environment secret reached the resolved config");
+    assert.ok(config.tokenProvider);
+  } finally {
+    process.env = restore;
+  }
+});
+
+test("a tokenProvider passed alongside explicit credentials is still refused", () => {
+  // Passing both by name is a belief about which wins, and it would be wrong half the time.
+  assert.throws(
+    () =>
+      resolveConfig({
+        gatewayBaseURL: "https://gw.test",
+        clientId: "id",
+        clientSecret: "secret",
+        tokenProvider: { token: async () => "t", refresh: async () => "u" },
+      }),
+    /different modes/,
+  );
+});

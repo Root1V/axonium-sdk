@@ -53,6 +53,7 @@ function problem(overrides: Partial<ProblemDetails> = {}): ProblemDetails {
       idempotentReplay: false,
       idempotentReplayOf: undefined,
       rateLimit: undefined,
+      ignoredParameters: undefined,
     },
     raw: {},
     ...overrides,

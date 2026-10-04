@@ -231,10 +231,33 @@ auth-service, arrives as problem+json, and maps into the table above as
 | `Transport`, `TokenManager`                     | The layers under the client, exported because they are useful alone                                                        |
 | `events(body)`, `dataOf(event)`                 | The SSE primitives                                                                                                         |
 
-## Not here yet
+## `meta` on every response
 
-- **`usage.export`** — in no SDK of this family. `GET /v1/usage/export` is in the contract
-- **OpenTelemetry** and a logging hook — planned for `0.2.0`
-- **`X-Prometheus-Ignored-Parameters` on a success** — held until all five SDKs agree on the shape
-- **A `ca_bundle` option** — impossible without breaking the zero-dependency rule. Use
-  `NODE_EXTRA_CA_CERTS` on Node and Bun, `--cert` on Deno
+| field                                    |                                                                                                                                        |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `requestId`, `traceId`                   | What the platform team asks for. Worth logging on success too — correlating a slow-but-successful call matters as much as a failed one |
+| `instance`, `instanceId`                 | Which replica answered                                                                                                                 |
+| `idempotentReplay`, `idempotentReplayOf` | A replay is neither generated nor billed, and `idempotentReplayOf` is the only id with a usage row — a replay's own id has none        |
+| `rateLimit`                              | `undefined` when the gateway reported none, which is not a budget of zero                                                              |
+| `ignoredParameters`                      | Fields the gateway accepted, **ignored**, and named back                                                                               |
+
+**`ignoredParameters` is `undefined` when there were none**, because the header is present only when
+there is something to report — so an empty array would claim the gateway looked and found nothing, which
+is a different statement from the gateway not having said.
+
+This endpoint takes an OpenAI-compatible _subset_: `n`, `presence_penalty`, `logit_bias`, `seed` and the
+like neither fail the request nor reach the engine. They were dropped in silence until `PRM-127`, and the
+guide's own words on fixing that are why this is surfaced rather than read and discarded — _a setting that
+does nothing and says nothing is indistinguishable from one that works_. `requireParameters: true` turns
+it into a `400 unknown-parameter` instead.
+
+## Not here, and why
+
+- **`usage.export`** — not an oversight. The contract says it plainly: _"Requires `admin:read`. Not
+  something an SDK calls; documented because consumers parse the file."_ An integrator's token does not
+  hold `admin:read`, and the response is a CSV whose columns are a documented contract — so the thing to
+  read is §3.9, not a method here.
+- **OpenTelemetry** and a logging hook — `0.2.0`.
+- **A `caBundle` option** — cannot exist. `fetch` has no option for a CA, and reaching one means an
+  `undici` dependency or a `node:` import, each breaking a requirement this package was built to. Use
+  `NODE_EXTRA_CA_CERTS` on Node and Bun, `--cert` on Deno.

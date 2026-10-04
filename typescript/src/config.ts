@@ -144,10 +144,23 @@ export function resolveConfig(options: AxoniumOptions = {}): ResolvedConfig {
     (options[key] ?? readEnv(ENV_KEYS[key]) ?? "").trim();
 
   const gatewayBaseURL = pick("gatewayBaseURL").replace(/\/+$/, "");
-  const clientId = pick("clientId");
-  const clientSecret = pick("clientSecret");
   const scope = pick("scope");
   const tokenProvider = options.tokenProvider;
+
+  // A provider DISCARDS credentials that merely happen to be in the environment, and only a pair
+  // passed explicitly alongside it is a contradiction.
+  //
+  // The first version read both the same way, so a caller who passed a provider on a machine with
+  // AXONIUM_CLIENT_SECRET exported was refused outright -- which is the governed multi-tenant shape on
+  // any box where ops set those variables. Found by running the repository's verify script in a shell
+  // with a `.env` sourced, which is what a developer does.
+  //
+  // The reading also makes the guarantee a fact rather than a claim: when a provider is supplied this
+  // SDK holds no long-lived secret, whatever the environment contains.
+  const explicitId = (options.clientId ?? "").trim();
+  const explicitSecret = (options.clientSecret ?? "").trim();
+  const clientId = tokenProvider ? explicitId : pick("clientId");
+  const clientSecret = tokenProvider ? explicitSecret : pick("clientSecret");
 
   if (!gatewayBaseURL) {
     throw new ConfigurationError(
@@ -176,8 +189,8 @@ export function resolveConfig(options: AxoniumOptions = {}): ResolvedConfig {
 
   // Both modes named at once is a contradiction rather than a preference, so it is refused instead
   // of one silently winning -- a caller who passes both has a belief about which, and would be wrong
-  // half the time.
-  if (tokenProvider && (clientId || clientSecret)) {
+  // half the time. `explicit*` rather than the resolved values: see the note above.
+  if (tokenProvider && (explicitId || explicitSecret)) {
     throw new ConfigurationError(
       `Both a tokenProvider and a clientId/clientSecret were supplied, and they are different modes. ` +
         `Pass the provider alone to keep credentials out of this SDK, or the credentials alone to let ` +
