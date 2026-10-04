@@ -53,9 +53,13 @@ jobs:
           echo "Both say $packaged"
 
       - run: npm ci
+      # Builds first, because `lint` typechecks the examples against the published .d.ts and so needs
+      # the build to exist. `lint` now produces it itself, and the order here is belt and braces -- the
+      # first run of this workflow failed exactly here while `npm run lint` passed locally, on a dist/
+      # left over from an earlier build.
+      - run: npm run build
       - run: npm run lint
       - run: npm test
-      - run: npm run build
 
       - name: The tarball ships what it should and no more
         # `files` in package.json is the allowlist and the only one: a `.npmignore` alongside it silently
