@@ -1,6 +1,6 @@
 # Axonium
 
-Client SDKs for the **Prometheus** inference platform, in Python, Go and Rust.
+Client SDKs for the **Prometheus** inference platform, in Python, Go, Rust, Swift and TypeScript.
 
 **Prometheus** is a self-hosted inference platform: a catalog of small language, embedding,
 reranking and image models, served across managed instances behind one authenticated API, with
@@ -31,17 +31,18 @@ equivalent.
 
 | Language | Install | Version |
 |---|---|---|
-| Python | `pip install axonium` | [`1.0.0rc6`](https://pypi.org/project/axonium/) on PyPI |
-| Go | `go get github.com/Root1V/axonium-sdk/go@v0.5.0` | `v0.5.0` |
-| Rust | `axonium = "0.5"` | [`0.5.0`](https://crates.io/crates/axonium) on crates.io |
-| Swift | `.package(url: "…/axonium-sdk-swift", from: "0.2.0")` | [`0.2.0`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
+| Python | `pip install axonium` | [`1.0.0rc7`](https://pypi.org/project/axonium/) on PyPI |
+| Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.0` | `v0.6.0` |
+| Rust | `axonium = "0.6"` | [`0.6.0`](https://crates.io/crates/axonium) on crates.io |
+| Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.0")` | [`0.3.0`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
 | TypeScript | `npm install axonium` | [`0.1.0`](https://www.npmjs.com/package/axonium) on npm |
 
 All five are published and implement the same surface. Python was built first as the reference
 implementation; every behaviour they share is pinned by the contract corpus in
-[`spec/`](https://github.com/Root1V/axonium-sdk/tree/main/spec) — one manifest, one set of recorded wire bytes, four runners that share no code,
-so identical behaviour is verified rather than intended. Swift vendors `spec/` as a submodule and
-replays the same 48 cases.
+[`spec/`](https://github.com/Root1V/axonium-sdk/tree/main/spec) — one manifest, one set of recorded
+wire bytes, four runners here that share no code and a fifth in Swift's repository, which vendors
+`spec/` as a submodule. Identical behaviour is verified rather than intended. The case count lives in
+the manifest and nowhere else, so it cannot go stale in prose.
 
 Backlog and delivered work:
 [ROADMAP.md](https://github.com/Root1V/axonium-sdk/blob/main/ROADMAP.md).
@@ -54,7 +55,11 @@ spec/       The API contract: vendored integration guide, error catalog,
 python/     Python SDK  (source of truth for behavior)
 go/         Go SDK
 rust/       Rust SDK
+typescript/ TypeScript SDK
 ```
+
+Swift is the one exception and lives in
+[its own repository](https://github.com/Root1V/axonium-sdk-swift), vendoring `spec/` as a submodule.
 
 Run everything CI runs, in one command:
 
@@ -83,8 +88,13 @@ Each language releases independently under a prefixed tag:
 | `python/vX.Y.Z` | PyPI |
 | `go/vX.Y.Z` | Go module proxy |
 | `rust/vX.Y.Z` | crates.io |
+| `ts/vX.Y.Z` | npm, with provenance |
 
-Bare `vX.Y.Z` tags belong to the legacy SDK described below and are not used for new releases.
+Swift releases from [its own repository](https://github.com/Root1V/axonium-sdk-swift) under bare
+`X.Y.Z` tags, because that is what Swift Package Manager resolves.
+
+Bare `vX.Y.Z` tags in *this* repository belong to the legacy SDK described below and are not used for
+new releases.
 
 ## Legacy SDK (v0.6.0 and earlier)
 
