@@ -1,13 +1,24 @@
 name: ts-release
 
-# Publishes to npm with provenance via OIDC -- no token is stored anywhere.
+# Publishes to npm with provenance. Authentication is OIDC once the package exists, and a token for
+# the one release that creates it -- see the two publish steps at the bottom, and the comment there
+# for why the first cannot be OIDC.
 #
-# One-time setup required by the package owner before the first run:
-#   1. On npm, the name `axonium` is unclaimed (404 on 2026-10-03), so the first publish claims it.
-#      Configure a trusted publisher for it: owner `Root1V`, repository `axonium-sdk`, workflow
-#      `ts-release.yml`, environment `npm`.
-#   2. Create the `npm` environment in this repository's settings, with a required reviewer. An npm
-#      version can be deprecated and unpublished only within 72 hours, and never reused.
+# Setup by the package owner, in this order:
+#   1. The `npm` environment in this repository's settings, WITH A REQUIRED REVIEWER. GitHub creates
+#      a missing environment implicitly and with no protection rules, so naming one here buys nothing
+#      on its own -- the job would simply not wait for anybody. An npm version can be deprecated and
+#      unpublished only within 72 hours, and the version number is never reusable after that.
+#   2. An `NPM_TOKEN` secret ON THAT ENVIRONMENT (not on the repository), so the credential is
+#      unreachable until the reviewer has approved the run. Granular, read+write, 2FA bypass on --
+#      a runner cannot answer an OTP prompt -- and necessarily scoped to all packages, because npm
+#      cannot scope a token to a package that does not exist yet.
+#   3. Tag. The first publish claims the name (`axonium` was a 404 on 2026-10-03).
+#   4. Only NOW can a trusted publisher be configured, on npmjs.com under the package's own settings:
+#      GitHub Actions, `Root1V/axonium-sdk`, workflow `ts-release.yml`, environment `npm`. npm has no
+#      pending-publisher flow the way PyPI does, which is why this is step 4 and not step 1.
+#   5. Delete the npm token and the NPM_TOKEN secret. That is what moves this workflow onto OIDC;
+#      nothing in this file changes.
 #
 # A tag publishes. There is no TestPyPI equivalent for npm, so the rehearsal is `npm pack` plus an
 # install of the tarball into a clean directory, which the build job does and uploads.
