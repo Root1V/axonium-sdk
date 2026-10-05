@@ -4,21 +4,30 @@ name: ts-release
 # the one release that creates it -- see the two publish steps at the bottom, and the comment there
 # for why the first cannot be OIDC.
 #
-# Setup by the package owner, in this order:
-#   1. The `npm` environment in this repository's settings, WITH A REQUIRED REVIEWER. GitHub creates
-#      a missing environment implicitly and with no protection rules, so naming one here buys nothing
-#      on its own -- the job would simply not wait for anybody. An npm version can be deprecated and
-#      unpublished only within 72 hours, and the version number is never reusable after that.
-#   2. An `NPM_TOKEN` secret ON THAT ENVIRONMENT (not on the repository), so the credential is
-#      unreachable until the reviewer has approved the run. Granular, read+write, 2FA bypass on --
-#      a runner cannot answer an OTP prompt -- and necessarily scoped to all packages, because npm
-#      cannot scope a token to a package that does not exist yet.
-#   3. Tag. The first publish claims the name (`axonium` was a 404 on 2026-10-03).
-#   4. Only NOW can a trusted publisher be configured, on npmjs.com under the package's own settings:
-#      GitHub Actions, `Root1V/axonium-sdk`, workflow `ts-release.yml`, environment `npm`. npm has no
-#      pending-publisher flow the way PyPI does, which is why this is step 4 and not step 1.
-#   5. Delete the npm token and the NPM_TOKEN secret. That is what moves this workflow onto OIDC;
-#      nothing in this file changes.
+# SETUP IS DONE. Nothing below needs doing again, and in particular DO NOT CREATE AN NPM TOKEN: the
+# repository holds zero secrets (verified 2026-10-05, repository and all five environments), and npm
+# restricts 2FA-bypass tokens for direct publishing from January 2027 anyway. If a release fails at
+# authentication, the fix is the trusted publisher on npmjs.com, not a new credential.
+#
+# Current state, so a reader can check it rather than trust this comment:
+#   - `npm` environment exists in this repository WITH A REQUIRED REVIEWER. That part is load-bearing:
+#     GitHub creates a missing environment implicitly and with NO protection rules, so naming one in a
+#     job buys nothing on its own -- it would simply not wait for anybody.
+#   - Trusted publisher on npmjs.com under the package's own settings: GitHub Actions,
+#     `Root1V/axonium-sdk`, workflow `ts-release.yml`, environment `npm`, with `npm publish` allowed.
+#     Without that last box the publish only STAGES, exits 0, and reports green while nothing ships.
+#   - Account 2FA, which npm began requiring for package edits in August 2026.
+#
+# How it got here, because the order is not the one you would guess and the file said the wrong one
+# until 2026-10-05: a trusted publisher is configured on the PACKAGE's settings page, and there is no
+# page until the package exists. npm has no pending-publisher flow the way PyPI does. So `axonium`
+# 0.1.0 was published with a short-lived granular token, deleted the same day, and the trusted
+# publisher was configured afterwards. Provenance was never at stake -- it needs `id-token: write` and
+# a recognised CI, not OIDC authentication.
+#
+# The token path below has not been exercised since, and the OIDC path has not been exercised at all:
+# the next release is its first run. If it fails, it fails BEFORE publishing anything, so there is
+# nothing to retract.
 #
 # A tag publishes. There is no TestPyPI equivalent for npm, so the rehearsal is `npm pack` plus an
 # install of the tarball into a clean directory, which the build job does and uploads.
