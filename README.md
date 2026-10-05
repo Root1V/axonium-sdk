@@ -34,7 +34,7 @@ equivalent.
 | Python | `pip install axonium` | [`1.0.0rc7`](https://pypi.org/project/axonium/) on PyPI |
 | Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.0` | `v0.6.0` |
 | Rust | `axonium = "0.6"` | [`0.6.0`](https://crates.io/crates/axonium) on crates.io |
-| Swift | `.package(url: "…/axonium-sdk-swift", from: "0.2.0")` | [`0.2.0`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
+| Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.0")` | [`0.3.0`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
 | TypeScript | `npm install axonium` | `0.1.0` **ready, not yet published** — see [`typescript/`](typescript/) |
 
 Four are published and implement the same surface; TypeScript is built and awaiting its first publish.
@@ -55,7 +55,11 @@ spec/       The API contract: vendored integration guide, error catalog,
 python/     Python SDK  (source of truth for behavior)
 go/         Go SDK
 rust/       Rust SDK
+typescript/ TypeScript SDK
 ```
+
+Swift is the one exception and lives in
+[its own repository](https://github.com/Root1V/axonium-sdk-swift), vendoring `spec/` as a submodule.
 
 Run everything CI runs, in one command:
 
@@ -84,8 +88,13 @@ Each language releases independently under a prefixed tag:
 | `python/vX.Y.Z` | PyPI |
 | `go/vX.Y.Z` | Go module proxy |
 | `rust/vX.Y.Z` | crates.io |
+| `ts/vX.Y.Z` | npm, with provenance |
 
-Bare `vX.Y.Z` tags belong to the legacy SDK described below and are not used for new releases.
+Swift releases from [its own repository](https://github.com/Root1V/axonium-sdk-swift) under bare
+`X.Y.Z` tags, because that is what Swift Package Manager resolves.
+
+Bare `vX.Y.Z` tags in *this* repository belong to the legacy SDK described below and are not used for
+new releases.
 
 ## Legacy SDK (v0.6.0 and earlier)
 
