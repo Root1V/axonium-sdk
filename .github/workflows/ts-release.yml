@@ -161,6 +161,19 @@ jobs:
         with:
           name: tarball
           path: typescript/
+
+      # Trusted publishing needs npm >= 11.5.1, and the npm a Node line happens to bundle is not it:
+      # the 22.x setup-node installs ships npm 10.x, which has no OIDC exchange at all. It would not
+      # fail loudly either -- without a trusted publisher it falls through to looking for a token,
+      # and the error is ENEEDAUTH, which reads as "your credentials are wrong" rather than "this npm
+      # cannot do OIDC". Pinned to a floor rather than left to whatever the runner's Node brings,
+      # because that version drifts without this file changing.
+      #
+      # Not caught by any of the three dry runs: they skip this job by design, so the one step that
+      # cannot be rehearsed is the one that needed checking by reading.
+      - run: npm install -g npm@^11.5.1
+      - run: npm --version
+
       # --provenance needs id-token: write above, and ties the published tarball to this workflow run
       # and this commit. It is what lets a consumer verify the package was built from this source.
       - run: npm publish --provenance --access public axonium-*.tgz
