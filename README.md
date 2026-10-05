@@ -1,6 +1,6 @@
 # Axonium
 
-Client SDKs for the **Prometheus** inference platform, in Python, Go and Rust.
+Client SDKs for the **Prometheus** inference platform, in Python, Go, Rust, Swift and TypeScript.
 
 **Prometheus** is a self-hosted inference platform: a catalog of small language, embedding,
 reranking and image models, served across managed instances behind one authenticated API, with
@@ -31,17 +31,18 @@ equivalent.
 
 | Language | Install | Version |
 |---|---|---|
-| Python | `pip install axonium` | [`1.0.0rc6`](https://pypi.org/project/axonium/) on PyPI |
-| Go | `go get github.com/Root1V/axonium-sdk/go@v0.5.0` | `v0.5.0` |
-| Rust | `axonium = "0.5"` | [`0.5.0`](https://crates.io/crates/axonium) on crates.io |
+| Python | `pip install axonium` | [`1.0.0rc7`](https://pypi.org/project/axonium/) on PyPI |
+| Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.0` | `v0.6.0` |
+| Rust | `axonium = "0.6"` | [`0.6.0`](https://crates.io/crates/axonium) on crates.io |
 | Swift | `.package(url: "…/axonium-sdk-swift", from: "0.2.0")` | [`0.2.0`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
 | TypeScript | `npm install axonium` | `0.1.0` **ready, not yet published** — see [`typescript/`](typescript/) |
 
-Four are published and implement the same surface; TypeScript is being built. Python was built first as the reference
-implementation; every behaviour they share is pinned by the contract corpus in
-[`spec/`](https://github.com/Root1V/axonium-sdk/tree/main/spec) — one manifest, one set of recorded wire bytes, four runners that share no code,
-so identical behaviour is verified rather than intended. Swift vendors `spec/` as a submodule and
-replays the same 48 cases.
+Four are published and implement the same surface; TypeScript is built and awaiting its first publish.
+Python was built first as the reference implementation; every behaviour they share is pinned by the
+contract corpus in [`spec/`](https://github.com/Root1V/axonium-sdk/tree/main/spec) — one manifest, one
+set of recorded wire bytes, four runners here that share no code and a fifth in Swift's repository,
+which vendors `spec/` as a submodule. Identical behaviour is verified rather than intended. The case
+count lives in the manifest and nowhere else, so it cannot go stale in prose.
 
 Backlog and delivered work:
 [ROADMAP.md](https://github.com/Root1V/axonium-sdk/blob/main/ROADMAP.md).

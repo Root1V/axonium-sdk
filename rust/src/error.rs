@@ -18,7 +18,15 @@ use serde_json::Value;
 ///
 /// Unknown suffixes resolve to a status-keyed variant rather than failing to parse: the catalogue
 /// grows, and an SDK that hard-failed on an unfamiliar code would break the day one is added.
+///
+/// `#[non_exhaustive]` for the same reason, one layer out. The sentence above is about parsing; a
+/// bare enum would still have broken every downstream `match` the day a row was added -- and the
+/// catalogue has gone 15 rows, then 32, then 34, each addition a compile error for code that
+/// matched exhaustively. Added in 0.6.0, which was already the breaking release for two new
+/// variants, so this is the last time catalogue growth costs a caller anything. Match the variants
+/// you handle and leave a `_` arm for the rows that do not exist yet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ErrorKind {
     // 400
     UnknownModel,

@@ -278,6 +278,10 @@ is a real conflict rather than a tuning question and is written down as one.
 
 ### Unreleased
 
+Nothing yet.
+
+### 1.0.0rc7 — 2026-10-04
+
 Re-vendored at `2026-10-02 · PRM-167/173/174`, which adds **two error types** and takes one away.
 
 - **`404 unknown-route`** → ``UnknownRouteError``
@@ -298,6 +302,14 @@ deleted, because **the fallback it forced stays and its reason has changed**: a 
 still arrives, but from a proxy returning HTML before the request ever reaches the gateway, which is
 not the platform's to fix. One sentence of the corpus case that replays it said the same thing and is
 corrected the same way.
+
+**The corpus moved to v27, 49 cases**, and this SDK needed no change to pass it. The new case is a
+second in-band stream failure whose payload is an **object** rather than the literal string
+`stream interrupted` — added because mutating a runner to compare that exact text left all 48 cases
+green. One fixture carried an in-band error and it carried the one message, so the corpus could not
+tell *detect the key* from *compare the string*, which is precisely the distinction the platform asked
+for and the one this SDK has always implemented. It passed on the first run; what changed is that it
+is now **pinned rather than lucky**.
 
 ### 1.0.0rc6 — 2026-10-02
 
@@ -1119,6 +1131,10 @@ which spoke to a platform generation that no longer exists.
 
 ### Unreleased
 
+Nothing yet.
+
+### 0.6.0 — 2026-10-04
+
 Re-vendored at `2026-10-02 · PRM-167/173/174`, which adds **two error types** and takes one away.
 
 - **`404 unknown-route`** → ``ErrUnknownRoute``
@@ -1139,6 +1155,14 @@ deleted, because **the fallback it forced stays and its reason has changed**: a 
 still arrives, but from a proxy returning HTML before the request ever reaches the gateway, which is
 not the platform's to fix. One sentence of the corpus case that replays it said the same thing and is
 corrected the same way.
+
+**The corpus moved to v27, 49 cases**, and this SDK needed no change to pass it. The new case is a
+second in-band stream failure whose payload is an **object** rather than the literal string
+`stream interrupted` — added because mutating a runner to compare that exact text left all 48 cases
+green. One fixture carried an in-band error and it carried the one message, so the corpus could not
+tell *detect the key* from *compare the string*, which is precisely the distinction the platform asked
+for and the one this SDK has always implemented. It passed on the first run; what changed is that it
+is now **pinned rather than lucky**.
 
 ### 0.5.0 — 2026-10-02
 
@@ -1845,6 +1869,25 @@ No third-party dependencies: standard library only.
 
 ### Unreleased
 
+Nothing yet.
+
+### 0.6.0 — 2026-10-04
+
+**`ErrorKind` is now `#[non_exhaustive]`**, which is the breaking half of this release and the reason
+it is `0.6.0` rather than `0.5.1`.
+
+Two variants were added, and a bare enum makes that a compile error for every caller who matched
+exhaustively — so this release breaks them whatever it does. The catalogue has gone **15 rows, then
+32, then 34**, each growth spurt the same breakage, and the doc comment on the enum had been promising
+since `0.1.0` that *the catalogue grows* while the type guaranteed it would hurt. One truth stated in
+two places with only one of them kept.
+
+Marking it now, inside the break that was already happening, makes this the last time catalogue growth
+costs a caller anything: match the variants you handle and leave a `_` arm for the rows that do not
+exist yet. **`Error` stays exhaustive** on purpose — it enumerates the ways *this crate* can fail,
+which is ours to decide and changes deliberately, not a mirror of a list the platform grows without
+asking us.
+
 Re-vendored at `2026-10-02 · PRM-167/173/174`, which adds **two error types** and takes one away.
 
 - **`404 unknown-route`** → ``ErrorKind::UnknownRoute``
@@ -1865,6 +1908,14 @@ deleted, because **the fallback it forced stays and its reason has changed**: a 
 still arrives, but from a proxy returning HTML before the request ever reaches the gateway, which is
 not the platform's to fix. One sentence of the corpus case that replays it said the same thing and is
 corrected the same way.
+
+**The corpus moved to v27, 49 cases**, and this SDK needed no change to pass it. The new case is a
+second in-band stream failure whose payload is an **object** rather than the literal string
+`stream interrupted` — added because mutating a runner to compare that exact text left all 48 cases
+green. One fixture carried an in-band error and it carried the one message, so the corpus could not
+tell *detect the key* from *compare the string*, which is precisely the distinction the platform asked
+for and the one this SDK has always implemented. It passed on the first run; what changed is that it
+is now **pinned rather than lucky**.
 
 ### 0.5.0 — 2026-10-02
 
