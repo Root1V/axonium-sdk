@@ -212,6 +212,14 @@
     },
     {
       "status": 503,
+      "suffix": "rerank-dialect-unknown",
+      "meaning": "Only on POST /v1/rerank. The model is running, but on an engine whose rerank request shape this gateway has not recorded. Not a transient fault: a reranker on a new engine is not llama.cpp's shape just because the last one was, so the gateway records the shape deliberately rather than assuming it.",
+      "retryable": false,
+      "remedy": "Operator action -- the engine's rerank dialect has to be registered on the gateway. Retrying cannot change it, and a 503 that is not retryable is the unusual part of this row.",
+      "$comment": "Added from guide 2026-10-04 (PRM-182/183/184), announced in P-35 section 3. The status is the one to be careful with: every other 503 in this catalog is retryable, so an SDK that keyed retry on the STATUS rather than on this table would retry it forever. That is why retryable lives here and not in a status map."
+    },
+    {
+      "status": 503,
       "suffix": "upstream-unavailable",
       "meaning": "Only on POST /oauth2/token -- the gateway could not reach the auth-service. The ONLY problem+json a token request can produce; every other token outcome uses the RFC 6749 OAuth2 error shape.",
       "retryable": true,

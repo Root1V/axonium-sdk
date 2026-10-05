@@ -73,6 +73,7 @@ export {
   InvalidScopeError,
   InvalidTokenError,
   MethodNotAllowedError,
+  RerankDialectUnknownError,
   MissingCredentialsError,
   ModalityMismatchError,
   ModelNotLoadedError,

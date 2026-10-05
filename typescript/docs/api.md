@@ -169,6 +169,7 @@ does not exist or a suffix the catalogue does not list — a test asserts both d
 | `503` | `backend-unavailable` | `BackendUnavailableError` | yes |
 | `503` | `rate-limiting-unavailable` | `RateLimitingUnavailableError` | yes |
 | `503` | `usage-store-unavailable` | `UsageStoreUnavailableError` | yes |
+| `503` | `rerank-dialect-unknown` | `RerankDialectUnknownError` | **no** |
 | `422` | `validation-error` | `ValidationError` | no |
 | `400` | `unknown-parameter` | `UnknownParameterError` | no |
 | `400` | `unknown-instance` | `UnknownInstanceError` | no |

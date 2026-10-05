@@ -54,6 +54,7 @@ __all__ = [
     "RangeTooLargeError",
     "RateLimitError",
     "RateLimitingUnavailableError",
+    "RerankDialectUnknownError",
     "ServerError",
     "SpendCapExceededError",
     "StreamInterruptedError",
@@ -639,6 +640,23 @@ class BackendUnavailableError(ServerError):
     type_suffix = "backend-unavailable"
 
 
+class RerankDialectUnknownError(ServerError):
+    """The reranker runs, on an engine whose rerank request shape the gateway has not recorded.
+
+    **Not retryable, unlike every other 503 in the catalog**, which is the whole reason this class
+    exists rather than falling through to :class:`ServerError`. Nothing about the wait changes it:
+    the gateway records each engine's rerank dialect deliberately, because a reranker on a new
+    engine is not llama.cpp's shape just because the last one was. An operator has to register it.
+
+    An SDK that keyed retry on the *status* rather than on the catalog would retry this until its
+    attempt budget ran out, every time, and report a timeout for a condition that was never going
+    to clear.
+    """
+
+    type_suffix = "rerank-dialect-unknown"
+    retryable = False
+
+
 class RateLimitingUnavailableError(ServerError):
     """The rate limiter's backing store is down and the deployment fails closed."""
 
@@ -779,6 +797,7 @@ _BY_SUFFIX: dict[str, type[APIError]] = {
         BackendUnavailableError,
         RateLimitingUnavailableError,
         UsageStoreUnavailableError,
+        RerankDialectUnknownError,
     )
     if cls.type_suffix is not None
 }

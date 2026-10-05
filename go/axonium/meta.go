@@ -18,8 +18,18 @@ import (
 // reservation, so a burst of large requests can still exceed the token budget between header
 // updates. Treat them as a strong signal, not a guarantee against ever seeing a 429.
 type RateLimitSnapshot struct {
-	// Scope names which budget these numbers describe -- "embeddings", "rerank",
-	// "chat_completions", or "default" for everything sharing the general bucket.
+	// Scope names which budget these numbers describe. An OPEN set, read from the header and never
+	// enumerated here. Five SDKs kept five different hand-written lists and they had already
+	// diverged -- one said `chat` where the header says `chat_completions`, which is a name a caller
+	// would key a map by and never match. The guide contradicts itself about the set too, so the
+	// header is the only answer that cannot be stale.
+	//
+	// The budget is a FIXED 60-second bucket aligned to the wall clock, not a sliding window: the
+	// whole allowance returns at second 0 of each minute, which is what the reset field is the
+	// timestamp of. So a burst can straddle a boundary and pass where the same burst seconds earlier
+	// is refused -- pace against the remaining count, never against an assumed rate. The budget is
+	// counted per credential; the limit VALUE is platform configuration per endpoint, so a 429 means
+	// your own credential emptied its own bucket and raising it is an operator action.
 	//
 	// Without it these counters cannot be attributed: the endpoints hold separate budgets, so a
 	// RemainingRequests read after a chat call says nothing about the embeddings budget, and

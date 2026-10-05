@@ -107,9 +107,24 @@ export interface ResponseMeta {
 /**
  * The rate-limit budget as of one response.
  *
- * `scope` names **which** budget: `chat`, `embeddings`, `rerank`, `predict`, `images` or `default`.
- * All three pass-through modalities share `predict`, so a caller pacing itself has to know that a
- * classification request spends the same budget as a typed decision.
+ * `scope` names **which** budget, and is an **open set read from the header** rather than a list
+ * kept here. The previous version of this comment enumerated six names and one of them — `chat` —
+ * was wrong; the header says `chat_completions`, so a caller keying a map by the documented name
+ * would never have matched. Five SDKs kept five different hand-written lists, and the guide
+ * contradicts itself about the set, so the header is the only answer that cannot be stale.
+ *
+ * What is worth knowing and is not a list: all three pass-through modalities share one `predict`
+ * budget, so a classification request spends the same allowance as a typed decision. And **key it
+ * before you cache it** — one logical operation touching embeddings, rerank and chat gets three
+ * responses about three budgets, and a single "last seen" slot holds whichever answered last while
+ * looking entirely plausible.
+ *
+ * The budget is a **fixed 60-second bucket aligned to the wall clock**, not a sliding window: the
+ * whole allowance returns at second 0 of each minute, which is what `resetRequests` timestamps. A
+ * burst can straddle a boundary and pass where the same burst seconds earlier is refused, so pace
+ * against `remainingRequests` rather than against an assumed rate. The budget is counted per
+ * credential; the limit *value* is platform configuration per endpoint, so a 429 means your own
+ * credential emptied its own bucket and raising it is an operator action.
  */
 export interface RateLimitSnapshot {
   readonly scope: string | undefined;
@@ -397,6 +412,22 @@ export class UsageStoreUnavailableError extends ServerError {
   static override readonly typeSuffix = "usage-store-unavailable";
 }
 
+/**
+ * A reranker running on an engine whose rerank request shape the gateway has not recorded. Only on
+ * `POST /v1/rerank`.
+ *
+ * **The one 5xx in the catalogue that is not retryable**, which is why it is named rather than left
+ * to fall through to {@link ServerError} — that fallback *is* retryable, so without this class the
+ * SDK would retry through its whole attempt budget and report a timeout for a condition that was
+ * never going to clear. The gateway records each engine's dialect deliberately, because a reranker
+ * on a new engine is not llama.cpp's shape just because the last one was. An operator registers it.
+ */
+export class RerankDialectUnknownError extends ServerError {
+  override readonly name = "RerankDialectUnknownError";
+  static override readonly typeSuffix = "rerank-dialect-unknown";
+  static override readonly retryable = false;
+}
+
 /** The gateway could not reach the auth-service to issue a token. */
 export class TokenEndpointUnavailableError extends ServerError {
   override readonly name = "TokenEndpointUnavailableError";
@@ -517,6 +548,7 @@ const GATEWAY_CLASSES = [
   BackendUnavailableError,
   RateLimitingUnavailableError,
   UsageStoreUnavailableError,
+  RerankDialectUnknownError,
   TokenEndpointUnavailableError,
   TokenEndpointNotConfiguredError,
   RateLimitError,

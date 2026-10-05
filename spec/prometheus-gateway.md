@@ -1,6 +1,6 @@
 # Prometheus Gateway — SDK Integration Guide
 
-**Revision**: 2026-10-02 · `PRM-167/173/174`
+**Revision**: 2026-10-04 · `PRM-182/183/184`
 <!-- Consumers vendor this file and diff it. The date and commit above are what to quote
      when asking whether a copy is current; they change whenever this document does. -->
 
@@ -386,9 +386,35 @@ our contract (`prometheus.chat.v1`, `prometheus.embeddings.v1`, `prometheus.imag
 `prometheus.rerank.v1`) and does **not** change when a model moves between engines, because
 nothing a caller sends changes. For the pass-through route the body is the engine's, so it names
 the engine's contract (`hf-inference.text-classification.v1`,
-`hf-inference.zero-shot-classification.v1`, `typed-decision.v1`) and a different engine serving
-the same modality can mean a different shape — which is precisely the half `modality` cannot
-answer.
+`hf-inference.zero-shot-classification.v1`, `tei.predict.v1`, `typed-decision.v1`) and a
+different engine serving the same modality can mean a different shape — which is precisely the
+half `modality` cannot answer.
+
+**`tei.predict.v1` is the clearest example of why**, added in `PRM-184`. It covers both
+`classification` and `zero_shot` on that engine, because there one endpoint and one body serve
+both — and it is **not** convertible to `hf-inference.zero-shot-classification.v1`. The same
+model answers differently: hf-serve returns `{sequence, labels, scores}` normalised across the
+candidate labels you supplied, while TEI returns scores across the **model's own** classes and
+has no notion of candidate labels at all. A caller dispatching on `modality` would read one as
+the other.
+
+Its body, measured against a running server rather than read from a schema, because one case is
+a trap:
+
+```
+inputs: "a text"                     → one flat list of {label, score}
+inputs: ["premise", "hypothesis"]    → ONE PAIR, not a batch of two texts
+inputs: ["a", "b", "c"]              → 422
+inputs: [["a"], ["b"]]               → a batch of two single texts → two lists
+inputs: [["p1","h1"], ["p2","h2"]]   → a batch of two pairs → two lists
+raw_scores: true                     → logits instead of probabilities
+```
+
+**A batch is always a list of lists.** A flat array of two strings is silently read as a single
+pair and answers once; a flat array of three or more is a `422`. So the natural-looking "send me
+my N texts as an array" is the one form that will quietly return a single wrong answer, and
+`[[t] for t in texts]` is the form that batches. The cap on how many entries one request may
+carry is set per instance (64 on this deployment).
 
 The names are not `openai.chat.v1` on purpose: this gateway accepts an allowlisted subset of the
 OpenAI request fields (§3.3), so that name would promise a compatibility it does not have.
@@ -794,6 +820,24 @@ Idempotent-Replay                  — "true" only on a replayed response
 X-Idempotent-Replay-Of             — on a replay: the request id that was actually billed
 ```
 
+**The rate-limit window, stated precisely (asked for in `C-01 §4`, and it was nowhere)**: the
+budget is a **fixed 60-second bucket aligned to the wall clock**, not a sliding window per
+request. A new bucket begins at second 0 of each minute and the whole allowance is available
+again at that instant — `X-RateLimit-Reset-Requests` is that timestamp. Two consequences worth
+designing for:
+
+- A burst can span a boundary and pass, where the same burst a few seconds earlier would be
+  refused. If you pace requests, pace against `X-RateLimit-Remaining-Requests` rather than
+  against an assumed rate.
+- **The budget is counted per credential**, so one client's traffic never consumes another's.
+  The *limit value*, however, is platform configuration per endpoint — not per client — so a
+  429 means your own credential exhausted its own bucket, and raising it is an operator action.
+
+Each **scope** in `X-RateLimit-Scope` is its own bucket with its own limit: today `default`,
+`chat_completions`, `admin` and `predict`. A 429 on one does not imply the others are
+exhausted, which is exactly what that header exists to tell you — back off the scope it names,
+not the whole API.
+
 **`X-Trace-ID` adoption rule, confirmed precisely (two deployment modes exist)**:
 - In deployments with a real tracing backend configured ("OTEL mode"), a client-supplied
   `X-Trace-ID` is **never read at all** — the gateway always starts a fresh trace and returns
@@ -1150,6 +1194,7 @@ model" as something only the SDK can catch.
 | 503 | `not-configured` | Only on `POST /oauth2/token` — this deployment has no token endpoint wired up. | No — needs operator action |
 | 404 | `unknown-route` | **No route at that URL.** A mistake in the caller's code, not a fact about their data — deliberately a different `type` from `not-found` above, which an SDK may reasonably retry or treat as an empty result. `detail` names the method and path. | No (fix the URL) |
 | 405 | `method-not-allowed` | The URL exists, the verb does not. The `Allow` response header lists the verbs that do. | No (fix the method) |
+| 503 | `rerank-dialect-unknown` | Only on `POST /v1/rerank` — the model is running, but on an engine whose rerank request shape this gateway has not recorded. Not a transient fault: a reranker on a new engine is not llama.cpp's shape just because the last one was, so the shape is recorded deliberately rather than assumed. | No — needs operator action |
 
 There is no `404` on the inference-family endpoints for "model not found" — that's a `400
 unknown-model`, not a `404`. The only `404` an SDK should expect from a client-facing endpoint

@@ -7,7 +7,45 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
-Nothing yet.
+Re-vendored at `2026-10-04 · PRM-182/183/184`, which brings a new engine, a new error, and a trap.
+
+**`503 rerank-dialect-unknown` → `RerankDialectUnknownError`.** A reranker running on an engine whose rerank request
+shape the gateway has not recorded. **The one 5xx in the catalogue that is not retryable**, and that
+is the whole reason it needed naming rather than falling through: measured here, an unmapped `503`
+resolves to the status-keyed fallback, which **is** retryable — so until today this error would have
+been retried through the whole attempt budget and reported as a timeout for a condition that was
+never going to clear. Mutation-tested two ways in Rust: deleting the mapping fails the catalogue
+parity check by name, and marking it retryable fails it with the number.
+
+**`tei.predict.v1`, and the case `payload_schema` was waiting for.** A second engine now serves
+`zero_shot`, and the two disagree. `hf-inference.zero-shot-classification.v1` answers scores
+normalised across *the caller's* candidate labels; `tei.predict.v1` answers scores across the
+**model's own** classes and has no notion of candidate labels at all. Both sum to 1, over different
+things. Dispatching on `modality` reads one as the other, which is exactly the failure the decision
+to dispatch on `payload_schema` was made to prevent — and it had no case to prove it until now. No
+code changed: `payload_schema` is a pass-through string and no SDK enumerates its values.
+
+**The batch trap, documented where somebody will read it.** On that engine a batch is *always* a
+list of lists: a flat array of two strings is read as one pair and answers **once, in silence**, and
+three or more is a `422`. So the obvious "send my N texts as an array" is the single form that
+quietly returns one wrong answer. It is also the argument for leaving the predict result undecoded —
+one input returns a flat list and a batch returns a list of lists, from the same model and the same
+endpoint.
+
+**Five SDKs kept five different hand-written lists of rate-limit scopes, and they had diverged.**
+This one said `chat`, `embeddings`, `rerank`, `predict`, `images`, `default`. One of the five said `chat` where the header says `chat_completions`, which
+is a name a caller would key a map by and never match. The guide now contradicts itself about the
+set too — the new §6.3 addendum names four scopes as today's complete set while the paragraph below
+it, unchanged, says `PRM-129` gave `embeddings` and `rerank` their own. Raised with the platform; in
+the meantime all five stop enumerating and say the set is read from the header. The fixed 60-second
+wall-clock window is documented in its place, because that one is a fact a caller has to design
+against: pace on the remaining count, never on an assumed rate.
+
+**`raw_scores` on `/v1/rerank` is deliberately absent.** It was announced to us as a new optional
+field in the gateway's own contract, with measurements — but §3.6 of the guide revision that was
+supposed to carry it still documents only `query`, `documents` and `top_n`. Implementing from a
+message rather than from the contract is how a field ends up in five SDKs and in no allowlist check.
+Raised; it lands when the contract has it.
 
 ### 0.1.0 — 2026-10-05
 
@@ -299,7 +337,47 @@ is a real conflict rather than a tuning question and is written down as one.
 
 Nothing yet.
 
-### 1.0.0rc7 — 2026-10-04
+### 1.0.0rc7 — 2026-10-05
+
+Re-vendored at `2026-10-04 · PRM-182/183/184`, which brings a new engine, a new error, and a trap.
+
+**`503 rerank-dialect-unknown` → ``RerankDialectUnknownError``.** A reranker running on an engine whose rerank request
+shape the gateway has not recorded. **The one 5xx in the catalogue that is not retryable**, and that
+is the whole reason it needed naming rather than falling through: measured here, an unmapped `503`
+resolves to the status-keyed fallback, which **is** retryable — so until today this error would have
+been retried through the whole attempt budget and reported as a timeout for a condition that was
+never going to clear. Mutation-tested two ways in Rust: deleting the mapping fails the catalogue
+parity check by name, and marking it retryable fails it with the number.
+
+**`tei.predict.v1`, and the case `payload_schema` was waiting for.** A second engine now serves
+`zero_shot`, and the two disagree. `hf-inference.zero-shot-classification.v1` answers scores
+normalised across *the caller's* candidate labels; `tei.predict.v1` answers scores across the
+**model's own** classes and has no notion of candidate labels at all. Both sum to 1, over different
+things. Dispatching on `modality` reads one as the other, which is exactly the failure the decision
+to dispatch on `payload_schema` was made to prevent — and it had no case to prove it until now. No
+code changed: `payload_schema` is a pass-through string and no SDK enumerates its values.
+
+**The batch trap, documented where somebody will read it.** On that engine a batch is *always* a
+list of lists: a flat array of two strings is read as one pair and answers **once, in silence**, and
+three or more is a `422`. So the obvious "send my N texts as an array" is the single form that
+quietly returns one wrong answer. It is also the argument for leaving the predict result undecoded —
+one input returns a flat list and a batch returns a list of lists, from the same model and the same
+endpoint.
+
+**Five SDKs kept five different hand-written lists of rate-limit scopes, and they had diverged.**
+This one said `embeddings`, `rerank`, `chat_completions`, `default`. One of the five said `chat` where the header says `chat_completions`, which
+is a name a caller would key a map by and never match. The guide now contradicts itself about the
+set too — the new §6.3 addendum names four scopes as today's complete set while the paragraph below
+it, unchanged, says `PRM-129` gave `embeddings` and `rerank` their own. Raised with the platform; in
+the meantime all five stop enumerating and say the set is read from the header. The fixed 60-second
+wall-clock window is documented in its place, because that one is a fact a caller has to design
+against: pace on the remaining count, never on an assumed rate.
+
+**`raw_scores` on `/v1/rerank` is deliberately absent.** It was announced to us as a new optional
+field in the gateway's own contract, with measurements — but §3.6 of the guide revision that was
+supposed to carry it still documents only `query`, `documents` and `top_n`. Implementing from a
+message rather than from the contract is how a field ends up in five SDKs and in no allowlist check.
+Raised; it lands when the contract has it.
 
 Re-vendored at `2026-10-02 · PRM-167/173/174`, which adds **two error types** and takes one away.
 
@@ -1152,7 +1230,47 @@ which spoke to a platform generation that no longer exists.
 
 Nothing yet.
 
-### 0.6.0 — 2026-10-04
+### 0.6.0 — 2026-10-05
+
+Re-vendored at `2026-10-04 · PRM-182/183/184`, which brings a new engine, a new error, and a trap.
+
+**`503 rerank-dialect-unknown` → `ErrRerankDialectUnknown`.** A reranker running on an engine whose rerank request
+shape the gateway has not recorded. **The one 5xx in the catalogue that is not retryable**, and that
+is the whole reason it needed naming rather than falling through: measured here, an unmapped `503`
+resolves to the status-keyed fallback, which **is** retryable — so until today this error would have
+been retried through the whole attempt budget and reported as a timeout for a condition that was
+never going to clear. Mutation-tested two ways in Rust: deleting the mapping fails the catalogue
+parity check by name, and marking it retryable fails it with the number.
+
+**`tei.predict.v1`, and the case `payload_schema` was waiting for.** A second engine now serves
+`zero_shot`, and the two disagree. `hf-inference.zero-shot-classification.v1` answers scores
+normalised across *the caller's* candidate labels; `tei.predict.v1` answers scores across the
+**model's own** classes and has no notion of candidate labels at all. Both sum to 1, over different
+things. Dispatching on `modality` reads one as the other, which is exactly the failure the decision
+to dispatch on `payload_schema` was made to prevent — and it had no case to prove it until now. No
+code changed: `payload_schema` is a pass-through string and no SDK enumerates its values.
+
+**The batch trap, documented where somebody will read it.** On that engine a batch is *always* a
+list of lists: a flat array of two strings is read as one pair and answers **once, in silence**, and
+three or more is a `422`. So the obvious "send my N texts as an array" is the single form that
+quietly returns one wrong answer. It is also the argument for leaving the predict result undecoded —
+one input returns a flat list and a batch returns a list of lists, from the same model and the same
+endpoint.
+
+**Five SDKs kept five different hand-written lists of rate-limit scopes, and they had diverged.**
+This one said `embeddings`, `rerank`, `chat_completions`, `default`. One of the five said `chat` where the header says `chat_completions`, which
+is a name a caller would key a map by and never match. The guide now contradicts itself about the
+set too — the new §6.3 addendum names four scopes as today's complete set while the paragraph below
+it, unchanged, says `PRM-129` gave `embeddings` and `rerank` their own. Raised with the platform; in
+the meantime all five stop enumerating and say the set is read from the header. The fixed 60-second
+wall-clock window is documented in its place, because that one is a fact a caller has to design
+against: pace on the remaining count, never on an assumed rate.
+
+**`raw_scores` on `/v1/rerank` is deliberately absent.** It was announced to us as a new optional
+field in the gateway's own contract, with measurements — but §3.6 of the guide revision that was
+supposed to carry it still documents only `query`, `documents` and `top_n`. Implementing from a
+message rather than from the contract is how a field ends up in five SDKs and in no allowlist check.
+Raised; it lands when the contract has it.
 
 Re-vendored at `2026-10-02 · PRM-167/173/174`, which adds **two error types** and takes one away.
 
@@ -1890,7 +2008,47 @@ No third-party dependencies: standard library only.
 
 Nothing yet.
 
-### 0.6.0 — 2026-10-04
+### 0.6.0 — 2026-10-05
+
+Re-vendored at `2026-10-04 · PRM-182/183/184`, which brings a new engine, a new error, and a trap.
+
+**`503 rerank-dialect-unknown` → `ErrorKind::RerankDialectUnknown`.** A reranker running on an engine whose rerank request
+shape the gateway has not recorded. **The one 5xx in the catalogue that is not retryable**, and that
+is the whole reason it needed naming rather than falling through: measured here, an unmapped `503`
+resolves to the status-keyed fallback, which **is** retryable — so until today this error would have
+been retried through the whole attempt budget and reported as a timeout for a condition that was
+never going to clear. Mutation-tested two ways in Rust: deleting the mapping fails the catalogue
+parity check by name, and marking it retryable fails it with the number.
+
+**`tei.predict.v1`, and the case `payload_schema` was waiting for.** A second engine now serves
+`zero_shot`, and the two disagree. `hf-inference.zero-shot-classification.v1` answers scores
+normalised across *the caller's* candidate labels; `tei.predict.v1` answers scores across the
+**model's own** classes and has no notion of candidate labels at all. Both sum to 1, over different
+things. Dispatching on `modality` reads one as the other, which is exactly the failure the decision
+to dispatch on `payload_schema` was made to prevent — and it had no case to prove it until now. No
+code changed: `payload_schema` is a pass-through string and no SDK enumerates its values.
+
+**The batch trap, documented where somebody will read it.** On that engine a batch is *always* a
+list of lists: a flat array of two strings is read as one pair and answers **once, in silence**, and
+three or more is a `422`. So the obvious "send my N texts as an array" is the single form that
+quietly returns one wrong answer. It is also the argument for leaving the predict result undecoded —
+one input returns a flat list and a batch returns a list of lists, from the same model and the same
+endpoint.
+
+**Five SDKs kept five different hand-written lists of rate-limit scopes, and they had diverged.**
+This one said `embeddings`, `rerank`, `chat_completions`, `default`. One of the five said `chat` where the header says `chat_completions`, which
+is a name a caller would key a map by and never match. The guide now contradicts itself about the
+set too — the new §6.3 addendum names four scopes as today's complete set while the paragraph below
+it, unchanged, says `PRM-129` gave `embeddings` and `rerank` their own. Raised with the platform; in
+the meantime all five stop enumerating and say the set is read from the header. The fixed 60-second
+wall-clock window is documented in its place, because that one is a fact a caller has to design
+against: pace on the remaining count, never on an assumed rate.
+
+**`raw_scores` on `/v1/rerank` is deliberately absent.** It was announced to us as a new optional
+field in the gateway's own contract, with measurements — but §3.6 of the guide revision that was
+supposed to carry it still documents only `query`, `documents` and `top_n`. Implementing from a
+message rather than from the contract is how a field ends up in five SDKs and in no allowlist check.
+Raised; it lands when the contract has it.
 
 **`ErrorKind` is now `#[non_exhaustive]`**, which is the breaking half of this release and the reason
 it is `0.6.0` rather than `0.5.1`.

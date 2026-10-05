@@ -312,6 +312,31 @@ export class Axonium {
      * The pass-through route, for `classification`, `zero_shot` and `typed_decision`. Deliberately not
      * a `classify(text)` typed per modality: the shape is the engine's, and two engines serving one
      * modality can want different bodies. Dispatch on the catalogue's `payloadSchema`.
+     *
+     * `tei.predict.v1` is the first case where that is not hypothetical. On `zero_shot`,
+     * `hf-inference.zero-shot-classification.v1` answers `{sequence, labels, scores}` normalised
+     * across the candidate labels *you* supplied, while `tei.predict.v1` answers scores across the
+     * **model's own** classes and has no notion of candidate labels at all. Both sum to 1, over
+     * different things, so a caller dispatching on `modality` reads one as the other.
+     *
+     * And it carries a trap worth reading before writing a batch helper — measured against a live
+     * server by the platform team:
+     *
+     * ```text
+     * inputs: "a text"                     → one flat list of {label, score}
+     * inputs: ["premise", "hypothesis"]    → ONE PAIR, not a batch of two texts
+     * inputs: ["a", "b", "c"]              → 422
+     * inputs: [["a"], ["b"]]               → a batch of two single texts → two lists
+     * inputs: [["p1","h1"], ["p2","h2"]]   → a batch of two pairs → two lists
+     * ```
+     *
+     * A batch is **always** a list of lists. A flat array of two strings is read as a single pair
+     * and answers once, in silence; three or more is a `422`. So the obvious `texts` array is the
+     * one form that quietly returns a single wrong answer, and `texts.map((t) => [t])` is the form
+     * that batches. The per-request cap is set per instance (64 on the reference deployment).
+     *
+     * It is also why {@link PredictResult} keeps its value undecoded: one input returns a flat list
+     * and a batch returns a list of lists, from the same model and the same endpoint.
      */
     create: async (
       model: string,

@@ -136,6 +136,15 @@ var (
 	ErrBackendUnavailable      = errors.New("axonium: backend-unavailable")
 	ErrRateLimitingUnavailable = errors.New("axonium: rate-limiting-unavailable")
 	ErrUsageStoreUnavailable   = errors.New("axonium: usage-store-unavailable")
+
+	// ErrRerankDialectUnknown reports a reranker running on an engine whose rerank request shape
+	// the gateway has not recorded. Only on POST /v1/rerank.
+	//
+	// Not retryable, unlike every other 503 in the catalog, which is why it is named rather than
+	// left to fall through: the gateway records each engine's dialect deliberately, because a
+	// reranker on a new engine is not llama.cpp's shape just because the last one was. Waiting
+	// cannot register it; an operator has to.
+	ErrRerankDialectUnknown = errors.New("axonium: rerank-dialect-unknown")
 )
 
 // Non-HTTP failures.
@@ -203,6 +212,7 @@ var suffixSentinels = map[string]error{
 	"backend-unavailable":               ErrBackendUnavailable,
 	"rate-limiting-unavailable":         ErrRateLimitingUnavailable,
 	"usage-store-unavailable":           ErrUsageStoreUnavailable,
+	"rerank-dialect-unknown":            ErrRerankDialectUnknown,
 }
 
 // retryableSuffixes are the errors where retrying can plausibly succeed. See spec/errors.json for
@@ -227,6 +237,11 @@ var retryableSuffixes = map[string]bool{
 	"model-not-loaded": false,
 	// predict-backend-rejected is deliberately absent: its status is the engine's, so the answer
 	// is not a property of the name. Retryable() decides it from Status instead.
+	//
+	// rerank-dialect-unknown is absent because this map is an allowlist and absence is the right
+	// answer -- but it is written here because it is the one 503 where that is surprising, and a
+	// future reader comparing this map against the status column would otherwise "fix" it.
+	"rerank-dialect-unknown": false,
 }
 
 // predictBackendRetryableStatuses are the engine statuses worth repeating when the gateway wraps a

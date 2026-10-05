@@ -98,6 +98,16 @@ pub enum ErrorKind {
     /// means they are working. `retry_after` is always 1 and is a hint, not a promise.
     CapacityExhausted,
     ModelNotLoaded,
+    /// A reranker running on an engine whose rerank request shape the gateway has not recorded.
+    /// Only on `POST /v1/rerank`.
+    ///
+    /// **The one 5xx in the catalogue that is not retryable**, which is why it is named rather than
+    /// left to fall through to [`ErrorKind::OtherServerError`] -- that fallback *is* retryable, so
+    /// before this variant existed the SDK would have retried this through its whole attempt budget
+    /// and reported a timeout for a condition that was never going to clear. The gateway records
+    /// each engine's dialect deliberately, because a reranker on a new engine is not llama.cpp's
+    /// shape just because the last one was. An operator registers it; waiting does nothing.
+    RerankDialectUnknown,
     BackendUnavailable,
     RateLimitingUnavailable,
     UsageStoreUnavailable,
@@ -140,6 +150,7 @@ impl ErrorKind {
             "not-found" => Self::NotFound,
             "unknown-route" => Self::UnknownRoute,
             "method-not-allowed" => Self::MethodNotAllowed,
+            "rerank-dialect-unknown" => Self::RerankDialectUnknown,
             "inconsistent-model-group" => Self::InconsistentModelGroup,
             "unauthorized" => Self::UnauthorizedRequest,
             "invalid-date" => Self::InvalidDate,

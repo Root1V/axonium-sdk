@@ -20,6 +20,32 @@ import (
 // is not stable even across engines serving the same modality. That is the cost of pass-through and
 // it is paid by the caller; Model.PayloadSchema in the catalog is what identifies the shape.
 //
+// Two engines can serve one modality and disagree, and `tei.predict.v1` is the first case where
+// that is not hypothetical. On `zero_shot`, `hf-inference.zero-shot-classification.v1` answers
+// `{sequence, labels, scores}` normalised across the candidate labels YOU supplied, while
+// `tei.predict.v1` answers scores across the MODEL'S OWN classes and has no notion of candidate labels
+// at all. Both sum to 1, over different things. A caller dispatching on `modality` reads one as the
+// other; dispatching on `payload_schema` is what prevents it, and this is the case that argument was
+// waiting for.
+//
+// And `tei.predict.v1` has a trap worth reading before building a batch helper. Measured against a
+// live server by the platform team:
+//
+//     inputs: "a text"                     -> one flat list of {label, score}
+//     inputs: ["premise", "hypothesis"]    -> ONE PAIR, not a batch of two texts
+//     inputs: ["a", "b", "c"]              -> 422
+//     inputs: [["a"], ["b"]]               -> a batch of two single texts -> two lists
+//     inputs: [["p1","h1"], ["p2","h2"]]   -> a batch of two pairs -> two lists
+//
+// A batch is ALWAYS a list of lists. A flat array of two strings is read as a single pair and answers
+// once, in silence; three or more is a 422. So the obvious "send my N texts as an array" is the one
+// form that quietly returns a single wrong answer, and wrapping each text in its own list is the form
+// that batches. The per-request cap is set per instance (64 on the reference deployment).
+//
+// This is also why the result holds its value undecoded: a single input returns a flat list and a
+// batch returns a list of lists, from the same model and the same endpoint, so a type that assumed
+// either one would be wrong half the time.
+//
 // What does NOT pass through is the policy: the model still resolves, inference:read plus the
 // specific model:<id> scope is still required, a dead replica is still skipped, and the request is
 // still metered and still counts against a spend cap.
