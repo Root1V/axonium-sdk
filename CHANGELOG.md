@@ -9,7 +9,26 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 Nothing yet.
 
-### 0.1.0 — ready to publish, not yet published
+### 0.1.0 — 2026-10-05
+
+On npm as [`axonium`](https://www.npmjs.com/package/axonium), with provenance. Verified as a consumer
+rather than read off the publish log: installed from the registry into an empty project, `npm audit
+signatures` reports a verified attestation, **one** package in `node_modules` — the zero-dependency
+claim, measured — and both `import` and `require` resolve `VERSION` to `0.1.0` and `ForbiddenError` to
+a class.
+
+**The first publish could not use OIDC**, which is a fact about npm rather than a shortcut taken here:
+a trusted publisher is configured on the package's own settings page, and there is no page until the
+package exists. npm has no pending-publisher flow the way PyPI does. So `0.1.0` authenticated with a
+short-lived granular token, deleted immediately after, and every release from here is OIDC — the
+workflow carries both paths and switches on the secret's absence, so nothing is edited at the moment of
+switching. **Provenance was never at stake**: it needs `id-token: write` and a recognised CI, not OIDC
+authentication, so the attestation on `0.1.0` is the same one every later release will carry, and
+Apeiron's acceptance criterion 5 is met by this version rather than the next.
+
+npm left a `0.0.0-stage` placeholder in the version list from its own staging step. It is not `latest`
+and nothing resolves to it.
+
 
 Apeiron's `H2` scope, plus the three acceptance criteria that were missing.
 
