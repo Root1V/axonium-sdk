@@ -9,6 +9,33 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 Nothing yet.
 
+### 0.2.1 — 2026-10-06
+
+**Credentials are the only required setting**, which two of the five did not have. `DEFAULT_GATEWAY_BASE_URL` is new and exported, and `gatewayBaseURL` is now optional.
+
+Python, Go and Rust have defaulted the gateway address since `AXO-83` collapsed auth onto the
+gateway. TypeScript threw `Missing gatewayBaseURL` and Swift took it as a required **first
+positional** parameter — so the documentation's own *smallest thing that works* example threw
+against `axonium@0.2.0` installed from npm, and would not have compiled in Swift. Measured by
+running the documented snippet, not by reading it.
+
+The default is a **loopback** address, and that is what makes defaulting safe rather than reckless:
+getting it wrong reaches your own machine — normally a refused connection — and can never quietly
+send a credential somewhere real. TypeScript's refusal even carried its own reasoning, *there is no
+default: a wrong gateway is worse than a missing one*, which Rust had answered three SDKs earlier in
+a doc comment. **Only Rust had a test**; Python and Go were correct by luck. All five pin it now,
+including that the default stays loopback.
+
+**And every published surface links to the documentation.** A registry renders the README and a doc
+tool renders the module comment, and between the five READMEs, the Go package comment, the Rust
+crate doc and the Python docstring there were **zero** links to the guide. PyPI and crates.io carried
+a `Documentation` URL in their metadata, which is a small link in a sidebar; npm's `homepage` pointed
+at the repository, which is already in `repository`. Guarded by a test over every published surface.
+
+**The site is now also in Spanish**, at <https://root1v.github.io/axonium-sdk/es/>, with every
+Spanish page recording the digest of the English revision it was translated from so that falling
+behind is loud rather than silent.
+
 ### 0.2.0 — 2026-10-05
 
 Re-vendored at `2026-10-05a · PRM-187/188`, and the two things we asked for arrived in `2026-10-04b`.
@@ -394,6 +421,33 @@ is a real conflict rather than a tuning question and is written down as one.
 ### Unreleased
 
 Nothing yet.
+
+### 1.0.0rc8 — 2026-10-06
+
+**Credentials are the only required setting**, which two of the five did not have. No change here — this SDK already had it — but the rule is now pinned by a test rather than true by accident.
+
+Python, Go and Rust have defaulted the gateway address since `AXO-83` collapsed auth onto the
+gateway. TypeScript threw `Missing gatewayBaseURL` and Swift took it as a required **first
+positional** parameter — so the documentation's own *smallest thing that works* example threw
+against `axonium@0.2.0` installed from npm, and would not have compiled in Swift. Measured by
+running the documented snippet, not by reading it.
+
+The default is a **loopback** address, and that is what makes defaulting safe rather than reckless:
+getting it wrong reaches your own machine — normally a refused connection — and can never quietly
+send a credential somewhere real. TypeScript's refusal even carried its own reasoning, *there is no
+default: a wrong gateway is worse than a missing one*, which Rust had answered three SDKs earlier in
+a doc comment. **Only Rust had a test**; Python and Go were correct by luck. All five pin it now,
+including that the default stays loopback.
+
+**And every published surface links to the documentation.** A registry renders the README and a doc
+tool renders the module comment, and between the five READMEs, the Go package comment, the Rust
+crate doc and the Python docstring there were **zero** links to the guide. PyPI and crates.io carried
+a `Documentation` URL in their metadata, which is a small link in a sidebar; npm's `homepage` pointed
+at the repository, which is already in `repository`. Guarded by a test over every published surface.
+
+**The site is now also in Spanish**, at <https://root1v.github.io/axonium-sdk/es/>, with every
+Spanish page recording the digest of the English revision it was translated from so that falling
+behind is loud rather than silent.
 
 ### 1.0.0rc7 — 2026-10-05
 
@@ -1323,6 +1377,33 @@ which spoke to a platform generation that no longer exists.
 
 Nothing yet.
 
+### 0.6.1 — 2026-10-06
+
+**Credentials are the only required setting**, which two of the five did not have. No change here — this SDK already had it — but the rule is now pinned by a test rather than true by accident.
+
+Python, Go and Rust have defaulted the gateway address since `AXO-83` collapsed auth onto the
+gateway. TypeScript threw `Missing gatewayBaseURL` and Swift took it as a required **first
+positional** parameter — so the documentation's own *smallest thing that works* example threw
+against `axonium@0.2.0` installed from npm, and would not have compiled in Swift. Measured by
+running the documented snippet, not by reading it.
+
+The default is a **loopback** address, and that is what makes defaulting safe rather than reckless:
+getting it wrong reaches your own machine — normally a refused connection — and can never quietly
+send a credential somewhere real. TypeScript's refusal even carried its own reasoning, *there is no
+default: a wrong gateway is worse than a missing one*, which Rust had answered three SDKs earlier in
+a doc comment. **Only Rust had a test**; Python and Go were correct by luck. All five pin it now,
+including that the default stays loopback.
+
+**And every published surface links to the documentation.** A registry renders the README and a doc
+tool renders the module comment, and between the five READMEs, the Go package comment, the Rust
+crate doc and the Python docstring there were **zero** links to the guide. PyPI and crates.io carried
+a `Documentation` URL in their metadata, which is a small link in a sidebar; npm's `homepage` pointed
+at the repository, which is already in `repository`. Guarded by a test over every published surface.
+
+**The site is now also in Spanish**, at <https://root1v.github.io/axonium-sdk/es/>, with every
+Spanish page recording the digest of the English revision it was translated from so that falling
+behind is loud rather than silent.
+
 ### 0.6.0 — 2026-10-05
 
 Re-vendored at `2026-10-05a · PRM-187/188`, and the two things we asked for arrived in `2026-10-04b`.
@@ -2135,6 +2216,33 @@ No third-party dependencies: standard library only.
 ### Unreleased
 
 Nothing yet.
+
+### 0.6.1 — 2026-10-06
+
+**Credentials are the only required setting**, which two of the five did not have. No change here, and this is the one SDK that already had a test for it.
+
+Python, Go and Rust have defaulted the gateway address since `AXO-83` collapsed auth onto the
+gateway. TypeScript threw `Missing gatewayBaseURL` and Swift took it as a required **first
+positional** parameter — so the documentation's own *smallest thing that works* example threw
+against `axonium@0.2.0` installed from npm, and would not have compiled in Swift. Measured by
+running the documented snippet, not by reading it.
+
+The default is a **loopback** address, and that is what makes defaulting safe rather than reckless:
+getting it wrong reaches your own machine — normally a refused connection — and can never quietly
+send a credential somewhere real. TypeScript's refusal even carried its own reasoning, *there is no
+default: a wrong gateway is worse than a missing one*, which Rust had answered three SDKs earlier in
+a doc comment. **Only Rust had a test**; Python and Go were correct by luck. All five pin it now,
+including that the default stays loopback.
+
+**And every published surface links to the documentation.** A registry renders the README and a doc
+tool renders the module comment, and between the five READMEs, the Go package comment, the Rust
+crate doc and the Python docstring there were **zero** links to the guide. PyPI and crates.io carried
+a `Documentation` URL in their metadata, which is a small link in a sidebar; npm's `homepage` pointed
+at the repository, which is already in `repository`. Guarded by a test over every published surface.
+
+**The site is now also in Spanish**, at <https://root1v.github.io/axonium-sdk/es/>, with every
+Spanish page recording the digest of the English revision it was translated from so that falling
+behind is loud rather than silent.
 
 ### 0.6.0 — 2026-10-05
 
