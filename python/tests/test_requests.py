@@ -36,6 +36,45 @@ class TestAllowlist:
         with pytest.warns(UnsupportedFieldWarning, match="Unrecognized"):
             ChatCompletionRequest(model="m", messages=MESSAGES, wibble=1)
 
+    def test_an_unknown_field_is_warned_about_and_still_sent(self) -> None:
+        """The platform's own stated intent, and the opposite of what this did until 2026-10-06.
+
+        *"They stay outside the accepted set deliberately, so they keep appearing in
+        X-Prometheus-Ignored-Parameters rather than being quietly accepted and quietly
+        dropped."*
+        Dropping it here defeats that: the caller never sees the field in
+        ``meta.ignored_parameters`` and cannot find out whether it did anything. The gateway's
+        header is the one answer that cannot go stale, and this SDK's allowlist demonstrably can:
+        it warned that
+        ``response_format`` would be dropped for five days after the platform began honouring it.
+
+        Nothing pinned the old behaviour, which is why changing it broke no test.
+        """
+        with pytest.warns(UnsupportedFieldWarning, match="sent anyway"):
+            request = ChatCompletionRequest(model="m", messages=MESSAGES, reasoning_effort="low")
+
+        assert request.to_payload()["reasoning_effort"] == "low"
+
+    def test_a_documented_unsupported_field_is_still_dropped(self) -> None:
+        # The split: the contract NAMES these, so we know they do nothing, and sending them would
+        # add noise to a header whose entire value is that its contents mean something.
+        with pytest.warns(UnsupportedFieldWarning, match="does not support"):
+            request = ChatCompletionRequest(model="m", messages=MESSAGES, seed=7)
+
+        assert "seed" not in request.to_payload()
+
+    def test_chat_template_kwargs_is_declared_rather_than_an_extra(self) -> None:
+        # Declared in PRM-195, so it is forwarded to the engine rather than reported as ignored.
+        # It is the difference between 215 tokens and 16 on a reasoning model, measured by the
+        # platform -- so a caller that set it and had it dropped would pay for thinking they
+        # explicitly turned off.
+        request = ChatCompletionRequest(
+            model="qwen36-35b-a3b-q4",
+            messages=MESSAGES,
+            chat_template_kwargs={"enable_thinking": False},
+        )
+        assert request.to_payload()["chat_template_kwargs"] == {"enable_thinking": False}
+
     def test_several_dropped_fields_are_reported_together(self) -> None:
         with pytest.warns(UnsupportedFieldWarning, match="seed, user"):
             ChatCompletionRequest(model="m", messages=MESSAGES, seed=1, user="u")

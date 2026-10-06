@@ -80,17 +80,19 @@ The gateway accepts an allowlisted subset and **names back** what it ignored. It
 silence until `PRM-127`, which is the problem the header exists to end: you set `frequency_penalty`,
 nothing complains, and nothing applies it.
 
-**The five SDKs do three different things with a field they do not recognise**, which is worth
-knowing before you rely on one:
+**All five send a field they do not recognise**, and that is the platform's own intent rather than
+ours: an unrecognised field is kept outside the accepted set *so that it keeps appearing in the
+header*. Dropping it would deny you the one answer that cannot be stale.
 
 | | an unrecognised field |
 |---|---|
-| Python | **not sent**, with an `UnsupportedFieldWarning` naming it |
+| Python | sent, with an `UnsupportedFieldWarning` naming it and pointing at `meta.ignored_parameters` |
 | Go, Rust, Swift | sent, through an explicit `Extra` / `extra` / `extraFields` channel |
-| TypeScript | sent, silently — the request type accepts any key |
+| TypeScript | sent — the request type accepts any key |
 
-So an engine-specific parameter such as `chat_template_kwargs` reaches llama.cpp from TypeScript and
-cannot from Python. That divergence is `AXO-154` and is not yet decided.
+Until 2026-10-06 Python dropped them, on the reasoning that the gateway would discard them silently.
+`PRM-127` ended that, and `chat_template_kwargs` is what made it matter: it reached llama.cpp from
+TypeScript and could not from Python.
 
 That allowlist is the SDK's *model* of what the gateway accepts, and a model can go stale: when the
 platform started honouring `response_format`, this SDK kept warning that it would be dropped for
@@ -104,6 +106,32 @@ here is the one they will copy.
 
 Pass `require_parameters: true` to turn a silent drop into a `400 unknown-parameter` instead, when
 being quietly given less than you asked for is worse than failing.
+
+### Turning a reasoning model's thinking off
+
+`chat_template_kwargs` carries the variables llama.cpp hands to the model's own chat template. It is
+how you stop a reasoning model thinking before every answer, and the platform's measurements make the
+case better than prose:
+
+```
+qwen36-35b-a3b-q4   without                            215 tokens   6.91 s
+qwen36-35b-a3b-q4   enable_thinking: false              16 tokens   0.71 s
+```
+
+**The keys belong to each model's template, not to the gateway.** The mapping is forwarded
+unexamined, the useful set differs per model — `enable_thinking` for the Qwen3.6 family,
+`reasoning_effort` for gpt-oss — and a key the template does not read is ignored by the template in
+silence. Check the model card; nothing in the response can tell you.
+
+**`reasoning_effort` and `reasoning_budget` at the top level do nothing.** Measured against a running
+server: byte-identical output with and without. They are kept outside the accepted set on purpose, so
+that they keep appearing in `X-Prometheus-Ignored-Parameters` instead of being quietly accepted and
+quietly dropped. `reasoning_effort` goes *inside* `chat_template_kwargs`, where the template reads it.
+
+That is also the rule these SDKs follow for any field they do not recognise: **it is sent, not
+dropped**, so the gateway's header gets to answer. An SDK's own allowlist can go stale — this one
+warned that `response_format` would be dropped for five days after the platform started honouring it
+— and the header cannot.
 
 ### Structured output
 
@@ -166,6 +194,17 @@ const answer = JSON.parse(completion.content); // a JSON string, not a nested ob
 
 The grammar is the engine's, and the schema is forwarded verbatim — validating it here would be a
 second copy of the engine's rules, drifting from the first.
+
+**Send a zod 4 tuple as it comes.** llama.cpp refuses a boolean `items` — `400 JSON schema conversion
+failed: Unrecognized schema: false` — which is exactly how zod closes a tuple, and the gateway now
+translates it before forwarding (`items: false` becomes `maxItems`). Do **not** work around it by
+widening the tuple to `items: {"type": "string"}`: that is what people reached for, and it throws
+away the per-position types that made it a tuple.
+
+Of sixteen schema features measured against the engine, only `items` fails as a boolean.
+`additionalProperties`, `propertyNames`, `contains`, `not`, `enum`, `oneOf`/`anyOf`/`allOf`,
+`$ref`/`$defs`, `pattern`, `format`, `const`, `minimum`/`maximum`, `uniqueItems` and
+`minItems`/`maxItems` all pass.
 
 ### How confident the model was
 

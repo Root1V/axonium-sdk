@@ -151,6 +151,23 @@ export interface ChatRequest {
   tool_choice?: ToolChoice;
   response_format?: ResponseFormat;
   /**
+   * Variables llama.cpp hands to the model's own chat template, forwarded as an opaque mapping.
+   *
+   * **The keys belong to each model's template, not to the gateway**, so nothing validates them and
+   * the useful set differs per model: `enable_thinking` for the Qwen3.6 family, `reasoning_effort`
+   * for gpt-oss. A key the template does not read is ignored by the template, silently, and nothing
+   * can tell you that — check the model card.
+   *
+   * It is how a reasoning model's thinking is turned off, and that is not a micro-optimisation:
+   * measured on the platform, the same question answered in **215 tokens and 6.91 s** without it and
+   * **16 tokens and 0.71 s** with `{ enable_thinking: false }`.
+   *
+   * `reasoning_effort` goes **inside** this mapping. At the top level it does nothing at all, and the
+   * platform keeps it outside the accepted set on purpose so that it keeps appearing in
+   * `meta.ignoredParameters` rather than being quietly accepted and quietly dropped.
+   */
+  chat_template_kwargs?: Record<string, unknown>;
+  /**
    * Ask for the chosen token's own probability, returned as {@link ChatCompletion.logprobs}.
    *
    * The point is an agent deciding when to escalate to a person rather than act on a guess.

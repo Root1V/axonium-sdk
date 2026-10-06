@@ -1,4 +1,4 @@
-<!-- translated-from: 02-calls.md sha256:854deaf265 -->
+<!-- translated-from: 02-calls.md sha256:2af9bc6bac -->
 # Hacer llamadas
 
 > **Ya tengo un cliente. ¿Qué le puedo pedir?**
@@ -81,17 +81,19 @@ El gateway acepta un subconjunto permitido y **nombra de vuelta** lo que ignoró
 descartaba en silencio, que es el problema que la cabecera vino a terminar: pones `frequency_penalty`,
 nadie se queja, y nada lo aplica.
 
-**Los cinco SDK hacen tres cosas distintas con un campo que no reconocen**, y conviene saberlo antes
-de apoyarse en uno:
+**Los cinco envían un campo que no reconocen**, y eso es intención de la plataforma y no nuestra: un
+campo no reconocido se mantiene fuera del conjunto aceptado *para que siga apareciendo en la
+cabecera*. Descartarlo te negaría la única respuesta que no puede caducar.
 
 | | un campo no reconocido |
 |---|---|
-| Python | **no se envía**, con un `UnsupportedFieldWarning` que lo nombra |
+| Python | se envía, con un `UnsupportedFieldWarning` que lo nombra y apunta a `meta.ignored_parameters` |
 | Go, Rust, Swift | se envía, por un canal explícito: `Extra` / `extra` / `extraFields` |
-| TypeScript | se envía, en silencio — el tipo de petición acepta cualquier clave |
+| TypeScript | se envía — el tipo de petición acepta cualquier clave |
 
-Así que un parámetro específico del motor como `chat_template_kwargs` llega a llama.cpp desde
-TypeScript y no puede desde Python. Esa divergencia es `AXO-154` y está sin decidir.
+Hasta el 06/10/2026 Python los descartaba, con el razonamiento de que el gateway los tiraría en
+silencio. `PRM-127` acabó con eso, y `chat_template_kwargs` es lo que lo hizo importar: llegaba a
+llama.cpp desde TypeScript y no podía desde Python.
 
 Esa lista es el *modelo* que el SDK tiene de lo que el gateway acepta, y un modelo puede caducar:
 cuando la plataforma empezó a honrar `response_format`, este SDK siguió avisando de que se
@@ -106,6 +108,32 @@ el que copiarán.
 
 Pasa `require_parameters: true` para convertir un descarte silencioso en un `400 unknown-parameter`,
 cuando que te den calladamente menos de lo que pediste es peor que fallar.
+
+### Apagar el pensamiento de un modelo de razonamiento
+
+`chat_template_kwargs` lleva las variables que llama.cpp entrega a la plantilla del propio modelo. Es
+como se impide que un modelo de razonamiento piense antes de cada respuesta, y las mediciones de la
+plataforma lo argumentan mejor que la prosa:
+
+```
+qwen36-35b-a3b-q4   without                            215 tokens   6.91 s
+qwen36-35b-a3b-q4   enable_thinking: false              16 tokens   0.71 s
+```
+
+**Las claves son de la plantilla de cada modelo, no del gateway.** El mapping se reenvía sin
+examinar, el conjunto útil cambia por modelo —`enable_thinking` en la familia Qwen3.6,
+`reasoning_effort` en gpt-oss— y una clave que la plantilla no lee se ignora en silencio. Mira la
+ficha del modelo; nada en la respuesta puede decírtelo.
+
+**`reasoning_effort` y `reasoning_budget` en la raíz no hacen nada.** Medido contra un servidor vivo:
+salida idéntica byte a byte con y sin ellos. Se mantienen fuera del conjunto aceptado **a propósito**,
+para que sigan apareciendo en `X-Prometheus-Ignored-Parameters` en vez de aceptarse y descartarse en
+silencio. `reasoning_effort` va **dentro** de `chat_template_kwargs`, que es donde la plantilla lo lee.
+
+Esa es además la regla que siguen estos SDK con cualquier campo que no reconocen: **se envía, no se
+descarta**, para que conteste la cabecera del gateway. La lista permitida de un SDK puede caducar
+—esta avisó durante cinco días de que `response_format` se descartaría, después de que la plataforma
+empezara a honrarlo— y la cabecera no.
 
 ### Salida estructurada
 
@@ -168,6 +196,17 @@ const answer = JSON.parse(completion.content); // a JSON string, not a nested ob
 
 La gramática es del motor, y el esquema se reenvía verbatim — validarlo aquí sería una segunda copia
 de las reglas del motor, separándose de la primera.
+
+**Manda una tupla de zod 4 tal cual viene.** llama.cpp rechaza un `items` booleano — `400 JSON schema
+conversion failed: Unrecognized schema: false` — que es exactamente cómo zod cierra una tupla, y el
+gateway ya lo traduce antes de reenviar (`items: false` pasa a `maxItems`). **No** lo esquives
+ensanchando la tupla a `items: {"type": "string"}`: es lo que la gente hacía, y tira los tipos por
+posición que hacían que fuera una tupla.
+
+De dieciséis características de esquema medidas contra el motor, solo `items` falla como booleano.
+`additionalProperties`, `propertyNames`, `contains`, `not`, `enum`, `oneOf`/`anyOf`/`allOf`,
+`$ref`/`$defs`, `pattern`, `format`, `const`, `minimum`/`maximum`, `uniqueItems` y
+`minItems`/`maxItems` pasan todas.
 
 ### Cuánta confianza tenía el modelo
 

@@ -220,8 +220,9 @@ closest available approximation, and it is characters rather than tokens.</li>
 <p>The gateway accepts an allowlisted subset and <strong>names back</strong> what it ignored. It did discard in
 silence until <code>PRM-127</code>, which is the problem the header exists to end: you set <code>frequency_penalty</code>,
 nothing complains, and nothing applies it.</p>
-<p><strong>The five SDKs do three different things with a field they do not recognise</strong>, which is worth
-knowing before you rely on one:</p>
+<p><strong>All five send a field they do not recognise</strong>, and that is the platform's own intent rather than
+ours: an unrecognised field is kept outside the accepted set <em>so that it keeps appearing in the
+header</em>. Dropping it would deny you the one answer that cannot be stale.</p>
 <div class="table-scroll"><table>
 <thead>
 <tr>
@@ -232,7 +233,7 @@ knowing before you rely on one:</p>
 <tbody>
 <tr>
 <td>Python</td>
-<td><strong>not sent</strong>, with an <code>UnsupportedFieldWarning</code> naming it</td>
+<td>sent, with an <code>UnsupportedFieldWarning</code> naming it and pointing at <code>meta.ignored_parameters</code></td>
 </tr>
 <tr>
 <td>Go, Rust, Swift</td>
@@ -240,12 +241,13 @@ knowing before you rely on one:</p>
 </tr>
 <tr>
 <td>TypeScript</td>
-<td>sent, silently — the request type accepts any key</td>
+<td>sent — the request type accepts any key</td>
 </tr>
 </tbody>
 </table></div>
-<p>So an engine-specific parameter such as <code>chat_template_kwargs</code> reaches llama.cpp from TypeScript and
-cannot from Python. That divergence is <code>AXO-154</code> and is not yet decided.</p>
+<p>Until 2026-10-06 Python dropped them, on the reasoning that the gateway would discard them silently.
+<code>PRM-127</code> ended that, and <code>chat_template_kwargs</code> is what made it matter: it reached llama.cpp from
+TypeScript and could not from Python.</p>
 <p>That allowlist is the SDK's <em>model</em> of what the gateway accepts, and a model can go stale: when the
 platform started honouring <code>response_format</code>, this SDK kept warning that it would be dropped for
 five days. The gateway reports its own verdict in <code>X-Prometheus-Ignored-Parameters</code>, which is the
@@ -256,6 +258,24 @@ claim the gateway looked and found nothing. The other four read the header and d
 here is the one they will copy.</p>
 <p>Pass <code>require_parameters: true</code> to turn a silent drop into a <code>400 unknown-parameter</code> instead, when
 being quietly given less than you asked for is worse than failing.</p>
+<h3>Turning a reasoning model's thinking off</h3>
+<p><code>chat_template_kwargs</code> carries the variables llama.cpp hands to the model's own chat template. It is
+how you stop a reasoning model thinking before every answer, and the platform's measurements make the
+case better than prose:</p>
+<div class="code" data-language="" data-label=""><pre><code class="language-">qwen36-35b-a3b-q4   without                            215 tokens   6.91 s
+qwen36-35b-a3b-q4   enable_thinking: false              16 tokens   0.71 s</code></pre></div>
+<p><strong>The keys belong to each model's template, not to the gateway.</strong> The mapping is forwarded
+unexamined, the useful set differs per model — <code>enable_thinking</code> for the Qwen3.6 family,
+<code>reasoning_effort</code> for gpt-oss — and a key the template does not read is ignored by the template in
+silence. Check the model card; nothing in the response can tell you.</p>
+<p><strong><code>reasoning_effort</code> and <code>reasoning_budget</code> at the top level do nothing.</strong> Measured against a running
+server: byte-identical output with and without. They are kept outside the accepted set on purpose, so
+that they keep appearing in <code>X-Prometheus-Ignored-Parameters</code> instead of being quietly accepted and
+quietly dropped. <code>reasoning_effort</code> goes <em>inside</em> <code>chat_template_kwargs</code>, where the template reads it.</p>
+<p>That is also the rule these SDKs follow for any field they do not recognise: <strong>it is sent, not
+dropped</strong>, so the gateway's header gets to answer. An SDK's own allowlist can go stale — this one
+warned that <code>response_format</code> would be dropped for five days after the platform started honouring it
+— and the header cannot.</p>
 <h3>Structured output</h3>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">schema</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"json_schema"</span><span class="p">,</span> <span class="s2">"json_schema"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"capital"</span><span class="p">,</span> <span class="s2">"schema"</span><span class="p">:</span> <span class="p">{</span>
     <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span> <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"capital"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span> <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"capital"</span><span class="p">]}}}</span>
@@ -301,6 +321,14 @@ being quietly given less than you asked for is worse than failing.</p>
 <span class="kd">const</span><span class="w"> </span><span class="nx">answer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">content</span><span class="p">);</span><span class="w"> </span><span class="c1">// a JSON string, not a nested object</span></code></pre></div>
 </div><p>The grammar is the engine's, and the schema is forwarded verbatim — validating it here would be a
 second copy of the engine's rules, drifting from the first.</p>
+<p><strong>Send a zod 4 tuple as it comes.</strong> llama.cpp refuses a boolean <code>items</code> — <code>400 JSON schema conversion failed: Unrecognized schema: false</code> — which is exactly how zod closes a tuple, and the gateway now
+translates it before forwarding (<code>items: false</code> becomes <code>maxItems</code>). Do <strong>not</strong> work around it by
+widening the tuple to <code>items: {&quot;type&quot;: &quot;string&quot;}</code>: that is what people reached for, and it throws
+away the per-position types that made it a tuple.</p>
+<p>Of sixteen schema features measured against the engine, only <code>items</code> fails as a boolean.
+<code>additionalProperties</code>, <code>propertyNames</code>, <code>contains</code>, <code>not</code>, <code>enum</code>, <code>oneOf</code>/<code>anyOf</code>/<code>allOf</code>,
+<code>$ref</code>/<code>$defs</code>, <code>pattern</code>, <code>format</code>, <code>const</code>, <code>minimum</code>/<code>maximum</code>, <code>uniqueItems</code> and
+<code>minItems</code>/<code>maxItems</code> all pass.</p>
 <h3>How confident the model was</h3>
 <p><code>logprobs</code> returns the chosen token's own probability; <code>top_logprobs</code> adds the N most likely
 alternatives at each position. The point is an agent deciding when to <strong>escalate to a person</strong>

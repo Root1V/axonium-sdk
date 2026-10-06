@@ -7,7 +7,7 @@
  * so a test asserts the two agree --- the Swift SDK shipped `0.1.1` announcing itself as `0.1.0`, and
  * the consumer found it by reading the tag.
  */
-export const VERSION = "0.2.2";
+export const VERSION = "0.2.3";
 
 /** The `User-Agent` this SDK sends. */
 export const USER_AGENT = `axonium-ts/${VERSION}`;

@@ -118,7 +118,7 @@ DEFAULT_GATEWAY_BASE_URL = 'http://127.0.0.1:8020'
 ### `__version__`
 
 ```python
-__version__ = '1.0.0rc8'
+__version__ = '1.0.0rc9'
 ```
 
 ## Requests
@@ -141,6 +141,7 @@ Body for ``POST /v1/chat/completions``.
 | `tools` | `list[dict[str, Any]] \| None` | `None` |
 | `response_format` | `dict[str, Any] \| None` | `None` |
 | `tool_choice` | `str \| dict[str, Any] \| None` | `None` |
+| `chat_template_kwargs` | `dict[str, Any] \| None` | `None` |
 | `logprobs` | `bool \| None` | `None` |
 | `top_logprobs` | `int \| None` | `None` |
 

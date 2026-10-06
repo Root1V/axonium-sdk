@@ -63,6 +63,23 @@ type ChatRequest struct {
 	// string: a generation stopped by MaxTokens leaves it truncated.
 	ResponseFormat any `json:"response_format,omitempty"`
 
+	// ChatTemplateKwargs are the variables llama.cpp hands to the model's own chat template,
+	// forwarded as an opaque mapping (PRM-195).
+	//
+	// THE KEYS BELONG TO EACH MODEL'S TEMPLATE, not to the gateway, so nothing validates them here
+	// and the useful set differs per model: enable_thinking for the Qwen3.6 family, reasoning_effort
+	// for gpt-oss. A key the template does not read is ignored by the template, silently, and
+	// nothing can tell you that -- check the model card.
+	//
+	// It is how a reasoning model's thinking is turned off, and that is not a micro-optimisation:
+	// measured on the platform, the same question answered in 215 tokens and 6.91 s without it and
+	// 16 tokens and 0.71 s with {"enable_thinking": false}.
+	//
+	// reasoning_effort goes INSIDE this mapping. At the top level it does nothing at all, and the
+	// platform keeps it outside the accepted set on purpose so it keeps showing up in
+	// X-Prometheus-Ignored-Parameters instead of being quietly accepted and quietly dropped.
+	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
+
 	// Logprobs asks for the chosen token's own probability, under Choice.Logprobs (PRM-187). The
 	// point is an agent deciding when to escalate to a person rather than act on a guess.
 	Logprobs *bool `json:"logprobs,omitempty"`

@@ -9,6 +9,32 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 Nothing yet.
 
+### 0.2.3 — 2026-10-06
+
+Re-vendored at `2026-10-06b · PRM-195/196/197`, and it answers the question `A-40` asked.
+
+**`chat_template_kwargs` is declared**, so it reaches the engine. It is how a reasoning model's
+thinking is turned off, and the platform's measurement is the argument: the same question answered in
+**215 tokens and 6.91 s** without it, **16 tokens and 0.71 s** with `enable_thinking: false`. The keys
+belong to each model's template rather than to the gateway, so the mapping is forwarded unexamined and
+the useful set differs per model.
+
+**`reasoning_effort` and `reasoning_budget` at the top level do nothing** — measured, byte-identical
+output with and without — and the platform keeps them outside the accepted set *on purpose*, so they
+keep appearing in `X-Prometheus-Ignored-Parameters` instead of being quietly accepted and quietly
+dropped. They go **inside** `chat_template_kwargs`.
+
+The other four already forwarded an unrecognised field; **Python did not until now**, which is why
+`chat_template_kwargs` reached llama.cpp from this SDK and could not from there. `AXO-154` is closed
+in favour of forwarding.
+
+
+**A zod 4 tuple can be sent as it comes.** llama.cpp refuses a boolean `items`, which is exactly how
+zod closes a tuple, and `PRM-197` translates it before forwarding. The workaround people reached for
+— widening to `items: {"type": "string"}` — throws away the per-position types that made it a tuple,
+so it should be removed where it exists. Of sixteen schema features measured against the engine, only
+`items` fails as a boolean.
+
 ### 0.2.2 — 2026-10-06
 
 **Node's own fetch gives up after 300 s on a response that has sent no headers, and this SDK turned
@@ -456,6 +482,38 @@ is a real conflict rather than a tuning question and is written down as one.
 ### Unreleased
 
 Nothing yet.
+
+### 1.0.0rc9 — 2026-10-06
+
+Re-vendored at `2026-10-06b · PRM-195/196/197`, and it answers the question `A-40` asked.
+
+**`chat_template_kwargs` is declared**, so it reaches the engine. It is how a reasoning model's
+thinking is turned off, and the platform's measurement is the argument: the same question answered in
+**215 tokens and 6.91 s** without it, **16 tokens and 0.71 s** with `enable_thinking: false`. The keys
+belong to each model's template rather than to the gateway, so the mapping is forwarded unexamined and
+the useful set differs per model.
+
+**`reasoning_effort` and `reasoning_budget` at the top level do nothing** — measured, byte-identical
+output with and without — and the platform keeps them outside the accepted set *on purpose*, so they
+keep appearing in `X-Prometheus-Ignored-Parameters` instead of being quietly accepted and quietly
+dropped. They go **inside** `chat_template_kwargs`.
+
+**And this settles `AXO-154`, against what this SDK was doing.** An unrecognised field is now
+**forwarded with a warning** rather than dropped. The platform's own words decide it: those fields
+*"stay outside the accepted set deliberately, so they keep appearing in
+`X-Prometheus-Ignored-Parameters`"* — so dropping one here denied the caller the only answer that
+cannot be stale, and this SDK's allowlist demonstrably can be: it warned that `response_format` would
+be dropped for five days after the platform started honouring it. Fields the contract *names* as
+unsupported are still dropped, because those are known to do nothing and sending them would be noise
+in a header whose value is that its contents mean something. Nothing pinned the old behaviour, which
+is why changing it broke no test; it is pinned now.
+
+
+**A zod 4 tuple can be sent as it comes.** llama.cpp refuses a boolean `items`, which is exactly how
+zod closes a tuple, and `PRM-197` translates it before forwarding. The workaround people reached for
+— widening to `items: {"type": "string"}` — throws away the per-position types that made it a tuple,
+so it should be removed where it exists. Of sixteen schema features measured against the engine, only
+`items` fails as a boolean.
 
 ### 1.0.0rc8 — 2026-10-06
 
@@ -1412,6 +1470,32 @@ which spoke to a platform generation that no longer exists.
 
 Nothing yet.
 
+### 0.6.2 — 2026-10-06
+
+Re-vendored at `2026-10-06b · PRM-195/196/197`, and it answers the question `A-40` asked.
+
+**`chat_template_kwargs` is declared**, so it reaches the engine. It is how a reasoning model's
+thinking is turned off, and the platform's measurement is the argument: the same question answered in
+**215 tokens and 6.91 s** without it, **16 tokens and 0.71 s** with `enable_thinking: false`. The keys
+belong to each model's template rather than to the gateway, so the mapping is forwarded unexamined and
+the useful set differs per model.
+
+**`reasoning_effort` and `reasoning_budget` at the top level do nothing** — measured, byte-identical
+output with and without — and the platform keeps them outside the accepted set *on purpose*, so they
+keep appearing in `X-Prometheus-Ignored-Parameters` instead of being quietly accepted and quietly
+dropped. They go **inside** `chat_template_kwargs`.
+
+The other four already forwarded an unrecognised field; **Python did not until now**, which is why
+`chat_template_kwargs` reached llama.cpp from this SDK and could not from there. `AXO-154` is closed
+in favour of forwarding.
+
+
+**A zod 4 tuple can be sent as it comes.** llama.cpp refuses a boolean `items`, which is exactly how
+zod closes a tuple, and `PRM-197` translates it before forwarding. The workaround people reached for
+— widening to `items: {"type": "string"}` — throws away the per-position types that made it a tuple,
+so it should be removed where it exists. Of sixteen schema features measured against the engine, only
+`items` fails as a boolean.
+
 ### 0.6.1 — 2026-10-06
 
 **Credentials are the only required setting**, which two of the five did not have. No change here — this SDK already had it — but the rule is now pinned by a test rather than true by accident.
@@ -2251,6 +2335,32 @@ No third-party dependencies: standard library only.
 ### Unreleased
 
 Nothing yet.
+
+### 0.6.2 — 2026-10-06
+
+Re-vendored at `2026-10-06b · PRM-195/196/197`, and it answers the question `A-40` asked.
+
+**`chat_template_kwargs` is declared**, so it reaches the engine. It is how a reasoning model's
+thinking is turned off, and the platform's measurement is the argument: the same question answered in
+**215 tokens and 6.91 s** without it, **16 tokens and 0.71 s** with `enable_thinking: false`. The keys
+belong to each model's template rather than to the gateway, so the mapping is forwarded unexamined and
+the useful set differs per model.
+
+**`reasoning_effort` and `reasoning_budget` at the top level do nothing** — measured, byte-identical
+output with and without — and the platform keeps them outside the accepted set *on purpose*, so they
+keep appearing in `X-Prometheus-Ignored-Parameters` instead of being quietly accepted and quietly
+dropped. They go **inside** `chat_template_kwargs`.
+
+The other four already forwarded an unrecognised field; **Python did not until now**, which is why
+`chat_template_kwargs` reached llama.cpp from this SDK and could not from there. `AXO-154` is closed
+in favour of forwarding.
+
+
+**A zod 4 tuple can be sent as it comes.** llama.cpp refuses a boolean `items`, which is exactly how
+zod closes a tuple, and `PRM-197` translates it before forwarding. The workaround people reached for
+— widening to `items: {"type": "string"}` — throws away the per-position types that made it a tuple,
+so it should be removed where it exists. Of sixteen schema features measured against the engine, only
+`items` fails as a boolean.
 
 ### 0.6.1 — 2026-10-06
 

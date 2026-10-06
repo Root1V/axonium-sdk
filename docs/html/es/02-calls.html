@@ -220,8 +220,9 @@ aproximación más cercana disponible, y son caracteres y no tokens.</li>
 <p>El gateway acepta un subconjunto permitido y <strong>nombra de vuelta</strong> lo que ignoró. Hasta <code>PRM-127</code> sí
 descartaba en silencio, que es el problema que la cabecera vino a terminar: pones <code>frequency_penalty</code>,
 nadie se queja, y nada lo aplica.</p>
-<p><strong>Los cinco SDK hacen tres cosas distintas con un campo que no reconocen</strong>, y conviene saberlo antes
-de apoyarse en uno:</p>
+<p><strong>Los cinco envían un campo que no reconocen</strong>, y eso es intención de la plataforma y no nuestra: un
+campo no reconocido se mantiene fuera del conjunto aceptado <em>para que siga apareciendo en la
+cabecera</em>. Descartarlo te negaría la única respuesta que no puede caducar.</p>
 <div class="table-scroll"><table>
 <thead>
 <tr>
@@ -232,7 +233,7 @@ de apoyarse en uno:</p>
 <tbody>
 <tr>
 <td>Python</td>
-<td><strong>no se envía</strong>, con un <code>UnsupportedFieldWarning</code> que lo nombra</td>
+<td>se envía, con un <code>UnsupportedFieldWarning</code> que lo nombra y apunta a <code>meta.ignored_parameters</code></td>
 </tr>
 <tr>
 <td>Go, Rust, Swift</td>
@@ -240,12 +241,13 @@ de apoyarse en uno:</p>
 </tr>
 <tr>
 <td>TypeScript</td>
-<td>se envía, en silencio — el tipo de petición acepta cualquier clave</td>
+<td>se envía — el tipo de petición acepta cualquier clave</td>
 </tr>
 </tbody>
 </table></div>
-<p>Así que un parámetro específico del motor como <code>chat_template_kwargs</code> llega a llama.cpp desde
-TypeScript y no puede desde Python. Esa divergencia es <code>AXO-154</code> y está sin decidir.</p>
+<p>Hasta el 06/10/2026 Python los descartaba, con el razonamiento de que el gateway los tiraría en
+silencio. <code>PRM-127</code> acabó con eso, y <code>chat_template_kwargs</code> es lo que lo hizo importar: llegaba a
+llama.cpp desde TypeScript y no podía desde Python.</p>
 <p>Esa lista es el <em>modelo</em> que el SDK tiene de lo que el gateway acepta, y un modelo puede caducar:
 cuando la plataforma empezó a honrar <code>response_format</code>, este SDK siguió avisando de que se
 descartaría durante cinco días. El gateway reporta su propio veredicto en
@@ -257,6 +259,24 @@ gateway miró y no encontró nada. Los otros cuatro leen la cabecera y la tiran;
 el que copiarán.</p>
 <p>Pasa <code>require_parameters: true</code> para convertir un descarte silencioso en un <code>400 unknown-parameter</code>,
 cuando que te den calladamente menos de lo que pediste es peor que fallar.</p>
+<h3>Apagar el pensamiento de un modelo de razonamiento</h3>
+<p><code>chat_template_kwargs</code> lleva las variables que llama.cpp entrega a la plantilla del propio modelo. Es
+como se impide que un modelo de razonamiento piense antes de cada respuesta, y las mediciones de la
+plataforma lo argumentan mejor que la prosa:</p>
+<div class="code" data-language="" data-label=""><pre><code class="language-">qwen36-35b-a3b-q4   without                            215 tokens   6.91 s
+qwen36-35b-a3b-q4   enable_thinking: false              16 tokens   0.71 s</code></pre></div>
+<p><strong>Las claves son de la plantilla de cada modelo, no del gateway.</strong> El mapping se reenvía sin
+examinar, el conjunto útil cambia por modelo —<code>enable_thinking</code> en la familia Qwen3.6,
+<code>reasoning_effort</code> en gpt-oss— y una clave que la plantilla no lee se ignora en silencio. Mira la
+ficha del modelo; nada en la respuesta puede decírtelo.</p>
+<p><strong><code>reasoning_effort</code> y <code>reasoning_budget</code> en la raíz no hacen nada.</strong> Medido contra un servidor vivo:
+salida idéntica byte a byte con y sin ellos. Se mantienen fuera del conjunto aceptado <strong>a propósito</strong>,
+para que sigan apareciendo en <code>X-Prometheus-Ignored-Parameters</code> en vez de aceptarse y descartarse en
+silencio. <code>reasoning_effort</code> va <strong>dentro</strong> de <code>chat_template_kwargs</code>, que es donde la plantilla lo lee.</p>
+<p>Esa es además la regla que siguen estos SDK con cualquier campo que no reconocen: <strong>se envía, no se
+descarta</strong>, para que conteste la cabecera del gateway. La lista permitida de un SDK puede caducar
+—esta avisó durante cinco días de que <code>response_format</code> se descartaría, después de que la plataforma
+empezara a honrarlo— y la cabecera no.</p>
 <h3>Salida estructurada</h3>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">schema</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"json_schema"</span><span class="p">,</span> <span class="s2">"json_schema"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"capital"</span><span class="p">,</span> <span class="s2">"schema"</span><span class="p">:</span> <span class="p">{</span>
     <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span> <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"capital"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span> <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"capital"</span><span class="p">]}}}</span>
@@ -302,6 +322,14 @@ cuando que te den calladamente menos de lo que pediste es peor que fallar.</p>
 <span class="kd">const</span><span class="w"> </span><span class="nx">answer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">content</span><span class="p">);</span><span class="w"> </span><span class="c1">// a JSON string, not a nested object</span></code></pre></div>
 </div><p>La gramática es del motor, y el esquema se reenvía verbatim — validarlo aquí sería una segunda copia
 de las reglas del motor, separándose de la primera.</p>
+<p><strong>Manda una tupla de zod 4 tal cual viene.</strong> llama.cpp rechaza un <code>items</code> booleano — <code>400 JSON schema conversion failed: Unrecognized schema: false</code> — que es exactamente cómo zod cierra una tupla, y el
+gateway ya lo traduce antes de reenviar (<code>items: false</code> pasa a <code>maxItems</code>). <strong>No</strong> lo esquives
+ensanchando la tupla a <code>items: {&quot;type&quot;: &quot;string&quot;}</code>: es lo que la gente hacía, y tira los tipos por
+posición que hacían que fuera una tupla.</p>
+<p>De dieciséis características de esquema medidas contra el motor, solo <code>items</code> falla como booleano.
+<code>additionalProperties</code>, <code>propertyNames</code>, <code>contains</code>, <code>not</code>, <code>enum</code>, <code>oneOf</code>/<code>anyOf</code>/<code>allOf</code>,
+<code>$ref</code>/<code>$defs</code>, <code>pattern</code>, <code>format</code>, <code>const</code>, <code>minimum</code>/<code>maximum</code>, <code>uniqueItems</code> y
+<code>minItems</code>/<code>maxItems</code> pasan todas.</p>
 <h3>Cuánta confianza tenía el modelo</h3>
 <p><code>logprobs</code> devuelve la probabilidad del token elegido; <code>top_logprobs</code> añade las N alternativas más
 probables en cada posición. El objetivo es que un agente decida cuándo <strong>escalar a una persona</strong> en

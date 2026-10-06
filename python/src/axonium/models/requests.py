@@ -78,14 +78,30 @@ class _AllowlistRequest(BaseModel):
             # what is true today rather than what was true when it was written.
             warnings.warn(
                 f"Unrecognized request {'fields' if len(unknown) > 1 else 'field'} "
-                f"{', '.join(unknown)}; not sent. This SDK forwards only the fields the contract "
-                f"documents. If you need to reach an engine-specific parameter, that is "
-                f"AXO-154 and not yet decided across the five SDKs.",
+                f"{', '.join(unknown)}; sent anyway, because the gateway names what it ignored in "
+                f"X-Prometheus-Ignored-Parameters and reading that header is the only answer that "
+                f"cannot be stale. Check meta.ignored_parameters on the response to find out. "
+                f"Engine-specific template variables go in chat_template_kwargs, not at the top "
+                f"level -- reasoning_effort there does nothing.",
                 UnsupportedFieldWarning,
                 stacklevel=3,
             )
 
-        self.__pydantic_extra__.clear()  # type: ignore[union-attr]
+        # The DOCUMENTED-unsupported set is dropped: the contract names those, we know they do
+        # nothing, and sending them would add noise to a header whose whole value is that it reports
+        # something.
+        #
+        # An UNKNOWN field is forwarded, which is the opposite of what this did until 2026-10-06 and
+        # is the platform's own stated intent: "they stay outside the accepted set deliberately, so
+        # they keep appearing in X-Prometheus-Ignored-Parameters rather than being quietly accepted
+        # and quietly dropped". Dropping it here defeats that -- the caller never sees the field in
+        # `meta.ignored_parameters` and cannot tell whether it worked. The warning stays, because a
+        # warning at the call site is earlier than a header on the response; what changes is that
+        # the gateway now gets to have the last word, and this SDK's allowlist no longer gets to be
+        # wrong in silence. It has been wrong before: it warned that `response_format` would be
+        # dropped for five days after the platform started honouring it.
+        for name in documented:
+            self.__pydantic_extra__.pop(name, None)  # type: ignore[union-attr]
         return self
 
     @classmethod
@@ -186,6 +202,22 @@ class ChatCompletionRequest(_AllowlistRequest):
     #:
     #: The point is an agent deciding when to escalate to a person instead of acting on a guess,
     #: which is what Apeiron asked for and why ``PRM-187`` exists.
+    #: Variables llama.cpp hands to the model's own chat template, forwarded as an opaque mapping.
+    #:
+    #: **The keys belong to each model's template, not to the gateway**, so the contents are not
+    #: validated here and the useful set differs per model: ``enable_thinking`` for the Qwen3.6
+    #: family, ``reasoning_effort`` for gpt-oss. A key the template does not read is ignored by the
+    #: template, silently, and nothing can tell you that -- check the model card.
+    #:
+    #: It is how you turn a reasoning model's thinking off, and it is not a micro-optimisation:
+    #: measured on the platform, the same question answered in **215 tokens and 6.91 s** without it
+    #: and **16 tokens and 0.71 s** with ``{"enable_thinking": False}``.
+    #:
+    #: ``reasoning_effort`` goes **inside** this mapping. At the top level it does nothing at all --
+    #: measured, byte-identical output with and without -- and the platform keeps it outside the
+    #: accepted set on purpose so that it shows up in ``X-Prometheus-Ignored-Parameters`` instead of
+    #: being quietly accepted and quietly dropped.
+    chat_template_kwargs: dict[str, Any] | None = None
     logprobs: bool | None = None
     #: The ``N`` most likely alternatives at each position, 0 to 20.
     #:
