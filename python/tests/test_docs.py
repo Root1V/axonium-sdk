@@ -8,6 +8,7 @@ public symbol has to be documented, or something ends up usable only by reading 
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import subprocess
 import sys
@@ -403,3 +404,41 @@ class TestTheRenderedOutputIsSelfContained:
         assert not emitted - styled - inherits, (
             f"emitted with no CSS rule: {sorted(emitted - styled - inherits)}"
         )
+
+
+class TestEveryPackageLinksToTheDocumentation:
+    """What a registry shows is the README and the module doc, and none of them named the site.
+
+    Measured 2026-10-06: `pypi`, `crates.io`, `npm`, `pkg.go.dev` and Swift's GitHub landing page
+    had **zero** links to https://root1v.github.io/axonium-sdk/ between them. PyPI and crates.io
+    carried a `Documentation` URL in their metadata, which is a small link in a sidebar; the page a
+    reader actually lands on said nothing. npm's `homepage` pointed at the repository.
+
+    Swift is in its own repository and has the mirror of this test there.
+    """
+
+    SITE = "https://root1v.github.io/axonium-sdk/"
+
+    #: Every file a package registry renders, or that a language's doc tooling publishes.
+    SURFACES = (
+        "python/README.md",
+        "go/README.md",
+        "rust/README.md",
+        "typescript/README.md",
+        "python/src/axonium/__init__.py",
+        "go/axonium/client.go",
+        "rust/src/lib.rs",
+    )
+
+    @pytest.mark.parametrize("surface", SURFACES, ids=lambda s: s)
+    def test_the_published_surface_names_the_documentation(self, surface: str) -> None:
+        text = (REPO / surface).read_text(encoding="utf-8")
+        assert self.SITE in text, (
+            f"{surface} is rendered by a package registry or doc tool and does not link to "
+            f"{self.SITE}. A reader who arrives there has no route to the guide."
+        )
+
+    def test_npms_homepage_is_the_documentation_rather_than_the_repository(self) -> None:
+        # The one field npm shows most prominently, and the repository is already in `repository`.
+        manifest = json.loads((REPO / "typescript" / "package.json").read_text(encoding="utf-8"))
+        assert manifest["homepage"] == self.SITE

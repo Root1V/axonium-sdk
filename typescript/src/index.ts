@@ -42,7 +42,7 @@ export type {
 } from "./resources.ts";
 
 export type { AxoniumOptions, ResolvedConfig, Timeouts, TokenProvider } from "./config.ts";
-export { DEFAULT_TIMEOUTS, resolveConfig } from "./config.ts";
+export { DEFAULT_GATEWAY_BASE_URL, DEFAULT_TIMEOUTS, resolveConfig } from "./config.ts";
 
 export type { TokenClaims, TokenSet } from "./auth.ts";
 export { TokenManager, decodeClaims } from "./auth.ts";

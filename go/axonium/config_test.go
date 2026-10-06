@@ -173,3 +173,33 @@ func TestPartialTimeoutsKeepTheOtherDefaults(t *testing.T) {
 		t.Errorf("overriding one phase must not zero the others: %+v", got)
 	}
 }
+
+// TestCredentialsAreTheOnlyRequiredSetting is the shape every SDK here promises, and that two of the
+// five did not have.
+//
+// Measured 2026-10-06: TypeScript refused to construct without an explicit gateway base URL and
+// Swift took it as a required FIRST POSITIONAL parameter, so the documentation's own "smallest thing
+// that works" example threw in one and did not compile in the other. Only Rust had a test. Go was
+// correct by luck, which is the state this test ends.
+//
+// The default being a LOOPBACK address is what makes defaulting safe rather than reckless: getting
+// it wrong reaches your own machine and is normally a refused connection, and it cannot quietly send
+// a credential somewhere real.
+func TestCredentialsAreTheOnlyRequiredSetting(t *testing.T) {
+	t.Setenv("AXONIUM_GATEWAY_BASE_URL", "")
+	t.Setenv("AXONIUM_SCOPE", "")
+
+	client, err := New(Config{ClientID: "i", ClientSecret: "s"})
+	if err != nil {
+		t.Fatalf("credentials alone should be enough: %v", err)
+	}
+	defer client.Close()
+
+	if got := client.config.GatewayBaseURL; got != DefaultGatewayBaseURL {
+		t.Errorf("GatewayBaseURL = %q, want the default %q", got, DefaultGatewayBaseURL)
+	}
+	if !strings.HasPrefix(DefaultGatewayBaseURL, "http://127.0.0.1") {
+		t.Errorf("the default must stay a loopback address, got %q: a wrong one has to fail "+
+			"locally rather than reach a host that is somebody's", DefaultGatewayBaseURL)
+	}
+}

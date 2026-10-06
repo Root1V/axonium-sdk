@@ -173,3 +173,41 @@ def test_secrets_are_not_exposed_in_validation_errors(config_kwargs: dict[str, s
         AxoniumConfig(**config_kwargs)
 
     assert "test-secret" not in str(caught.value)
+
+
+class TestCredentialsAreTheOnlyRequiredSetting:
+    """The shape every SDK here promises, and that two of the five did not have.
+
+    Measured 2026-10-06: TypeScript refused to construct without an explicit ``gatewayBaseURL`` and
+    Swift took it as a required *first positional* parameter -- so the documentation's own "smallest
+    thing that works" example threw in one and did not compile in the other. Only Rust had a test.
+    Python and Go were correct by luck, which is the state this class ends.
+
+    The default is a **loopback** address, which is what makes defaulting safe rather than reckless:
+    getting it wrong reaches your own machine and is normally a refused connection, and it cannot
+    quietly send a credential somewhere real.
+    """
+
+    def test_credentials_alone_construct_a_client(self, monkeypatch) -> None:
+        for key in ("AXONIUM_GATEWAY_BASE_URL", "AXONIUM_SCOPE"):
+            monkeypatch.delenv(key, raising=False)
+
+        config = AxoniumConfig(client_id="i", client_secret="s")
+
+        assert config.gateway_base_url == DEFAULT_GATEWAY_BASE_URL
+        assert config.gateway_base_url.startswith("http://127.0.0.1"), (
+            "the default must stay a loopback address: a wrong one has to fail locally rather than "
+            "reach a host that is somebody's"
+        )
+
+    def test_an_explicit_address_still_wins(self, monkeypatch) -> None:
+        monkeypatch.setenv("AXONIUM_GATEWAY_BASE_URL", "https://from-env.test")
+        assert AxoniumConfig(client_id="i", client_secret="s").gateway_base_url == (
+            "https://from-env.test"
+        )
+        assert (
+            AxoniumConfig(
+                client_id="i", client_secret="s", gateway_base_url="https://explicit.test"
+            ).gateway_base_url
+            == "https://explicit.test"
+        )

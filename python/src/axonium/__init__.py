@@ -1,5 +1,9 @@
 """Python SDK for the Prometheus inference platform.
 
+Documentation: https://root1v.github.io/axonium-sdk/ --- concepts, every call, failure and retries,
+configuration, composed operations and testing, with every example in Python, Go, Rust, Swift and
+TypeScript.
+
 See ``spec/prometheus-gateway.md`` in the repository for the API contract this package implements.
 """
 

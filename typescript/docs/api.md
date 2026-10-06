@@ -7,16 +7,16 @@ symbol appears here, so a new export with no entry is a red run rather than an u
 
 ### `new Axonium(options?)`
 
-| option                     | default                                                   | meaning                                                                                                                         |
-| -------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `gatewayBaseURL`           | `AXONIUM_GATEWAY_BASE_URL`                                | Required. `https`, or `localhost`/`127.0.0.1` for development. There is no default: a wrong gateway is worse than a missing one |
-| `clientId`, `clientSecret` | `AXONIUM_CLIENT_ID`, `AXONIUM_CLIENT_SECRET`              | The autonomous mode                                                                                                             |
-| `tokenProvider`            | —                                                         | The governed mode. Supplying both modes is **refused**, not resolved by precedence                                              |
-| `scope`                    | `AXONIUM_SCOPE`                                           | Omitted when empty — an empty `scope` asks for _no_ scopes, omitting it asks for everything the account holds                   |
-| `timeouts`                 | `{connect: 10_000, request: 600_000, stream: 180_000}` ms | See below                                                                                                                       |
-| `retry`                    | 3 attempts, 1s base, 60s cap, full jitter                 | Shared with every SDK in this family; the corpus depends on these numbers                                                       |
-| `fetch`                    | `globalThis.fetch`                                        | Injected for tests, or for a runtime whose `fetch` you want to wrap                                                             |
-| `allowInsecureCredential`  | `false`                                                   | Permits a `clientSecret` where this cannot establish it is on a server                                                          |
+| option                     | default                                                   | meaning                                                                                                                          |
+| -------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `gatewayBaseURL`           | `AXONIUM_GATEWAY_BASE_URL`                                | Optional. Defaults to `DEFAULT_GATEWAY_BASE_URL` — `http://127.0.0.1:8020`. **Credentials are the only setting you must supply** |
+| `clientId`, `clientSecret` | `AXONIUM_CLIENT_ID`, `AXONIUM_CLIENT_SECRET`              | The autonomous mode                                                                                                              |
+| `tokenProvider`            | —                                                         | The governed mode. Supplying both modes is **refused**, not resolved by precedence                                               |
+| `scope`                    | `AXONIUM_SCOPE`                                           | Omitted when empty — an empty `scope` asks for _no_ scopes, omitting it asks for everything the account holds                    |
+| `timeouts`                 | `{connect: 10_000, request: 600_000, stream: 180_000}` ms | See below                                                                                                                        |
+| `retry`                    | 3 attempts, 1s base, 60s cap, full jitter                 | Shared with every SDK in this family; the corpus depends on these numbers                                                        |
+| `fetch`                    | `globalThis.fetch`                                        | Injected for tests, or for a runtime whose `fetch` you want to wrap                                                              |
+| `allowInsecureCredential`  | `false`                                                   | Permits a `clientSecret` where this cannot establish it is on a server                                                           |
 
 **`request` defaults to 600 s deliberately.** It matches what the gateway allows its backends, and some
 image backends take 2–8 minutes. A client timeout shorter than the server's, plus a retry, queues a
@@ -221,16 +221,16 @@ auth-service, arrives as problem+json, and maps into the table above as
 
 ## Helpers
 
-|                                                 |                                                                                                                            |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `imageFromBytes(bytes, mediaType)`              | A base64 data URI part. **No URL helper exists**: the gateway refuses `http(s)://` as an SSRF mitigation                   |
-| `jsonSchema(name, schema, options?)`            | A `json_schema` response format. Accepts anything with `toJSONSchema()`, so Zod works without this package depending on it |
-| `decodedArguments(call)`                        | Parses a tool call's arguments. A function, not a method, because the response types are plain data                        |
-| `decodeClaims(token)`                           | Reads a JWT's payload. **Not verification** — that is the gateway's job                                                    |
-| `VERSION`, `USER_AGENT`                         |                                                                                                                            |
-| `DEFAULT_RETRY`, `NO_RETRY`, `DEFAULT_TIMEOUTS` |                                                                                                                            |
-| `Transport`, `TokenManager`                     | The layers under the client, exported because they are useful alone                                                        |
-| `events(body)`, `dataOf(event)`                 | The SSE primitives                                                                                                         |
+|                                                                             |                                                                                                                            |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `imageFromBytes(bytes, mediaType)`                                          | A base64 data URI part. **No URL helper exists**: the gateway refuses `http(s)://` as an SSRF mitigation                   |
+| `jsonSchema(name, schema, options?)`                                        | A `json_schema` response format. Accepts anything with `toJSONSchema()`, so Zod works without this package depending on it |
+| `decodedArguments(call)`                                                    | Parses a tool call's arguments. A function, not a method, because the response types are plain data                        |
+| `decodeClaims(token)`                                                       | Reads a JWT's payload. **Not verification** — that is the gateway's job                                                    |
+| `VERSION`, `USER_AGENT`                                                     |                                                                                                                            |
+| `DEFAULT_RETRY`, `NO_RETRY`, `DEFAULT_TIMEOUTS`, `DEFAULT_GATEWAY_BASE_URL` |                                                                                                                            |
+| `Transport`, `TokenManager`                                                 | The layers under the client, exported because they are useful alone                                                        |
+| `events(body)`, `dataOf(event)`                                             | The SSE primitives                                                                                                         |
 
 ## Per-token probabilities
 

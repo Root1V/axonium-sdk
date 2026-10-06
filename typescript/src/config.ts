@@ -23,6 +23,25 @@ export interface Timeouts {
   readonly stream: number;
 }
 
+/**
+ * The address this SDK talks to when nothing says otherwise.
+ *
+ * **Credentials are the only setting a caller must supply**, which is the shape Python, Go and Rust
+ * have had since `AXO-83` collapsed auth onto the gateway. This SDK shipped `0.1.0` and `0.2.0`
+ * refusing to start without an explicit address, on the argument that *a wrong gateway is worse than
+ * a missing one* — an argument the other three had already answered and this one had not read, the
+ * same way `AXO-133` was the Rust doc comment nobody here had read.
+ *
+ * The answer is that the default is a **loopback** address. Getting it wrong reaches your own
+ * machine, which is normally a refused connection and clear enough; it cannot quietly send a
+ * credential somewhere real. Set {@link AxoniumOptions.gatewayBaseURL} or
+ * `AXONIUM_GATEWAY_BASE_URL` for any deployment that is not this one.
+ *
+ * A consumer who *pins* an old version keeps pointing at the old address after the platform
+ * migrates, so the release that changes this constant will say so loudly.
+ */
+export const DEFAULT_GATEWAY_BASE_URL = "http://127.0.0.1:8020";
+
 export const DEFAULT_TIMEOUTS: Timeouts = {
   connect: 10_000,
   request: 600_000,
@@ -143,7 +162,7 @@ export function resolveConfig(options: AxoniumOptions = {}): ResolvedConfig {
   const pick = (key: keyof typeof ENV_KEYS): string =>
     (options[key] ?? readEnv(ENV_KEYS[key]) ?? "").trim();
 
-  const gatewayBaseURL = pick("gatewayBaseURL").replace(/\/+$/, "");
+  const gatewayBaseURL = (pick("gatewayBaseURL") || DEFAULT_GATEWAY_BASE_URL).replace(/\/+$/, "");
   const scope = pick("scope");
   const tokenProvider = options.tokenProvider;
 
@@ -162,12 +181,6 @@ export function resolveConfig(options: AxoniumOptions = {}): ResolvedConfig {
   const clientId = tokenProvider ? explicitId : pick("clientId");
   const clientSecret = tokenProvider ? explicitSecret : pick("clientSecret");
 
-  if (!gatewayBaseURL) {
-    throw new ConfigurationError(
-      `Missing gatewayBaseURL. Pass it to the constructor or set ${ENV_KEYS.gatewayBaseURL}. ` +
-        `There is no default: a wrong gateway is worse than a missing one.`,
-    );
-  }
   let parsed: URL;
   try {
     parsed = new URL(gatewayBaseURL);

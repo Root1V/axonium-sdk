@@ -1,5 +1,9 @@
 // Package axonium is the Go SDK for the Prometheus inference platform.
 //
+// Documentation: https://root1v.github.io/axonium-sdk/ -- concepts, every call, failure and
+// retries, configuration, composed operations and testing, with every example in Python, Go,
+// Rust, Swift and TypeScript. This is the package reference; that is the guide.
+//
 // The SDK is pure transport. It speaks the gateway's contract faithfully -- authentication,
 // retries that cannot double-bill, typed errors, streaming with real cancellation -- and does not
 // reshape responses into a vocabulary of its own. Normalization belongs above it, in whatever

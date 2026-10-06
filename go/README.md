@@ -2,6 +2,8 @@
 
 Go SDK for the Prometheus inference platform.
 
+📖 **Documentation: https://root1v.github.io/axonium-sdk/** — concepts, every call, failure and retries, configuration, composed operations and testing, with every example in Python, Go, Rust, Swift and TypeScript.
+
 Prometheus is a self-hosted inference platform — a catalog of small language, embedding, reranking
 and image models across managed instances, behind one authenticated API with per-model access
 control, rate limits, spend caps and usage accounting. This SDK talks to one of its components, the

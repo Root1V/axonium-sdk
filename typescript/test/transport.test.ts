@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveConfig } from "../src/config.ts";
+import { DEFAULT_GATEWAY_BASE_URL, resolveConfig } from "../src/config.ts";
 import {
   Transport,
   MAX_IDEMPOTENCY_KEY_LENGTH,
@@ -785,4 +785,29 @@ test("a response with no logprobs key says nothing rather than saying empty", as
     messages: [{ role: "user", content: "x" }],
   });
   assert.equal(completion.logprobs, undefined);
+});
+
+test("credentials are the only setting a caller must supply", () => {
+  // The shape Python, Go and Rust have had since AXO-83 collapsed auth onto the gateway, and that
+  // this SDK did not: 0.1.0 and 0.2.0 both threw `Missing gatewayBaseURL`, on the argument that a
+  // wrong gateway is worse than a missing one -- an argument the other three had already answered
+  // and this one had not read. The published documentation's own "smallest thing that works"
+  // example threw against the published package.
+  const config = resolveConfig({ clientId: "i", clientSecret: "s" });
+  assert.equal(config.gatewayBaseURL, DEFAULT_GATEWAY_BASE_URL);
+
+  // The answer to that argument, and the reason defaulting is safe rather than reckless: a wrong
+  // default reaches your own machine -- normally a refused connection -- and cannot quietly send a
+  // credential somewhere real.
+  assert.ok(
+    DEFAULT_GATEWAY_BASE_URL.startsWith("http://127.0.0.1"),
+    "the default must stay a loopback address",
+  );
+
+  // Explicit still wins, and an empty string is a mistake with an answer rather than an omission.
+  assert.equal(
+    resolveConfig({ clientId: "i", clientSecret: "s", gatewayBaseURL: "https://explicit.test" })
+      .gatewayBaseURL,
+    "https://explicit.test",
+  );
 });
