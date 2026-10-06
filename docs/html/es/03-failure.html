@@ -311,9 +311,44 @@ dio timeout:</p>
 registra uso, nada cuenta contra el tope de gasto. Así que el reintento cuesta un viaje de ida y
 vuelta en vez de una generación, y la objeción del timeout desaparece. Sin clave sigue en pie la
 regla antigua, porque nada del peligro ha cambiado.</p>
+<p><strong>Y el caso que hace que merezca la pena mandar clave en toda llamada larga</strong>: un reintento mientras
+la primera petición <em>sigue corriendo</em> no es un fallo ni una segunda generación. El gateway contesta
+<code>409 idempotency-in-progress</code>, que es el <strong>único <code>409</code> del catálogo marcado como reintentable</strong>, así
+que el SDK lo espera por ti y devuelve el resultado almacenado cuando la original termina.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>al reintentar</th>
+<th>el gateway contesta</th>
+<th>qué hace el SDK</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>la primera <strong>terminó</strong></td>
+<td>el resultado almacenado</td>
+<td>lo devuelve — ningún modelo alcanzado, ningún uso registrado, nada contra el tope de gasto</td>
+</tr>
+<tr>
+<td>la primera <strong>sigue corriendo</strong></td>
+<td><code>409 idempotency-in-progress</code></td>
+<td>lo reintenta, hasta que la original acaba</td>
+</tr>
+<tr>
+<td>misma clave, <strong>cuerpo distinto</strong></td>
+<td><code>409 idempotency-key-reuse</code></td>
+<td>lanza; la huella cubre ruta y cuerpo</td>
+</tr>
+</tbody>
+</table></div>
+<p>Así que con clave un reintento no es una apuesta: o recoge el resultado o lo espera. Dos bordes que
+conviene conocer:</p>
 <p>Las claves están limitadas a 255 caracteres y el SDK lo comprueba antes de enviar — el gateway
 reporta una clave demasiado larga como un <em>conflicto</em>, lo que apunta la investigación en la dirección
 equivocada.</p>
+<p><code>409 idempotency-response-not-retained</code> significa que la original tuvo éxito pero su respuesta pasó
+del tope de retención de <strong>1 MiB</strong>, así que nunca se guardó. Se generó y se facturó; simplemente no
+hay nada que repetir. Las generaciones largas llegan a esto.</p>
 <h3>Distinguir una repetición de una generación</h3>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="k">if</span> <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">idempotent_replay</span><span class="p">:</span>
     <span class="n">billed</span> <span class="o">=</span> <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">idempotent_replay_of</span></code></pre></div>

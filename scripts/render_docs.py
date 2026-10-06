@@ -49,6 +49,14 @@ LOCALES = {
 #: pointing at the English one and saying why, rather than a copy that is wrong most of the time.
 GENERATED = {"08-reference.md"}
 
+#: Marks a code block that is deliberately in ONE language, immediately above it.
+#:
+#: Almost every example on this site exists in all five, and a guard refuses a group that does not.
+#: But some sections are genuinely about one SDK -- Node's 300 s header timeout is a fact about
+#: undici and nothing else -- and the alternative to saying so is hiding the block from the guard by
+#: formatting it as a blockquote, which is an accident that happens to work rather than a decision.
+ONE_LANGUAGE = re.compile(r"^<!-- one-language: (?P<language>\w+) -->\s*$", re.M)
+
 #: What a non-translated page declares instead of a digest.
 NOT_A_TRANSLATION = re.compile(r"^<!-- not-a-translation: (?P<reason>[^>]*[^ >]) -->")
 
@@ -472,6 +480,7 @@ def build_page(page: Path, index: int, ordered: list[Path], locale: str = "en") 
     # page was made from, and the reader has no use for it.
     source = TRANSLATED_FROM.sub("", source, count=1)
     source = NOT_A_TRANSLATION.sub("", source, count=1).lstrip("\n")
+    source = ONE_LANGUAGE.sub("", source)
     body = markdown(source)
     body = rewrite_links(body)
     body = group_code_tabs(body)

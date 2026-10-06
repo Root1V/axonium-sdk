@@ -1,4 +1,4 @@
-<!-- translated-from: 04-configuration.md sha256:d6008eb0bd -->
+<!-- translated-from: 04-configuration.md sha256:500a8b2d09 -->
 # Configuración y transporte
 
 > **¿Cómo apunto esto a mi despliegue?**
@@ -166,6 +166,40 @@ TypeScript no tiene nada equivalente integrado, así que lleva el suyo — y ade
 `AbortSignal`, ganando el que dispare primero.
 
 **Un timeout de cliente no se reintenta**, y el error dice por qué — ver [Fallos](03-failure.md).
+
+### TypeScript sobre Node tiene un techo por debajo de todo esto, a 300 segundos
+
+El `fetch` propio de Node se rinde ante una respuesta que no ha mandado **ninguna cabecera** pasados
+300 s. Eso es el `headersTimeout` de undici, ignora `timeouts.request`, y este SDK no puede subirlo
+sin tomar una dependencia de undici — lo que acabaría con la regla de cero dependencias que vigilan
+tres tests.
+
+Solo muerde a las llamadas **no-streaming**, y las muerde a todas, porque una generación no-streaming
+manda sus cabeceras cuando termina. Así que cualquier generación de más de cinco minutos falla a los
+cinco minutos, por alto que pongas el timeout.
+
+Dos salidas, por orden de preferencia:
+
+1. **Usa `chat.completions.stream()`.** En un stream las cabeceras llegan de inmediato, así que el
+   límite nunca aplica. Para cualquier cosa que pueda pasar de cinco minutos, esta es la respuesta
+   correcta y no un apaño.
+2. **Inyecta tu propio `fetch`** con un `headersTimeout` mayor:
+
+<!-- one-language: typescript -->
+```typescript
+import { fetch as undiciFetch, Agent } from "undici";
+
+const client = new Axonium({
+  fetch: (url, init) =>
+    undiciFetch(url, { ...init, dispatcher: new Agent({ headersTimeout: 900_000 }) }),
+});
+```
+
+Hasta la `0.2.2` esto salía como `TransportError: Could not reach the gateway` — falso, el gateway
+contestó y seguía generando — **y los fallos de transporte se reintentan**, así que una llamada se
+convertía en tres generaciones facturables. Ahora es un `TimeoutError`, que nunca se reintenta, y el
+mensaje dice todo lo anterior. Lo reportó un consumidor; ver [Fallos](03-failure.md) para por qué un
+timeout es lo único que este SDK no reintenta por su cuenta.
 
 ## Política de reintentos
 

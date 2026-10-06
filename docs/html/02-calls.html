@@ -205,6 +205,17 @@ not model is still reachable.</p>
 </div><p><code>content</code> is an accessor, not a field. It reaches into the first choice's message, and returns
 empty rather than panicking when a response has no choices — which happens on a generation stopped
 before it produced any.</p>
+<p><strong>A reasoning model's thinking is a separate field, not part of <code>content</code>.</strong> All five SDKs read
+<code>reasoning_content</code> into <code>reasoning</code> — on a completion and, accumulated from the deltas, on a stream.
+Two consequences:</p>
+<ul>
+<li><strong><code>content</code> can be empty with nothing wrong.</strong> Measured on <code>qwen3-0.6b</code>: a stream of 120 chunks
+with every delta in reasoning and <code>content</code> empty throughout. An interface showing only <code>content</code>
+displays nothing and looks like a broken SDK.</li>
+<li><strong><code>usage.completion_tokens</code> counts both</strong>, and nothing separates them: the contract has no
+<code>reasoning_tokens</code> field, so neither do these SDKs. Comparing the two strings' lengths is the
+closest available approximation, and it is characters rather than tokens.</li>
+</ul>
 <h3>Fields the gateway does not support</h3>
 <p>The gateway accepts an allowlisted subset and <strong>names back</strong> what it ignored. It did discard in
 silence until <code>PRM-127</code>, which is the problem the header exists to end: you set <code>frequency_penalty</code>,

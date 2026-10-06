@@ -308,8 +308,43 @@ retryable:</p>
 nothing counts against the spend cap. So the retry costs a round trip instead of a generation, and
 the timeout objection disappears. Without a key the old rule stands, because nothing about the
 danger has changed.</p>
+<p><strong>And the case that makes a key worth sending on every long call</strong>: a retry while the first request
+is <em>still running</em> is not a failure and not a second generation. The gateway answers
+<code>409 idempotency-in-progress</code>, which is the <strong>only <code>409</code> in the catalog marked retryable</strong>, so the
+SDK waits it out on your behalf and returns the stored result when the original finishes.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>on retry</th>
+<th>the gateway answers</th>
+<th>what the SDK does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the first one <strong>finished</strong></td>
+<td>the stored result</td>
+<td>returns it — no model reached, no usage recorded, nothing against the spend cap</td>
+</tr>
+<tr>
+<td>the first one <strong>is still running</strong></td>
+<td><code>409 idempotency-in-progress</code></td>
+<td>retries it, until the original finishes</td>
+</tr>
+<tr>
+<td>same key, <strong>different body</strong></td>
+<td><code>409 idempotency-key-reuse</code></td>
+<td>raises; the fingerprint covers path and body</td>
+</tr>
+</tbody>
+</table></div>
+<p>So with a key a retry is not a gamble: it either collects the result or waits for it. Two edges worth
+knowing:</p>
 <p>Keys are capped at 255 characters and the SDK checks that before sending — the gateway reports an
 over-length key as a <em>conflict</em>, which points the investigation in the wrong direction.</p>
+<p><code>409 idempotency-response-not-retained</code> means the original succeeded but its response exceeded the
+<strong>1 MiB</strong> retention cap, so it was never stored. It was generated and billed; there is simply nothing
+to replay. Long generations reach this.</p>
 <h3>Telling a replay apart from a generation</h3>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="k">if</span> <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">idempotent_replay</span><span class="p">:</span>
     <span class="n">billed</span> <span class="o">=</span> <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">idempotent_replay_of</span></code></pre></div>

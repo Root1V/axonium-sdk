@@ -239,12 +239,25 @@ class TestWhatIsCalledPendingIsStillPending:
 
 
 def code_groups(page: Path) -> list[list[str]]:
-    """Runs of fenced blocks separated by nothing but blank lines -- what the renderer tabs."""
+    """Runs of fenced blocks separated by nothing but blank lines -- what the renderer tabs.
+
+    A block preceded by ``<!-- one-language: X -->`` is left out: it is a section about one SDK and
+    says so. The marker exists so that the exception is *written down* -- the alternative is hiding
+    such a block from this guard by formatting it as a blockquote, which works by accident and reads
+    as an oversight.
+    """
     lines = page.read_text(encoding="utf-8").splitlines()
+    exempt = {
+        n + 1 for n, line in enumerate(lines) if line.strip().startswith("<!-- one-language:")
+    }
     fences, index = [], 0
     while index < len(lines):
         opening = re.match(r"^```(\w*)", lines[index])
-        if opening:
+        if opening and index in exempt:
+            index += 1
+            while index < len(lines) and not lines[index].startswith("```"):
+                index += 1
+        elif opening:
             start, language = index, opening.group(1)
             index += 1
             while index < len(lines) and not lines[index].startswith("```"):

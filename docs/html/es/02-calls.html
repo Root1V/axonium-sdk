@@ -205,6 +205,17 @@ campo que el SDK no modela sigue siendo accesible.</p>
 </div><p><code>content</code> es un accesorio, no un campo. Entra al mensaje de la primera opción, y devuelve vacío en
 vez de reventar cuando una respuesta no tiene opciones — algo que pasa en una generación cortada
 antes de producir ninguna.</p>
+<p><strong>El pensamiento de un modelo de razonamiento es un campo aparte, no parte de <code>content</code>.</strong> Los cinco
+SDK leen <code>reasoning_content</code> en <code>reasoning</code> — en una completion y, acumulado de los deltas, en un
+stream. Dos consecuencias:</p>
+<ul>
+<li><strong><code>content</code> puede venir vacío sin que pase nada malo.</strong> Medido en <code>qwen3-0.6b</code>: un stream de 120
+chunks con todos los deltas en razonamiento y <code>content</code> vacío de principio a fin. Una interfaz que
+muestre solo <code>content</code> no enseña nada y parece un SDK roto.</li>
+<li><strong><code>usage.completion_tokens</code> cuenta los dos</strong>, y nada los separa: el contrato no tiene un campo
+<code>reasoning_tokens</code>, así que estos SDK tampoco. Comparar la longitud de las dos cadenas es la
+aproximación más cercana disponible, y son caracteres y no tokens.</li>
+</ul>
 <h3>Campos que el gateway no soporta</h3>
 <p>El gateway acepta un subconjunto permitido y <strong>nombra de vuelta</strong> lo que ignoró. Hasta <code>PRM-127</code> sí
 descartaba en silencio, que es el problema que la cabecera vino a terminar: pones <code>frequency_penalty</code>,

@@ -305,6 +305,32 @@ la cancelación de tareas, y un segundo mecanismo al lado es un sitio más para 
 TypeScript no tiene nada equivalente integrado, así que lleva el suyo — y además acepta tu
 <code>AbortSignal</code>, ganando el que dispare primero.</p>
 <p><strong>Un timeout de cliente no se reintenta</strong>, y el error dice por qué — ver <a href="03-failure.html">Fallos</a>.</p>
+<h3>TypeScript sobre Node tiene un techo por debajo de todo esto, a 300 segundos</h3>
+<p>El <code>fetch</code> propio de Node se rinde ante una respuesta que no ha mandado <strong>ninguna cabecera</strong> pasados
+300 s. Eso es el <code>headersTimeout</code> de undici, ignora <code>timeouts.request</code>, y este SDK no puede subirlo
+sin tomar una dependencia de undici — lo que acabaría con la regla de cero dependencias que vigilan
+tres tests.</p>
+<p>Solo muerde a las llamadas <strong>no-streaming</strong>, y las muerde a todas, porque una generación no-streaming
+manda sus cabeceras cuando termina. Así que cualquier generación de más de cinco minutos falla a los
+cinco minutos, por alto que pongas el timeout.</p>
+<p>Dos salidas, por orden de preferencia:</p>
+<ol>
+<li><strong>Usa <code>chat.completions.stream()</code>.</strong> En un stream las cabeceras llegan de inmediato, así que el
+límite nunca aplica. Para cualquier cosa que pueda pasar de cinco minutos, esta es la respuesta
+correcta y no un apaño.</li>
+<li><strong>Inyecta tu propio <code>fetch</code></strong> con un <code>headersTimeout</code> mayor:</li>
+</ol>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">fetch</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="nx">undiciFetch</span><span class="p">,</span><span class="w"> </span><span class="nx">Agent</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">"undici"</span><span class="p">;</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Axonium</span><span class="p">({</span>
+<span class="w">  </span><span class="nx">fetch</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">url</span><span class="p">,</span><span class="w"> </span><span class="nx">init</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span>
+<span class="w">    </span><span class="nx">undiciFetch</span><span class="p">(</span><span class="nx">url</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="nx">init</span><span class="p">,</span><span class="w"> </span><span class="nx">dispatcher</span><span class="o">:</span><span class="w"> </span><span class="kt">new</span><span class="w"> </span><span class="nx">Agent</span><span class="p">({</span><span class="w"> </span><span class="nx">headersTimeout</span><span class="o">:</span><span class="w"> </span><span class="kt">900_000</span><span class="w"> </span><span class="p">})</span><span class="w"> </span><span class="p">}),</span>
+<span class="p">});</span></code></pre></div>
+<p>Hasta la <code>0.2.2</code> esto salía como <code>TransportError: Could not reach the gateway</code> — falso, el gateway
+contestó y seguía generando — <strong>y los fallos de transporte se reintentan</strong>, así que una llamada se
+convertía en tres generaciones facturables. Ahora es un <code>TimeoutError</code>, que nunca se reintenta, y el
+mensaje dice todo lo anterior. Lo reportó un consumidor; ver <a href="03-failure.html">Fallos</a> para por qué un
+timeout es lo único que este SDK no reintenta por su cuenta.</p>
 <h2>Política de reintentos</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">RetryPolicy</span>
 

@@ -63,6 +63,17 @@ console.log(completion.usage?.totalTokens);
 empty rather than panicking when a response has no choices — which happens on a generation stopped
 before it produced any.
 
+**A reasoning model's thinking is a separate field, not part of `content`.** All five SDKs read
+`reasoning_content` into `reasoning` — on a completion and, accumulated from the deltas, on a stream.
+Two consequences:
+
+- **`content` can be empty with nothing wrong.** Measured on `qwen3-0.6b`: a stream of 120 chunks
+  with every delta in reasoning and `content` empty throughout. An interface showing only `content`
+  displays nothing and looks like a broken SDK.
+- **`usage.completion_tokens` counts both**, and nothing separates them: the contract has no
+  `reasoning_tokens` field, so neither do these SDKs. Comparing the two strings' lengths is the
+  closest available approximation, and it is characters rather than tokens.
+
 ### Fields the gateway does not support
 
 The gateway accepts an allowlisted subset and **names back** what it ignored. It did discard in

@@ -1,4 +1,4 @@
-<!-- translated-from: 02-calls.md sha256:6c54017156 -->
+<!-- translated-from: 02-calls.md sha256:854deaf265 -->
 # Hacer llamadas
 
 > **Ya tengo un cliente. ¿Qué le puedo pedir?**
@@ -63,6 +63,17 @@ console.log(completion.usage?.totalTokens);
 `content` es un accesorio, no un campo. Entra al mensaje de la primera opción, y devuelve vacío en
 vez de reventar cuando una respuesta no tiene opciones — algo que pasa en una generación cortada
 antes de producir ninguna.
+
+**El pensamiento de un modelo de razonamiento es un campo aparte, no parte de `content`.** Los cinco
+SDK leen `reasoning_content` en `reasoning` — en una completion y, acumulado de los deltas, en un
+stream. Dos consecuencias:
+
+- **`content` puede venir vacío sin que pase nada malo.** Medido en `qwen3-0.6b`: un stream de 120
+  chunks con todos los deltas en razonamiento y `content` vacío de principio a fin. Una interfaz que
+  muestre solo `content` no enseña nada y parece un SDK roto.
+- **`usage.completion_tokens` cuenta los dos**, y nada los separa: el contrato no tiene un campo
+  `reasoning_tokens`, así que estos SDK tampoco. Comparar la longitud de las dos cadenas es la
+  aproximación más cercana disponible, y son caracteres y no tokens.
 
 ### Campos que el gateway no soporta
 

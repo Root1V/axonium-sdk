@@ -1,4 +1,4 @@
-<!-- translated-from: 03-failure.md sha256:e9565f81ea -->
+<!-- translated-from: 03-failure.md sha256:7e6d75e168 -->
 # Fallos, reintentos e idempotencia
 
 > **¿Cuándo es seguro volver a intentarlo?**
@@ -187,9 +187,27 @@ registra uso, nada cuenta contra el tope de gasto. Así que el reintento cuesta 
 vuelta en vez de una generación, y la objeción del timeout desaparece. Sin clave sigue en pie la
 regla antigua, porque nada del peligro ha cambiado.
 
+**Y el caso que hace que merezca la pena mandar clave en toda llamada larga**: un reintento mientras
+la primera petición *sigue corriendo* no es un fallo ni una segunda generación. El gateway contesta
+`409 idempotency-in-progress`, que es el **único `409` del catálogo marcado como reintentable**, así
+que el SDK lo espera por ti y devuelve el resultado almacenado cuando la original termina.
+
+| al reintentar | el gateway contesta | qué hace el SDK |
+|---|---|---|
+| la primera **terminó** | el resultado almacenado | lo devuelve — ningún modelo alcanzado, ningún uso registrado, nada contra el tope de gasto |
+| la primera **sigue corriendo** | `409 idempotency-in-progress` | lo reintenta, hasta que la original acaba |
+| misma clave, **cuerpo distinto** | `409 idempotency-key-reuse` | lanza; la huella cubre ruta y cuerpo |
+
+Así que con clave un reintento no es una apuesta: o recoge el resultado o lo espera. Dos bordes que
+conviene conocer:
+
 Las claves están limitadas a 255 caracteres y el SDK lo comprueba antes de enviar — el gateway
 reporta una clave demasiado larga como un *conflicto*, lo que apunta la investigación en la dirección
 equivocada.
+
+`409 idempotency-response-not-retained` significa que la original tuvo éxito pero su respuesta pasó
+del tope de retención de **1 MiB**, así que nunca se guardó. Se generó y se facturó; simplemente no
+hay nada que repetir. Las generaciones largas llegan a esto.
 
 ### Distinguir una repetición de una generación
 

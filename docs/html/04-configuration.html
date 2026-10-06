@@ -301,6 +301,31 @@ cancellation are, and a second mechanism beside them is one more place for the t
 TypeScript has no such built-in, so it carries its own — and also accepts your <code>AbortSignal</code>, with
 whichever fires first winning.</p>
 <p><strong>A client-side timeout is not retried</strong>, and the error says why — see <a href="03-failure.html">Failure</a>.</p>
+<h3>TypeScript on Node has a ceiling under all of this, at 300 seconds</h3>
+<p>Node's own <code>fetch</code> gives up on a response that has sent <strong>no headers</strong> after 300 s. That is undici's
+<code>headersTimeout</code>, it ignores <code>timeouts.request</code>, and this SDK cannot raise it without taking a
+dependency on undici — which would end the zero-dependency rule that three tests enforce.</p>
+<p>It only bites <strong>non-streaming</strong> calls, and it bites all of them, because a non-streaming generation
+sends its headers when it finishes. So any generation slower than five minutes fails at five minutes
+however high you set the timeout.</p>
+<p>Two ways out, in order of preference:</p>
+<ol>
+<li><strong>Use <code>chat.completions.stream()</code>.</strong> Headers arrive immediately on a stream, so the limit never
+applies. For anything that can run past five minutes this is the right answer and not a
+workaround.</li>
+<li><strong>Inject your own <code>fetch</code></strong> with a larger <code>headersTimeout</code>:</li>
+</ol>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">fetch</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="nx">undiciFetch</span><span class="p">,</span><span class="w"> </span><span class="nx">Agent</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">"undici"</span><span class="p">;</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Axonium</span><span class="p">({</span>
+<span class="w">  </span><span class="nx">fetch</span><span class="o">:</span><span class="w"> </span><span class="p">(</span><span class="nx">url</span><span class="p">,</span><span class="w"> </span><span class="nx">init</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span>
+<span class="w">    </span><span class="nx">undiciFetch</span><span class="p">(</span><span class="nx">url</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="nx">init</span><span class="p">,</span><span class="w"> </span><span class="nx">dispatcher</span><span class="o">:</span><span class="w"> </span><span class="kt">new</span><span class="w"> </span><span class="nx">Agent</span><span class="p">({</span><span class="w"> </span><span class="nx">headersTimeout</span><span class="o">:</span><span class="w"> </span><span class="kt">900_000</span><span class="w"> </span><span class="p">})</span><span class="w"> </span><span class="p">}),</span>
+<span class="p">});</span></code></pre></div>
+<p>Until <code>0.2.2</code> this surfaced as <code>TransportError: Could not reach the gateway</code> — which is false, the
+gateway answered and was still generating — <strong>and transport failures are retried</strong>, so one call
+became three billable generations. It is a <code>TimeoutError</code> now, which is never retried, and the
+message says all of the above. Reported by a consumer; see <a href="03-failure.html">Failure</a> for why a
+timeout is the one thing this SDK will not retry on its own.</p>
 <h2>Retry policy</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">RetryPolicy</span>
 

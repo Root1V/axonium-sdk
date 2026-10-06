@@ -161,6 +161,39 @@ whichever fires first winning.
 
 **A client-side timeout is not retried**, and the error says why — see [Failure](03-failure.md).
 
+### TypeScript on Node has a ceiling under all of this, at 300 seconds
+
+Node's own `fetch` gives up on a response that has sent **no headers** after 300 s. That is undici's
+`headersTimeout`, it ignores `timeouts.request`, and this SDK cannot raise it without taking a
+dependency on undici — which would end the zero-dependency rule that three tests enforce.
+
+It only bites **non-streaming** calls, and it bites all of them, because a non-streaming generation
+sends its headers when it finishes. So any generation slower than five minutes fails at five minutes
+however high you set the timeout.
+
+Two ways out, in order of preference:
+
+1. **Use `chat.completions.stream()`.** Headers arrive immediately on a stream, so the limit never
+   applies. For anything that can run past five minutes this is the right answer and not a
+   workaround.
+2. **Inject your own `fetch`** with a larger `headersTimeout`:
+
+<!-- one-language: typescript -->
+```typescript
+import { fetch as undiciFetch, Agent } from "undici";
+
+const client = new Axonium({
+  fetch: (url, init) =>
+    undiciFetch(url, { ...init, dispatcher: new Agent({ headersTimeout: 900_000 }) }),
+});
+```
+
+Until `0.2.2` this surfaced as `TransportError: Could not reach the gateway` — which is false, the
+gateway answered and was still generating — **and transport failures are retried**, so one call
+became three billable generations. It is a `TimeoutError` now, which is never retried, and the
+message says all of the above. Reported by a consumer; see [Failure](03-failure.md) for why a
+timeout is the one thing this SDK will not retry on its own.
+
 ## Retry policy
 
 ```python

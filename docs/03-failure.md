@@ -184,8 +184,26 @@ nothing counts against the spend cap. So the retry costs a round trip instead of
 the timeout objection disappears. Without a key the old rule stands, because nothing about the
 danger has changed.
 
+**And the case that makes a key worth sending on every long call**: a retry while the first request
+is *still running* is not a failure and not a second generation. The gateway answers
+`409 idempotency-in-progress`, which is the **only `409` in the catalog marked retryable**, so the
+SDK waits it out on your behalf and returns the stored result when the original finishes.
+
+| on retry | the gateway answers | what the SDK does |
+|---|---|---|
+| the first one **finished** | the stored result | returns it — no model reached, no usage recorded, nothing against the spend cap |
+| the first one **is still running** | `409 idempotency-in-progress` | retries it, until the original finishes |
+| same key, **different body** | `409 idempotency-key-reuse` | raises; the fingerprint covers path and body |
+
+So with a key a retry is not a gamble: it either collects the result or waits for it. Two edges worth
+knowing:
+
 Keys are capped at 255 characters and the SDK checks that before sending — the gateway reports an
 over-length key as a *conflict*, which points the investigation in the wrong direction.
+
+`409 idempotency-response-not-retained` means the original succeeded but its response exceeded the
+**1 MiB** retention cap, so it was never stored. It was generated and billed; there is simply nothing
+to replay. Long generations reach this.
 
 ### Telling a replay apart from a generation
 
