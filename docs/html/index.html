@@ -149,8 +149,8 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 </nav>
 <main>
 <h1>Getting started</h1>
-<p><strong>Axonium</strong> is a set of client SDKs for the <strong>Prometheus</strong> inference platform, in Python, Go
-and Rust.</p>
+<p><strong>Axonium</strong> is a set of client SDKs for the <strong>Prometheus</strong> inference platform, in Python, Go,
+Rust, Swift and TypeScript.</p>
 <p><strong>Prometheus</strong> is a self-hosted inference platform: a catalog of small language, embedding,
 reranking and image models, served across managed instances behind one authenticated API, with
 per-model access control, rate limits, spend caps and per-request usage accounting.</p>
@@ -159,13 +159,18 @@ issues tokens at a single address. The rest of the platform sits behind it: the 
 the instances it schedules across, the auth service, the rate limiter and per-backend circuit
 breaker, and the usage store. These SDKs never address any of those directly, which is why there is
 one host to configure and not six.</p>
-<p>Three SDKs, one contract. They are separate implementations that share no code — what keeps them
-identical is a corpus of recorded wire bytes that all three replay. Behaviour that matches is
+<p>Five SDKs, one contract. They are separate implementations that share no code — what keeps them
+identical is a corpus of recorded wire bytes that all five replay. Behaviour that matches is
 verified, not intended.</p>
+<p>Every example on this site is shown in all five. If a tab is missing, that is a bug in the site and
+a test fails for it.</p>
 <h2>Install</h2>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">pip<span class="w"> </span>install<span class="w"> </span>axonium</code></pre></div>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">go<span class="w"> </span>get<span class="w"> </span>github.com/Root1V/axonium-sdk/go</code></pre></div>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">cargo<span class="w"> </span>add<span class="w"> </span>axonium</code></pre></div>
+<div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash"><span class="c1"># Package.swift: .package(url: "https://github.com/Root1V/axonium-sdk-swift", from: "0.3.0")</span>
+swift<span class="w"> </span>package<span class="w"> </span>add-dependency<span class="w"> </span>https://github.com/Root1V/axonium-sdk-swift<span class="w"> </span>--from<span class="w"> </span><span class="m">0</span>.3.0</code></pre></div>
+<div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">npm<span class="w"> </span>install<span class="w"> </span>axonium</code></pre></div>
 <h2>The smallest thing that works</h2>
 <p>Credentials are the only setting you must supply. The gateway issues its own tokens, so there is
 one address, and usually none to give:</p>
@@ -205,6 +210,22 @@ one address, and usually none to give:</p>
 <span class="w">    </span><span class="p">})</span>
 <span class="w">    </span><span class="p">.</span><span class="k">await</span><span class="o">?</span><span class="p">;</span>
 <span class="fm">println!</span><span class="p">(</span><span class="s">"{}"</span><span class="p">,</span><span class="w"> </span><span class="n">completion</span><span class="p">.</span><span class="n">content</span><span class="p">());</span></code></pre></div>
+<div class="code" data-language="swift" data-label="Swift"><pre><code class="language-swift"><span class="kd">let</span><span class="w"> </span><span class="nv">client</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="n">AxoniumClient</span><span class="p">(</span>
+<span class="w">    </span><span class="n">configuration</span><span class="p">:</span><span class="w"> </span><span class="n">AxoniumConfiguration</span><span class="p">(</span>
+<span class="w">        </span><span class="n">gatewayBaseURL</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="p">,</span><span class="w"> </span><span class="n">clientID</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="p">,</span><span class="w"> </span><span class="n">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="p">))</span>
+
+<span class="kd">let</span><span class="w"> </span><span class="nv">completion</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">chat</span><span class="p">(</span>
+<span class="w">    </span><span class="n">ChatRequest</span><span class="p">(</span><span class="n">model</span><span class="p">:</span><span class="w"> </span><span class="s">"qwen3-0.6b"</span><span class="p">,</span><span class="w"> </span><span class="n">messages</span><span class="p">:</span><span class="w"> </span><span class="p">[.</span><span class="n">user</span><span class="p">(</span><span class="s">"Say hello"</span><span class="p">)]))</span>
+<span class="bp">print</span><span class="p">(</span><span class="n">completion</span><span class="p">.</span><span class="n">content</span><span class="w"> </span><span class="p">??</span><span class="w"> </span><span class="s">""</span><span class="p">)</span></code></pre></div>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">Axonium</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">"axonium"</span><span class="p">;</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Axonium</span><span class="p">({</span><span class="w"> </span><span class="nx">clientId</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nx">clientSecret</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span><span class="p">});</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">completion</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">chat</span><span class="p">.</span><span class="nx">completions</span><span class="p">.</span><span class="nx">create</span><span class="p">({</span>
+<span class="w">  </span><span class="nx">model</span><span class="o">:</span><span class="w"> </span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">messages</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nx">role</span><span class="o">:</span><span class="w"> </span><span class="s2">"user"</span><span class="p">,</span><span class="w"> </span><span class="nx">content</span><span class="o">:</span><span class="w"> </span><span class="s2">"Say hello"</span><span class="w"> </span><span class="p">}],</span>
+<span class="p">});</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">content</span><span class="p">);</span></code></pre></div>
 </div><p>Credentials can come from the environment instead — <code>AXONIUM_CLIENT_ID</code> and
 <code>AXONIUM_CLIENT_SECRET</code>. The SDK never reads a <code>.env</code> file itself; loading one is the
 application's job, and <a href="04-configuration.html">Configuration</a> says why.</p>
@@ -231,9 +252,13 @@ the same shape non-streaming returns.</li>
 <li><a href="07-limits.html">What it does not do</a> — the limits, said out loud.</li>
 <li><a href="08-reference.html">Python API reference</a> — every exported symbol.</li>
 </ul>
-<p>Go and Rust reference documentation is generated by their own ecosystems:
-<a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">pkg.go.dev</a> and
-<a href="https://docs.rs/axonium/latest/axonium/">docs.rs</a>.</p>
+<p>Reference documentation for the other four is generated by their own ecosystems:
+<a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">pkg.go.dev</a> for Go,
+<a href="https://docs.rs/axonium/latest/axonium/">docs.rs</a> for Rust, DocC in the
+<a href="https://github.com/Root1V/axonium-sdk-swift">Swift repository</a>, and the <code>.d.ts</code> files plus
+<a href="https://github.com/Root1V/axonium-sdk/blob/main/typescript/docs/api.md"><code>docs/api.md</code></a> for
+TypeScript, which also ships a
+<a href="https://github.com/Root1V/axonium-sdk/blob/main/typescript/docs/migrating-from-python.md">migration guide from Python</a>.</p>
 <hr />
 <p><em>This page and the rest of this site are generated from <code>docs/*.md</code>. A test fails if the rendered
 HTML stops matching its source, and another fails if the reference stops matching the package.</em></p>

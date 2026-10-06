@@ -7,6 +7,29 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 ### Unreleased
 
+Nothing yet.
+
+### 0.2.0 — 2026-10-05
+
+**`meta.attempts` and `meta.waitedMs`, which this SDK has been computing since `0.1.0` and throwing
+away.** The retry loop tracked both, `sendJSON` dropped them, and the package exported an `Attempts`
+type that no public call ever returned — a type a consumer could name and never obtain.
+
+`waitedMs` is the number that matters: a respected `Retry-After` of up to 60 seconds looks from
+outside exactly like one slow call among fast ones, and three separate teams reported that as a hang.
+Subtract it from your own wall clock to get what the platform actually spent.
+
+**And unlike the other four, it is on errors too.** The site lists "a call that waited and then
+failed anyway reports none of this" as a known limit; here the error already carried `meta`, so the
+counters are stamped on before it leaves. That call is precisely the one whose duration needs
+explaining.
+
+The test that was supposed to cover this **read the counters off `send`'s internal return**, a shape
+no caller holds, so it stayed green while every consumer saw a retried call as a slow one. Rewritten
+against `sendJSON().meta`, where a caller stands, and mutation-tested: removing the threading turns
+it red.
+
+
 Re-vendored at `2026-10-04 · PRM-182/183/184`, which brings a new engine, a new error, and a trap.
 
 **`503 rerank-dialect-unknown` → `RerankDialectUnknownError`.** A reranker running on an engine whose rerank request

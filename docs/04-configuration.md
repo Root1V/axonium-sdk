@@ -91,10 +91,30 @@ let client = Client::new(Config {
 })?;
 ```
 
-The three do not carve the budget up identically, and the docs will not pretend they do. Python
-exposes httpx's four phases (`connect`, `read`, `write`, `pool`); Go and Rust bound the whole call
-with `Request`. What matters is the same everywhere: the read budget is generous because generation
-is slow, and `Stream`/`stream_read` is separate and shorter.
+```swift
+let client = try AxoniumClient(
+    configuration: AxoniumConfiguration(
+        gatewayBaseURL: "...",
+        clientID: "...",
+        clientSecret: "...",
+        timeouts: Timeouts(connect: 10, request: 600, streamRead: 180, auth: 30)))
+```
+
+```typescript
+const client = new Axonium({
+  clientId: "...",
+  clientSecret: "...",
+  // Milliseconds, because that is what every timer in this runtime takes and converting at the
+  // boundary is one more place to be wrong by a factor of a thousand.
+  timeouts: { connect: 10_000, request: 600_000, stream: 180_000 },
+});
+```
+
+The five do not carve the budget up identically, and the docs will not pretend they do. Python
+exposes httpx's four phases (`connect`, `read`, `write`, `pool`); Go, Rust and Swift bound the whole
+call with `request`; TypeScript counts in milliseconds because that is what its runtime's timers
+take. What matters is the same everywhere: the read budget is generous because generation is slow,
+and the streaming one is separate and shorter.
 
 Read timeouts are generous because generation is slow. The streaming read timeout is separate and
 shorter: it bounds the gap **between chunks**, not the length of the whole stream, so a stalled
@@ -120,9 +140,24 @@ let completion = tokio::time::timeout(
 ).await??;
 ```
 
-Only Python takes a per-call `timeout`. Go and Rust deliberately do not add one: a deadline on a
-single call is what `context.Context` and `tokio::time::timeout` already are, and a second
-mechanism beside them is one more place for the two to disagree.
+```swift
+// No per-call timeout: cancel the enclosing Task, which tears down the request.
+let task = Task { try await client.chat(request) }
+Task { try await Task.sleep(for: .seconds(30)); task.cancel() }
+let completion = try await task.value
+```
+
+```typescript
+// Either a per-call timeout, or your own AbortSignal -- whichever fires first wins.
+await client.chat.completions.create(request, { timeout: 30_000 });
+await client.chat.completions.create(request, { signal: AbortSignal.timeout(30_000) });
+```
+
+**Python and TypeScript take a per-call `timeout`; Go, Rust and Swift deliberately do not.** A
+deadline on a single call is already what `context.Context`, `tokio::time::timeout` and task
+cancellation are, and a second mechanism beside them is one more place for the two to disagree.
+TypeScript has no such built-in, so it carries its own — and also accepts your `AbortSignal`, with
+whichever fires first winning.
 
 **A client-side timeout is not retried**, and the error says why — see [Failure](03-failure.md).
 
@@ -166,6 +201,27 @@ let client = Client::new(Config {
 })?;
 ```
 
+```swift
+let client = try AxoniumClient(
+    configuration: AxoniumConfiguration(
+        gatewayBaseURL: "...",
+        clientID: "...",
+        clientSecret: "...",
+        retry: RetryPolicy(maxAttempts: 3, initialBackoff: 0.5, maxBackoff: 60, jitter: true)))
+```
+
+```typescript
+const client = new Axonium({
+  clientId: "...",
+  clientSecret: "...",
+  retry: { maxAttempts: 3, initialBackoff: 500, maxBackoff: 60_000, jitter: true },
+});
+
+// Or turn it off entirely, which is a policy and not an absence of one.
+import { NO_RETRY } from "axonium";
+const strict = new Axonium({ clientId: "...", clientSecret: "...", retry: NO_RETRY });
+```
+
 `max_backoff` does double duty: it is the backoff ceiling **and** the longest server-supplied
 `Retry-After` the SDK will sit through. Setting it to zero turns every wait into an immediate
 error carrying `retry_after` — which is what you want in a request handler that must not block.
@@ -176,11 +232,19 @@ Point `ca_bundle` at your deployment's trust chain. There is no flag to disable 
 there will not be one: the failure mode of that flag is that it gets set during an incident and
 never unset.
 
+Swift takes `additionalTrustAnchors` as **data** rather than a path, because an app bundles a
+certificate as a resource or pulls it from an MDM profile, and a path into a sandboxed container is
+not something a caller can usefully name.
+
+**TypeScript has no equivalent and cannot have one** without breaking its zero-dependency promise:
+native `fetch` does not expose TLS trust. On Node, set `NODE_EXTRA_CA_CERTS` on the process. That is
+a real gap rather than a design preference, and it is said here instead of being discovered.
+
 ## Connection reuse
 
 One client per process. The connection pool and the cached token live on it, so constructing one
 per request throws both away — and re-fetches a token you already had.
 
-All three clients are safe for concurrent use.
+All five clients are safe for concurrent use.
 
 Next: [Composed operations](05-composed.md).

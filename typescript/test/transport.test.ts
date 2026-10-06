@@ -113,7 +113,11 @@ test("a retryable error is retried up to the attempt budget and then raised", as
   assert.equal(stub.countFor(CHAT), DEFAULT_RETRY.maxAttempts, "attempts did not match the policy");
 });
 
-test("a retry that succeeds reports how many attempts it took", async () => {
+test("a retry that succeeds reports how many attempts it took, on the caller's path", async () => {
+  // Asserted through `meta`, which is what a caller holds. The first version of this test read the
+  // `attempts` field off `send`'s return -- a shape no public call hands back, so it was green while
+  // `sendJSON` dropped both numbers and every caller of this SDK saw a retried call as a slow one.
+  // The other four SDKs put them on meta; this one computed them and threw them away.
   const stub = new Stub()
     .token()
     .on(
@@ -121,9 +125,38 @@ test("a retry that succeeds reports how many attempts it took", async () => {
       { status: 503, body: problemBody("capacity-exhausted", { status: 503 }) },
       { body: JSON.stringify({ ok: 1 }) },
     );
-  const { attempts } = await transport(stub).send("POST", CHAT, { body: {} });
-  assert.equal(attempts.attempts, 2);
-  assert.ok(attempts.waitedMs > 0, "a wait happened and was not reported");
+  const { meta } = await transport(stub).sendJSON("POST", CHAT, { body: {} });
+  assert.equal(meta.attempts, 2);
+  assert.ok(meta.waitedMs > 0, "a wait happened and was not reported");
+});
+
+test("a call that waited and then failed anyway still reports the wait", async () => {
+  // The call whose duration most needs explaining. Four of the five SDKs cannot answer it -- the
+  // exception carries no response metadata at all -- and the docs list that as a known limit. Here
+  // the error already carries `meta`, so the only thing missing was stamping the loop's counters on
+  // it before it leaves.
+  const stub = new Stub()
+    .token()
+    .on(CHAT, { status: 503, body: problemBody("capacity-exhausted", { status: 503 }) });
+  await assert.rejects(transport(stub).sendJSON("POST", CHAT, { body: {} }), (error: unknown) => {
+    assert.ok(error instanceof APIError);
+    assert.equal(
+      error.meta.attempts,
+      3,
+      "gave up after the attempt budget and said it was the first",
+    );
+    assert.ok(error.meta.waitedMs > 0, "slept between attempts and reported no wait");
+    return true;
+  });
+});
+
+test("a first-time success says it waited for nothing, rather than saying nothing", async () => {
+  // Zero and absent are different claims. A caller subtracting meta.waitedMs from its own latency
+  // must not silently subtract undefined, so these are required fields and not optional ones.
+  const stub = new Stub().token().on(CHAT, { body: JSON.stringify({ ok: 1 }) });
+  const { meta } = await transport(stub).sendJSON("POST", CHAT, { body: {} });
+  assert.equal(meta.attempts, 1);
+  assert.equal(meta.waitedMs, 0);
 });
 
 test("no retries means one request, and the first failure is what the caller sees", async () => {

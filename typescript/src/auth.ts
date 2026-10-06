@@ -322,6 +322,10 @@ function tokenError(response: Response, payload: Record<string, unknown>, text: 
       instance: typeof payload["instance"] === "string" ? payload["instance"] : "",
       retryAfter: undefined,
       meta: {
+        // One attempt, no deliberate sleep: the token request has no retry loop of its own, so these
+        // are facts here rather than defaults.
+        attempts: 1,
+        waitedMs: 0,
         // Body first, then the headers. Same fallback as every other error path, and load-bearing for
         // the same reason: these envelopes carry the ids in the body and some non-gateway answers
         // carry them only in the headers.

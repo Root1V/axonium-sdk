@@ -247,10 +247,24 @@ body was evaluated once, at import, before anything had been configured.</p>
 <span class="w">    </span><span class="p">},</span>
 <span class="w">    </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
 <span class="p">})</span><span class="o">?</span><span class="p">;</span></code></pre></div>
-</div><p>The three do not carve the budget up identically, and the docs will not pretend they do. Python
-exposes httpx's four phases (<code>connect</code>, <code>read</code>, <code>write</code>, <code>pool</code>); Go and Rust bound the whole call
-with <code>Request</code>. What matters is the same everywhere: the read budget is generous because generation
-is slow, and <code>Stream</code>/<code>stream_read</code> is separate and shorter.</p>
+<div class="code" data-language="swift" data-label="Swift"><pre><code class="language-swift"><span class="kd">let</span><span class="w"> </span><span class="nv">client</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="n">AxoniumClient</span><span class="p">(</span>
+<span class="w">    </span><span class="n">configuration</span><span class="p">:</span><span class="w"> </span><span class="n">AxoniumConfiguration</span><span class="p">(</span>
+<span class="w">        </span><span class="n">gatewayBaseURL</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="p">,</span>
+<span class="w">        </span><span class="n">clientID</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="p">,</span>
+<span class="w">        </span><span class="n">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="p">,</span>
+<span class="w">        </span><span class="n">timeouts</span><span class="p">:</span><span class="w"> </span><span class="n">Timeouts</span><span class="p">(</span><span class="n">connect</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="n">request</span><span class="p">:</span><span class="w"> </span><span class="mi">600</span><span class="p">,</span><span class="w"> </span><span class="n">streamRead</span><span class="p">:</span><span class="w"> </span><span class="mi">180</span><span class="p">,</span><span class="w"> </span><span class="n">auth</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span><span class="p">)))</span></code></pre></div>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Axonium</span><span class="p">({</span>
+<span class="w">  </span><span class="nx">clientId</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">clientSecret</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span>
+<span class="w">  </span><span class="c1">// Milliseconds, because that is what every timer in this runtime takes and converting at the</span>
+<span class="w">  </span><span class="c1">// boundary is one more place to be wrong by a factor of a thousand.</span>
+<span class="w">  </span><span class="nx">timeouts</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">connect</span><span class="o">:</span><span class="w"> </span><span class="kt">10_000</span><span class="p">,</span><span class="w"> </span><span class="nx">request</span><span class="o">:</span><span class="w"> </span><span class="kt">600_000</span><span class="p">,</span><span class="w"> </span><span class="nx">stream</span><span class="o">:</span><span class="w"> </span><span class="kt">180_000</span><span class="w"> </span><span class="p">},</span>
+<span class="p">});</span></code></pre></div>
+</div><p>The five do not carve the budget up identically, and the docs will not pretend they do. Python
+exposes httpx's four phases (<code>connect</code>, <code>read</code>, <code>write</code>, <code>pool</code>); Go, Rust and Swift bound the whole
+call with <code>request</code>; TypeScript counts in milliseconds because that is what its runtime's timers
+take. What matters is the same everywhere: the read budget is generous because generation is slow,
+and the streaming one is separate and shorter.</p>
 <p>Read timeouts are generous because generation is slow. The streaming read timeout is separate and
 shorter: it bounds the gap <strong>between chunks</strong>, not the length of the whole stream, so a stalled
 stream is detected without capping a long one.</p>
@@ -264,9 +278,18 @@ stream is detected without capping a long one.</p>
 <span class="w">    </span><span class="n">Duration</span><span class="p">::</span><span class="n">from_secs</span><span class="p">(</span><span class="mi">30</span><span class="p">),</span>
 <span class="w">    </span><span class="n">client</span><span class="p">.</span><span class="n">chat</span><span class="p">(</span><span class="o">&amp;</span><span class="n">request</span><span class="p">),</span>
 <span class="p">).</span><span class="k">await</span><span class="o">??</span><span class="p">;</span></code></pre></div>
-</div><p>Only Python takes a per-call <code>timeout</code>. Go and Rust deliberately do not add one: a deadline on a
-single call is what <code>context.Context</code> and <code>tokio::time::timeout</code> already are, and a second
-mechanism beside them is one more place for the two to disagree.</p>
+<div class="code" data-language="swift" data-label="Swift"><pre><code class="language-swift"><span class="c1">// No per-call timeout: cancel the enclosing Task, which tears down the request.</span>
+<span class="kd">let</span><span class="w"> </span><span class="nv">task</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">Task</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">chat</span><span class="p">(</span><span class="n">request</span><span class="p">)</span><span class="w"> </span><span class="p">}</span>
+<span class="n">Task</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="n">Task</span><span class="p">.</span><span class="n">sleep</span><span class="p">(</span><span class="k">for</span><span class="p">:</span><span class="w"> </span><span class="p">.</span><span class="n">seconds</span><span class="p">(</span><span class="mi">30</span><span class="p">));</span><span class="w"> </span><span class="n">task</span><span class="p">.</span><span class="n">cancel</span><span class="p">()</span><span class="w"> </span><span class="p">}</span>
+<span class="kd">let</span><span class="w"> </span><span class="nv">completion</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="n">task</span><span class="p">.</span><span class="n">value</span></code></pre></div>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="c1">// Either a per-call timeout, or your own AbortSignal -- whichever fires first wins.</span>
+<span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">chat</span><span class="p">.</span><span class="nx">completions</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="nx">request</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">timeout</span><span class="o">:</span><span class="w"> </span><span class="kt">30_000</span><span class="w"> </span><span class="p">});</span>
+<span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">chat</span><span class="p">.</span><span class="nx">completions</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="nx">request</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">signal</span><span class="o">:</span><span class="w"> </span><span class="kt">AbortSignal.timeout</span><span class="p">(</span><span class="mf">30</span><span class="nx">_000</span><span class="p">)</span><span class="w"> </span><span class="p">});</span></code></pre></div>
+</div><p><strong>Python and TypeScript take a per-call <code>timeout</code>; Go, Rust and Swift deliberately do not.</strong> A
+deadline on a single call is already what <code>context.Context</code>, <code>tokio::time::timeout</code> and task
+cancellation are, and a second mechanism beside them is one more place for the two to disagree.
+TypeScript has no such built-in, so it carries its own — and also accepts your <code>AbortSignal</code>, with
+whichever fires first winning.</p>
 <p><strong>A client-side timeout is not retried</strong>, and the error says why — see <a href="03-failure.html">Failure</a>.</p>
 <h2>Retry policy</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">RetryPolicy</span>
@@ -298,6 +321,21 @@ mechanism beside them is one more place for the two to disagree.</p>
 <span class="w">    </span><span class="p">},</span>
 <span class="w">    </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
 <span class="p">})</span><span class="o">?</span><span class="p">;</span></code></pre></div>
+<div class="code" data-language="swift" data-label="Swift"><pre><code class="language-swift"><span class="kd">let</span><span class="w"> </span><span class="nv">client</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="n">AxoniumClient</span><span class="p">(</span>
+<span class="w">    </span><span class="n">configuration</span><span class="p">:</span><span class="w"> </span><span class="n">AxoniumConfiguration</span><span class="p">(</span>
+<span class="w">        </span><span class="n">gatewayBaseURL</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="p">,</span>
+<span class="w">        </span><span class="n">clientID</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="p">,</span>
+<span class="w">        </span><span class="n">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="s">"..."</span><span class="p">,</span>
+<span class="w">        </span><span class="n">retry</span><span class="p">:</span><span class="w"> </span><span class="n">RetryPolicy</span><span class="p">(</span><span class="n">maxAttempts</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="n">initialBackoff</span><span class="p">:</span><span class="w"> </span><span class="mf">0.5</span><span class="p">,</span><span class="w"> </span><span class="n">maxBackoff</span><span class="p">:</span><span class="w"> </span><span class="mi">60</span><span class="p">,</span><span class="w"> </span><span class="n">jitter</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">)))</span></code></pre></div>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Axonium</span><span class="p">({</span>
+<span class="w">  </span><span class="nx">clientId</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">clientSecret</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">retry</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">maxAttempts</span><span class="o">:</span><span class="w"> </span><span class="kt">3</span><span class="p">,</span><span class="w"> </span><span class="nx">initialBackoff</span><span class="o">:</span><span class="w"> </span><span class="kt">500</span><span class="p">,</span><span class="w"> </span><span class="nx">maxBackoff</span><span class="o">:</span><span class="w"> </span><span class="kt">60_000</span><span class="p">,</span><span class="w"> </span><span class="nx">jitter</span><span class="o">:</span><span class="w"> </span><span class="kt">true</span><span class="w"> </span><span class="p">},</span>
+<span class="p">});</span>
+
+<span class="c1">// Or turn it off entirely, which is a policy and not an absence of one.</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">NO_RETRY</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">"axonium"</span><span class="p">;</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">strict</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Axonium</span><span class="p">({</span><span class="w"> </span><span class="nx">clientId</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nx">clientSecret</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nx">retry</span><span class="o">:</span><span class="w"> </span><span class="kt">NO_RETRY</span><span class="w"> </span><span class="p">});</span></code></pre></div>
 </div><p><code>max_backoff</code> does double duty: it is the backoff ceiling <strong>and</strong> the longest server-supplied
 <code>Retry-After</code> the SDK will sit through. Setting it to zero turns every wait into an immediate
 error carrying <code>retry_after</code> — which is what you want in a request handler that must not block.</p>
@@ -305,10 +343,16 @@ error carrying <code>retry_after</code> — which is what you want in a request 
 <p>Point <code>ca_bundle</code> at your deployment's trust chain. There is no flag to disable verification, and
 there will not be one: the failure mode of that flag is that it gets set during an incident and
 never unset.</p>
+<p>Swift takes <code>additionalTrustAnchors</code> as <strong>data</strong> rather than a path, because an app bundles a
+certificate as a resource or pulls it from an MDM profile, and a path into a sandboxed container is
+not something a caller can usefully name.</p>
+<p><strong>TypeScript has no equivalent and cannot have one</strong> without breaking its zero-dependency promise:
+native <code>fetch</code> does not expose TLS trust. On Node, set <code>NODE_EXTRA_CA_CERTS</code> on the process. That is
+a real gap rather than a design preference, and it is said here instead of being discovered.</p>
 <h2>Connection reuse</h2>
 <p>One client per process. The connection pool and the cached token live on it, so constructing one
 per request throws both away — and re-fetches a token you already had.</p>
-<p>All three clients are safe for concurrent use.</p>
+<p>All five clients are safe for concurrent use.</p>
 <p>Next: <a href="05-composed.html">Composed operations</a>.</p>
 
 <div class="pager"><a class="prev" href="03-failure.html"><span class="dir">Previous</span>Failure, retries and idempotency</a><a class="next" href="05-composed.html"><span class="dir">Next</span>Composed operations</a></div>

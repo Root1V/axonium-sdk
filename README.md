@@ -35,7 +35,7 @@ equivalent.
 | Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.0` | `v0.6.0` |
 | Rust | `axonium = "0.6"` | [`0.6.0`](https://crates.io/crates/axonium) on crates.io |
 | Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.0")` | [`0.3.0`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
-| TypeScript | `npm install axonium` | [`0.1.0`](https://www.npmjs.com/package/axonium) on npm |
+| TypeScript | `npm install axonium` | [`0.2.0`](https://www.npmjs.com/package/axonium) on npm |
 
 All five are published and implement the same surface. Python was built first as the reference
 implementation; every behaviour they share is pinned by the contract corpus in

@@ -46,6 +46,8 @@ function problem(overrides: Partial<ProblemDetails> = {}): ProblemDetails {
     instance: "/v1/chat/completions",
     retryAfter: undefined,
     meta: {
+      attempts: 1,
+      waitedMs: 0,
       requestId: undefined,
       traceId: undefined,
       instance: undefined,

@@ -77,6 +77,22 @@ completion.meta.waited_for;
 completion.meta.attempts;
 ```
 
+```swift
+completion.meta.requestID     // take this to the platform team
+completion.meta.instanceID    // which instance served it
+completion.meta.rateLimit     // the budget as of this response
+completion.meta.waitedFor     // seconds this SDK spent deliberately asleep
+completion.meta.attempts      // how many HTTP attempts produced this
+```
+
+```typescript
+completion.meta.requestId; // take this to the platform team
+completion.meta.instanceId; // which instance served it
+completion.meta.rateLimit; // the budget as of this response
+completion.meta.waitedMs; // milliseconds this SDK spent deliberately asleep
+completion.meta.attempts; // how many HTTP attempts produced this
+```
+
 `waited_s` exists because a respected `Retry-After` of 0–60 seconds looks from the outside like one
 slow call among fast ones. Three separate teams reported exactly that as a hang. The SDK does log
 it, but a log line is invisible by default and a latency metric cannot read one — so the number
@@ -86,9 +102,18 @@ it from your own wall clock to get what the platform actually spent.
 ## The rate-limit snapshot
 
 `meta.rate_limit` carries the six `X-RateLimit-*` counters and, importantly, a `scope` naming
-**which budget** they describe. The endpoints hold separate budgets — `embeddings`, `rerank`,
-`chat_completions` — so a `remaining_requests` read after a chat call says nothing about your
-embeddings budget.
+**which budget** they describe. The endpoints hold separate budgets, so a `remaining_requests` read
+after a chat call says nothing about your embeddings budget.
+
+The set of scope names is **read from the header and not listed here**. This page used to name
+three of them; five SDKs each kept their own list in a doc comment, and they had already drifted —
+one said `chat` where the header says `chat_completions`, which is a name you would key a map by and
+never match.
+
+The window is worth designing against, though, and it is not a sliding one: the budget is a **fixed
+60-second bucket aligned to the wall clock**, and the whole allowance returns at second 0 of each
+minute. So a burst can straddle a boundary and pass where the same burst seconds earlier is refused.
+Pace against the remaining count, never against a rate you assumed.
 
 ```python
 client.last_rate_limit          # what the most recent call reported
@@ -105,10 +130,26 @@ client.last_rate_limit();                  // what the most recent call reported
 client.rate_limits().get("embeddings");    // the most recent reading for that budget
 ```
 
+```swift
+// No client-held map yet: read the budget off the response you just got.
+completion.meta.rateLimit?.scope              // which budget these numbers describe
+completion.meta.rateLimit?.remainingRequests  // what is left of it
+```
+
+```typescript
+client.lastRateLimit; // what the most recent call reported
+completion.meta.rateLimit; // the budget as of this response, and the one to key yourself
+```
+
 Read `client.rate_limits`, not `last_rate_limit`, when the question is "how much of budget X is
 left". The distinction is not pedantry: before `scope` existed, a suggestion pipeline touching
 three endpoints in a row left `last_rate_limit` describing whichever answered last, with nothing in
 the numbers saying so.
+
+**The per-scope map exists in Python, Go and Rust only.** TypeScript has `lastRateLimit` and Swift
+has neither — in both, `meta.rate_limit` on each response carries the same numbers with the `scope`
+attached, so keying them yourself is three lines and is what the map does. Said here rather than
+left as a tab that quietly shows something different.
 
 **What it does not do:** the token counters are the gateway's post-hoc accounting, not a
 reservation. They are a strong signal, not a guarantee you will not see a `429`.

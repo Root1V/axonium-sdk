@@ -67,6 +67,35 @@ let client = Client::new(Config {
 })?;
 ```
 
+```swift
+// URLProtocol, through the configuration's own sessionConfiguration hook -- which exists for this.
+final class FakeGateway: URLProtocol { /* canInit, startLoading, ... */ }
+
+let session = URLSessionConfiguration.ephemeral
+session.protocolClasses = [FakeGateway.self]
+
+let client = try AxoniumClient(
+    configuration: AxoniumConfiguration(
+        gatewayBaseURL: "https://gw.test", clientID: "i", clientSecret: "s",
+        sessionConfiguration: session))
+```
+
+```typescript
+// No mocking library and no patched global: `fetch` is injected, so the fake IS the dependency.
+// That is why this package's own suite has a test asserting no HTTP-mocking library is installed.
+const client = new Axonium({
+  gatewayBaseURL: "https://gw.test",
+  clientId: "i",
+  clientSecret: "s",
+  fetch: async (url, init) => {
+    if (String(url).endsWith("/oauth2/token")) {
+      return Response.json({ access_token: "t", token_type: "bearer", expires_in: 300 });
+    }
+    return Response.json(COMPLETION);
+  },
+});
+```
+
 ## Make the waits stop costing wall-clock
 
 A retry test that honours a real `Retry-After` takes as long as the wait. Set the policy to remove
@@ -101,6 +130,23 @@ let client = Client::new(Config {
 })?;
 ```
 
+```swift
+let client = try AxoniumClient(
+    configuration: AxoniumConfiguration(
+        gatewayBaseURL: "https://gw.test", clientID: "i", clientSecret: "s",
+        retry: RetryPolicy(maxAttempts: 3, initialBackoff: 0, maxBackoff: 0, jitter: false)))
+```
+
+```typescript
+const client = new Axonium({
+  gatewayBaseURL: "https://gw.test",
+  clientId: "i",
+  clientSecret: "s",
+  retry: { maxAttempts: 3, initialBackoff: 0, maxBackoff: 0, jitter: false },
+  fetch: fakeGateway,
+});
+```
+
 `max_backoff=0` has a second effect worth knowing: any server-supplied `Retry-After` above zero is
 then **surfaced as an error rather than slept through**, which is the same rule that keeps a long
 wait from blocking a real caller. If your test asserts that a long wait is handed back, this is how
@@ -125,8 +171,13 @@ will stop matching and nobody will notice.
 
 Worth knowing, because it tells you what is already covered and what is not:
 
-- **One corpus, three runners.** Python, Go and Rust replay the same manifest against the same
-  bytes. They share no code, so matching behaviour is verified rather than intended.
+- **One corpus, five runners.** Python, Go, Rust, TypeScript and Swift replay the same manifest
+  against the same bytes. They share no code, so matching behaviour is verified rather than
+  intended. Swift vendors the corpus as a submodule; the other four read it from the repository.
+- **The corpus grows when mutation finds a hole in it**, not on a schedule. The most recent case
+  exists because mutating a runner to match the literal string `"stream interrupted"` left every
+  other case green — the corpus could not tell *detect the key* from *compare the text*, which is
+  the distinction the platform explicitly asked for.
 - **Every test is written twice** in Python, sync and async, from one parametrised fixture. The
   previous generation of this SDK had zero async tests.
 - **Mutation testing is the acceptance bar.** A test that passes when the implementation is broken
@@ -137,6 +188,11 @@ Run the whole thing exactly as CI does:
 ```bash
 ./scripts/verify.sh
 ```
+
+It mirrors the workflow files deliberately. A local check that is *nearly* the CI check reports
+green and hides the difference — which this repository has paid for twice, once with a lint step
+that needed a build only present on one machine, and once with a test suite green on the Node
+version the author had and red on the one the package promises.
 
 ## Integration tests
 

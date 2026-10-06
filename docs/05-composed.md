@@ -85,6 +85,48 @@ loop {
 }
 ```
 
+```swift
+var messages: [Message] = [.user("What is the weather in Lima?")]
+
+while true {
+    var request = ChatRequest(model: "qwen3-0.6b", messages: messages)
+    request.tools = tools
+    let completion = try await client.chat(request)
+
+    let calls = completion.choices.first?.message.toolCalls ?? []
+    if calls.isEmpty { break }
+
+    messages.append(completion.choices[0].message)      // sent straight back
+    for call in calls {
+        let result = run(call.name, try call.decodedArguments())
+        messages.append(Message(role: "tool", content: .text(result), toolCallID: call.id))
+    }
+}
+```
+
+```typescript
+import { decodedArguments } from "axonium";
+
+const messages = [{ role: "user", content: "What is the weather in Lima?" }];
+
+for (;;) {
+  const completion = await client.chat.completions.create({
+    model: "qwen3-0.6b",
+    messages,
+    tools: TOOLS,
+  });
+
+  const calls = completion.toolCalls;
+  if (calls.length === 0) break;
+
+  messages.push(completion.choices[0]!.message); // sent straight back
+  for (const call of calls) {
+    const result = await runTool(call.name, decodedArguments(call));
+    messages.push({ role: "tool", tool_call_id: call.id, content: result });
+  }
+}
+```
+
 Two things to know:
 
 **`arguments` stays the model's JSON string.** Decoding it eagerly would mean a response model that
@@ -163,8 +205,42 @@ let answer = client
     .await?;
 ```
 
-Three calls, three **separate** rate-limit budgets — `embeddings`, `rerank` and `chat_completions`
-each hold their own. So this pipeline costs one unit from each, not three from one, and the budget
+```swift
+let vector = try await client.embeddings(
+    EmbeddingRequest(model: "qwen3-embedding", input: [query]))
+let candidates = store.nearest(vector.data[0].embedding, k: 50)
+
+let ranked = try await client.rerank(
+    RerankRequest(
+        model: "qwen3-reranker", query: query, documents: candidates.map(\.text)))
+let best = ranked.ranking.prefix(5).map { candidates[$0] }
+
+let answer = try await client.chat(
+    ChatRequest(model: "qwen3-0.6b", messages: [.user(promptWith(best, query))]))
+```
+
+```typescript
+const queryVector = await client.embeddings.create({
+  model: "qwen3-embedding",
+  input: query,
+});
+const candidates = vectorStore.nearest(queryVector.data[0]!.embedding, 50);
+
+const ranked = await client.rerank.create({
+  model: "qwen3-reranker",
+  query,
+  documents: candidates.map((c) => c.text),
+});
+const best = ranked.ranking.slice(0, 5).map((index) => candidates[index]!);
+
+const answer = await client.chat.completions.create({
+  model: "qwen3-0.6b",
+  messages: [{ role: "user", content: promptWith(best, query) }],
+});
+```
+
+Three calls, three **separate** rate-limit budgets: each endpoint holds its own, and the response
+names which one it is reporting in `rate_limit.scope`. So this pipeline costs one unit from each, not three from one, and the budget
 you need to watch is the one for the endpoint you are about to call:
 
 ```python
@@ -185,6 +261,21 @@ if let Some(budget) = client.rate_limits().get("embeddings") {
     if budget.remaining_requests == Some(0) {
         // ...
     }
+}
+```
+
+```swift
+// No client-held map here: key the snapshot off the response you just got.
+if vector.meta.rateLimit?.remainingRequests == 0 {
+    // ...
+}
+```
+
+```typescript
+// Likewise -- `client.lastRateLimit` is the most recent reading from ANY endpoint, so for a
+// specific budget read it off that endpoint's own response.
+if (queryVector.meta.rateLimit?.remainingRequests === 0) {
+  // ...
 }
 ```
 
@@ -220,6 +311,24 @@ let row = client.usage(&completion.meta.request_id).await?;
 row.usage.total_tokens;
 row.cost_usd;
 row.termination_reason;     // "complete", or why it stopped early
+```
+
+```swift
+let completion = try await client.chat(request)
+
+let row = try await client.usage(requestID: completion.meta.requestID)
+row.usage.totalTokens
+row.costUSD
+row.terminationReason       // "complete", or why it stopped early
+```
+
+```typescript
+const completion = await client.chat.completions.create(request);
+
+const row = await client.usage.get(completion.meta.requestId!);
+row.usage.totalTokens;
+row.costUsd;
+row.terminationReason; // "complete", or why it stopped early
 ```
 
 No `admin:read` needed — this is per-request, and it is your request.
@@ -278,6 +387,29 @@ let results = futures::future::join_all(questions.iter().map(|q| {
     })
 }))
 .await;
+```
+
+```swift
+let results = try await withThrowingTaskGroup(of: ChatCompletion.self) { group in
+    for question in questions {
+        group.addTask {
+            try await client.chat(
+                ChatRequest(model: "qwen3-0.6b", messages: [.user(question)]))
+        }
+    }
+    return try await group.reduce(into: []) { $0.append($1) }
+}
+```
+
+```typescript
+const results = await Promise.all(
+  questions.map((question) =>
+    client.chat.completions.create({
+      model: "qwen3-0.6b",
+      messages: [{ role: "user", content: question }],
+    }),
+  ),
+);
 ```
 
 Concurrency is bounded by your rate-limit budget, not by the client. Sixty requests a minute

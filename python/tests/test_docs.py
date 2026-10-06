@@ -34,9 +34,12 @@ def _load_renderer() -> Any:
     return module
 
 
-# Names cited in prose that are deliberately not ours: standard library, test tools, and the
-# gateway's own vocabulary. Anything not here has to exist in one of the three SDKs.
+# Names cited in prose that are deliberately not ours: standard library, platform APIs, test tools,
+# and the gateway's own vocabulary. Anything not here has to exist in one of the four in-repo SDKs.
 FOREIGN = {
+    "AbortSignal",  # the Web platform's, which the TypeScript SDK accepts rather than defines
+    "URLProtocol",  # Foundation's, how a Swift caller fakes the transport
+    "AutoProcessor",  # the inference platform's vocabulary, named in a payload_schema discussion
     "Axonium",  # the product name, in prose
     "Copy",
     "Copied",
@@ -95,7 +98,12 @@ def narrative_pages() -> list[Path]:
 
 
 def public_names() -> set[str]:
-    """Every identifier the three SDKs export, gathered from the sources rather than a list."""
+    """Every identifier the four in-repo SDKs export, gathered from the sources rather than a list.
+
+    Swift lives in its own repository and is not checkable from here. Its names are covered by the
+    mirror of this test in that repository, which reads the same pages through the corpus submodule
+    -- rather than by a hand-kept list here, which would be a fifth copy of a thing that drifts.
+    """
     names = set(axonium.__all__)
     for source in (REPO / "go" / "axonium").glob("*.go"):
         if source.name.endswith("_test.go"):
@@ -108,6 +116,12 @@ def public_names() -> set[str]:
         text = source.read_text(encoding="utf-8")
         names |= set(re.findall(r"pub (?:struct|enum|trait|fn|const) (\w+)", text))
         names |= set(re.findall(r"^\s*pub (\w+):", text, re.M))
+    for source in (REPO / "typescript" / "src").rglob("*.ts"):
+        text = source.read_text(encoding="utf-8")
+        names |= set(
+            re.findall(r"export (?:class|interface|type|function|const|abstract class) (\w+)", text)
+        )
+        names |= set(re.findall(r"^\s*(?:readonly )?(\w+)[?]?:", text, re.M))  # interface fields
     return names
 
 
@@ -251,30 +265,39 @@ def code_groups(page: Path) -> list[list[str]]:
     return [[language for _, language, _ in group] for group in groups]
 
 
-class TestEveryExampleSpeaksAllThreeLanguages:
-    """Three SDKs documented on one site, so an example in one language is an example missing two.
+#: The languages a tab group must speak, READ FROM THE RENDERER rather than written again here.
+#: The previous version kept its own ``{"python", "go", "rust"}`` in two places, so when a fourth
+#: and then a fifth SDK shipped, this guard went on certifying three-language groups as complete --
+#: a test that agreed with the site about a number both of them had got wrong.
+SDK_LANGUAGES = set(_load_renderer().TAB_LANGUAGES)
 
-    Both of these come from real defects. A group rendered as four tabs reading
-    "Python, Python, Go, Rust" with two of them empty, and most groups showed Python alone.
+
+class TestEveryExampleSpeaksEveryLanguage:
+    """One site for every SDK, so an example in one language is an example missing the rest.
+
+    All of these come from real defects. A group rendered as four tabs reading
+    "Python, Python, Go, Rust" with two of them empty; most groups showed Python alone; and the
+    whole site spoke three languages while the matrix on its own front page listed five.
     """
 
     @pytest.mark.parametrize("page", narrative_pages(), ids=lambda p: p.name)
-    def test_a_group_showing_one_sdk_language_shows_all_three(self, page: Path) -> None:
-        languages = {"python", "go", "rust"}
+    def test_a_group_showing_one_sdk_language_shows_them_all(self, page: Path) -> None:
         incomplete = [
             group
             for group in code_groups(page)
-            if set(group) & languages and not set(group) >= languages
+            if set(group) & SDK_LANGUAGES and not set(group) >= SDK_LANGUAGES
         ]
-        assert not incomplete, f"{page.name}: groups missing a language: {incomplete}"
+        assert not incomplete, (
+            f"{page.name}: {len(incomplete)} group(s) missing a language. "
+            f"Expected all of {sorted(SDK_LANGUAGES)}; got: {incomplete}"
+        )
 
     @pytest.mark.parametrize("page", narrative_pages(), ids=lambda p: p.name)
     def test_no_group_repeats_a_language(self, page: Path) -> None:
-        languages = {"python", "go", "rust"}
         repeated = [
             group
             for group in code_groups(page)
-            if set(group) & languages and len(group) != len(set(group))
+            if set(group) & SDK_LANGUAGES and len(group) != len(set(group))
         ]
         assert not repeated, f"{page.name}: a tabset would show duplicate tabs: {repeated}"
 

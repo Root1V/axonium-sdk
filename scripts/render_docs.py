@@ -31,10 +31,22 @@ SITE = "Axonium"
 TAGLINE = "Client SDKs for the Prometheus inference platform"
 REPO_URL = "https://github.com/Root1V/axonium-sdk"
 
-# Languages a tab group can contain. Shell is deliberately absent: tabs exist for one operation
-# expressed in three languages, and three different shell commands are three different operations
-# that happen to share a syntax -- grouped, they render as "Shell / Shell / Shell".
-TAB_LANGUAGES = {"python": "Python", "go": "Go", "rust": "Rust"}
+# Languages a tab group can contain, in the order a group should list them. Shell is deliberately
+# absent: tabs exist for ONE operation expressed in every language, and five different shell
+# commands are five different operations that happen to share a syntax -- grouped, they would render
+# as "Shell / Shell / Shell / Shell / Shell".
+#
+# This dict is the only place the set is written down. The grouping regex below derives from it, and
+# so does the test that refuses a group speaking fewer languages than the site claims -- that test
+# used to keep its own copy, which is how this site documented three SDKs for the two weeks after
+# the fourth shipped.
+TAB_LANGUAGES = {
+    "python": "Python",
+    "go": "Go",
+    "rust": "Rust",
+    "swift": "Swift",
+    "typescript": "TypeScript",
+}
 
 
 def pages() -> list[Path]:
@@ -89,7 +101,7 @@ def markdown(text: str) -> str:
 
 
 def group_code_tabs(body: str) -> str:
-    """Wrap runs of adjacent python/go/rust blocks in a tabset.
+    """Wrap runs of adjacent blocks in the TAB_LANGUAGES set in a tabset.
 
     The Markdown carries three plain fenced blocks, one per language, with no custom syntax: that is
     what an agent reads, and it is also what the HTML falls back to when JavaScript is unavailable,
@@ -100,8 +112,9 @@ def group_code_tabs(body: str) -> str:
     # between two blocks and end at a later `</div>`. That put a paragraph, a warning and an `<h2>`
     # inside a tabset, and rendered four tabs reading "Python, Python, Go, Rust".
     end = r"</code></pre></div>"
+    languages = "|".join(re.escape(name) for name in TAB_LANGUAGES)
     one_block = (
-        r'<div class="code" data-language="(?:python|go|rust)"[^>]*>'
+        r'<div class="code" data-language="(?:' + languages + r')"[^>]*>'
         r"<pre><code[^>]*>(?:(?!" + end + r").)*?" + end
     )
     pattern = re.compile(r"(?:" + one_block + r"\s*){2,}", re.S)

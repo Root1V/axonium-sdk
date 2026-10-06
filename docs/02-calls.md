@@ -39,6 +39,26 @@ let completion = client
 println!("{}", completion.content());
 ```
 
+```swift
+let completion = try await client.chat(
+    ChatRequest(
+        model: "qwen3-0.6b",
+        messages: [.user("Summarise this in one line: ...")],
+        maxTokens: 200))
+print(completion.content ?? "")        // the first choice's text
+print(completion.usage?.totalTokens ?? 0)
+```
+
+```typescript
+const completion = await client.chat.completions.create({
+  model: "qwen3-0.6b",
+  messages: [{ role: "user", content: "Summarise this in one line: ..." }],
+  max_tokens: 200,
+});
+console.log(completion.content); // the first choice's text
+console.log(completion.usage?.totalTokens);
+```
+
 `content` is an accessor, not a field. It reaches into the first choice's message, and returns
 empty rather than panicking when a response has no choices — which happens on a generation stopped
 before it produced any.
@@ -52,8 +72,16 @@ error, so a gateway that later adds a field does not break callers who were ahea
 
 That allowlist is the SDK's *model* of what the gateway accepts, and a model can go stale: when the
 platform started honouring `response_format`, this SDK kept warning that it would be dropped for
-five days. The gateway also reports its own verdict, in `X-Prometheus-Ignored-Parameters` on the
-response, which is the authoritative answer — the SDKs do not surface it yet.
+five days. The gateway reports its own verdict in `X-Prometheus-Ignored-Parameters`, which is the
+authoritative answer because it is the gateway's and not a guess about it.
+
+**TypeScript surfaces it as `meta.ignoredParameters`** — `undefined` when the header is absent,
+because the header is present only when there is something to report, and an empty array would
+claim the gateway looked and found nothing. The other four read the header and discard it; the name
+here is the one they will copy.
+
+Pass `require_parameters: true` to turn a silent drop into a `400 unknown-parameter` instead, when
+being quietly given less than you asked for is worse than failing.
 
 ### Structured output
 
@@ -91,6 +119,27 @@ let completion = client
     .await?;
 
 let answer: serde_json::Value = serde_json::from_str(&completion.content())?;
+```
+
+```swift
+var request = ChatRequest(model: "qwen3-0.6b", messages: [.user("Capital of Peru?")])
+request.responseFormat = schema
+
+let completion = try await client.chat(request)
+let answer = try JSONSerialization.jsonObject(with: Data((completion.content ?? "").utf8))
+```
+
+```typescript
+import { jsonSchema } from "axonium";
+
+const completion = await client.chat.completions.create({
+  model: "qwen3-0.6b",
+  messages: [{ role: "user", content: "Capital of Peru?" }],
+  // Accepts a plain JSON Schema, or anything with a toJSONSchema() method -- a Zod schema goes in
+  // without this package ever importing Zod, which is what keeps it at zero dependencies.
+  response_format: jsonSchema("capital", { type: "object", properties: { capital: { type: "string" } } }),
+});
+const answer = JSON.parse(completion.content); // a JSON string, not a nested object
 ```
 
 The grammar is the engine's, and the schema is forwarded verbatim — validating it here would be a
@@ -137,6 +186,28 @@ let mut stream = client.chat_stream(&request).await?;
 while let Some(chunk) = stream.next().await? {
     print!("{}", chunk.content());
 }
+```
+
+```swift
+let stream = try await client.chatStream(
+    ChatRequest(model: "qwen3-0.6b", messages: [.user("Count to five")]))
+
+for try await chunk in stream {
+    print(chunk.content ?? "", terminator: "")
+}
+print(await stream.usage() as Any)
+```
+
+```typescript
+const stream = await client.chat.completions.stream({
+  model: "qwen3-0.6b",
+  messages: [{ role: "user", content: "Count to five" }],
+});
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.content ?? "");
+}
+console.log(stream.usage);
 ```
 
 Four things the stream handles that a naive SSE reader does not:
@@ -198,6 +269,35 @@ let ranked = client
 println!("{:?}", ranked.ranking());
 ```
 
+```swift
+let vectors = try await client.embeddings(
+    EmbeddingRequest(model: "qwen3-embedding", input: ["first", "second"]))
+
+let ranked = try await client.rerank(
+    RerankRequest(
+        model: "qwen3-reranker",
+        query: "annual membership fee",
+        documents: ["Rates schedule", "Opening hours", "Card benefits"]))
+print(ranked.ranking)
+```
+
+```typescript
+const vectors = await client.embeddings.create({
+  model: "qwen3-embedding",
+  input: ["first", "second"],
+});
+
+const image = await client.images.generate({ model: "sd-turbo", prompt: "a lighthouse at dusk" });
+await writeFile("out.png", image.data[0]!.toBytes());
+
+const ranked = await client.rerank.create({
+  model: "qwen3-reranker",
+  query: "annual membership fee",
+  documents: ["Rates schedule", "Opening hours", "Card benefits"],
+});
+console.log(ranked.ranking); // indices into the documents you sent, best first
+```
+
 **Rerank scores the whole document set in one request.** Against a 60 RPM budget, scoring 50
 candidates costs one unit rather than fifty. Each result's `index` points into the array **you**
 sent, never into the results, which is what keeps a reordered result attributable to its input.
@@ -242,6 +342,27 @@ let result = client
 let labels: Vec<Label> = result.decode()?;
 ```
 
+```swift
+let result = try await client.predict(
+    model: "sst2-clf", body: ["inputs": "El servicio ha sido excelente"])
+
+// A top-level ARRAY from this engine, an object from the next one. Decode what you expect from
+// the payload_schema the catalog gave you, not from the modality.
+let labels: [[String: JSONValue]] = try result.decode()
+```
+
+```typescript
+const result = await client.predict.create("sst2-clf", {
+  inputs: "El servicio ha sido excelente",
+});
+result.value; // [{ label: "POSITIVE", score: 0.9783 }] -- an ARRAY, not an object
+
+const decided = await client.predict.create("von-decide", {
+  inputs: "Me cobraron dos veces la misma factura",
+  parameters: { candidate_labels: ["cargo duplicado", "cliente satisfecho"] },
+});
+```
+
 **The body goes to the engine verbatim and its answer comes back verbatim.** Inventing a body for
 these would be the gateway deciding, on the engine's behalf, what the engine's API should look like.
 
@@ -259,6 +380,26 @@ promise a stability the endpoint does not offer. The catalog says which contract
 | `sst2-clf` | `classification` | `hf-inference.text-classification.v1` |
 | `von-decide` | `zero_shot` | `hf-inference.zero-shot-classification.v1` |
 | `laya-decide` | `typed_decision` | `typed-decision.v1` |
+| `nli-tei` | `zero_shot` | `tei.predict.v1` |
+| `emotions-tei` | `classification` | `tei.predict.v1` |
+
+**The last two rows are why that table matters.** `von-decide` and `nli-tei` are both `zero_shot`
+and answer *different things that both sum to 1*: the first normalises across the candidate labels
+**you** supplied, the second across the **model's own** classes and has no notion of candidate
+labels at all. Dispatch on `modality` and you read one as the other, silently.
+
+`tei.predict.v1` also carries a trap worth knowing before you batch:
+
+```text
+inputs: "a text"                     → one flat list of {label, score}
+inputs: ["premise", "hypothesis"]    → ONE PAIR, not a batch of two texts
+inputs: ["a", "b", "c"]              → 422
+inputs: [["a"], ["b"]]               → a batch of two single texts → two lists
+```
+
+**A batch is always a list of lists.** The obvious "send my N texts as an array" is the one form
+that quietly returns a single wrong answer. It is also why the result is handed back undecoded: one
+input returns a flat list and a batch returns a list of lists, from the same model and endpoint.
 
 **What does not pass through is the policy.** The model still resolves, `inference:read` plus the
 specific `model:<id>` scope is still required, a dead replica is still skipped, and the request is
@@ -284,6 +425,16 @@ client.Models.Mine(ctx)   // the subset your token is scoped to, cached
 ```rust
 client.models().await?;        // what this token may call
 client.models_mine().await?;   // the subset your token is scoped to, cached
+```
+
+```swift
+try await client.models()       // what this token may call
+try await client.modelsMine()   // the subset your token is scoped to, cached
+```
+
+```typescript
+await client.models.list(); // what this token may call
+await client.models.mine(); // the subset your token is scoped to, cached
 ```
 
 Access is deny-by-default and granted per model, and streaming needs a different scope from
@@ -312,6 +463,20 @@ let row = client.usage(&completion.meta.request_id).await?;
 row.usage.total_tokens;
 row.cost_usd;           // None where no price is configured -- not 0.0
 row.termination_reason;
+```
+
+```swift
+let row = try await client.usage(requestID: completion.meta.requestID)
+row.usage.totalTokens
+row.costUSD             // nil where no price is configured -- not 0
+row.terminationReason
+```
+
+```typescript
+const row = await client.usage.get(completion.meta.requestId!);
+row.usage.totalTokens;
+row.costUsd; // undefined where no price is configured -- not 0
+row.terminationReason;
 ```
 
 This needs no `admin:read`. `cost_usd` is nullable on purpose: "nobody priced this" and "it cost

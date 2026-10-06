@@ -87,6 +87,24 @@ export interface ResponseMeta {
   readonly idempotentReplayOf: string | undefined;
   readonly rateLimit: RateLimitSnapshot | undefined;
   /**
+   * How many HTTP attempts produced this response. `1` means it worked first time.
+   */
+  readonly attempts: number;
+  /**
+   * Milliseconds this SDK spent **deliberately asleep** before answering: respected `Retry-After`
+   * waits and backoff, and nothing else.
+   *
+   * It is here because a respected `Retry-After` of up to 60 seconds looks, from outside, exactly
+   * like one slow call among fast ones — three separate teams reported that as a hang. A log line
+   * is invisible by default and a latency metric cannot read one, so the number travels on the
+   * answer. Subtract it from your own wall clock to get what the platform actually spent.
+   *
+   * The other four SDKs have carried this since they had retries. This one computed both numbers
+   * from `0.1.0` and dropped them on the floor, while exporting an `Attempts` type no public call
+   * ever returned.
+   */
+  readonly waitedMs: number;
+  /**
    * Request fields the gateway accepted, ignored, and named back.
    *
    * `undefined` when there were none --- the header is absent then, so **its presence always means

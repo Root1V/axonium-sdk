@@ -101,13 +101,38 @@ completion.meta.waited_for; // 36s
 completion.meta.attempts;   // 2
 ```
 
+```swift
+let completion = try await client.chat(request)
+
+completion.meta.waitedFor   // 36s
+completion.meta.attempts    // 2
+```
+
+```typescript
+const completion = await client.chat.completions.create(request);
+
+completion.meta.waitedMs; // 36000
+completion.meta.attempts; // 2
+```
+
 Use the second. A log line is invisible unless the application configured a handler for it — the
 SDKs install a `NullHandler` and do not touch your logging — and a latency dashboard cannot read
 one anyway.
 
-> **Known limit.** A call that waited and then failed *anyway* reports none of this: the exception
-> carries no response metadata. That is the call whose duration most needs explaining, and it is on
-> the roadmap rather than done.
+> **Known limit, in four of the five.** A call that waited and then failed *anyway* reports none of
+> this in Python, Go, Rust or Swift: the exception carries no response metadata. That is the call
+> whose duration most needs explaining, and it is on the roadmap rather than done.
+>
+> **TypeScript answers it**, because its errors already carry `meta` — so the counters are stamped
+> on before the error leaves, and `error.meta.waitedMs` says how long a failed call spent asleep:
+>
+> ```typescript
+> catch (error) {
+>   if (error instanceof APIError) {
+>     log.warn("gave up", { attempts: error.meta.attempts, waitedMs: error.meta.waitedMs });
+>   }
+> }
+> ```
 
 ## Idempotency
 
@@ -141,6 +166,19 @@ let completion = client
     .await?;
 ```
 
+```swift
+let completion = try await client.chat(
+    ChatRequest(model: "qwen3-0.6b", messages: [.user("...")]),
+    idempotencyKey: "order-4417-summary")
+```
+
+```typescript
+const completion = await client.chat.completions.create(
+  { model: "qwen3-0.6b", messages: [{ role: "user", content: "..." }] },
+  { idempotencyKey: "order-4417-summary" },
+);
+```
+
 With a key, a repeat returns the **stored** result: no model is reached, no usage is recorded,
 nothing counts against the spend cap. So the retry costs a round trip instead of a generation, and
 the timeout objection disappears. Without a key the old rule stands, because nothing about the
@@ -166,6 +204,18 @@ if completion.Meta.IdempotentReplay {
 ```rust
 if completion.meta.idempotent_replay {
     let billed = &completion.meta.idempotent_replay_of;
+}
+```
+
+```swift
+if completion.meta.idempotentReplay {
+    let billed = completion.meta.idempotentReplayOf
+}
+```
+
+```typescript
+if (completion.meta.idempotentReplay) {
+  const billed = completion.meta.idempotentReplayOf;
 }
 ```
 
@@ -239,6 +289,29 @@ match client.chat(&request).await {
     Err(Error::Api(api)) if api.kind == ErrorKind::SpendCapExceeded => { /* ... */ }
     Err(Error::Api(api)) if api.retryable() => { /* ... */ }
     other => other?,
+}
+```
+
+```swift
+do {
+    let completion = try await client.chat(request)
+} catch let AxoniumError.api(error) where error.kind == .spendCapExceeded {
+    // not retryable, ever; a human decision
+} catch let AxoniumError.api(error) where error.isRetryable {
+    // ...
+}
+```
+
+```typescript
+import { RateLimitError, SpendCapExceededError, APIError } from "axonium";
+
+try {
+  const completion = await client.chat.completions.create({ model: "qwen3-0.6b", messages });
+} catch (error) {
+  if (error instanceof SpendCapExceededError) throw error; // not retryable, ever
+  if (error instanceof RateLimitError) scheduleIn(error.retryAfter);
+  else if (error instanceof APIError) log.warn("gateway said no", { requestId: error.requestId });
+  else throw error;
 }
 ```
 

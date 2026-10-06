@@ -241,6 +241,13 @@ auth-service, arrives as problem+json, and maps into the table above as
 | `idempotentReplay`, `idempotentReplayOf` | A replay is neither generated nor billed, and `idempotentReplayOf` is the only id with a usage row — a replay's own id has none        |
 | `rateLimit`                              | `undefined` when the gateway reported none, which is not a budget of zero                                                              |
 | `ignoredParameters`                      | Fields the gateway accepted, **ignored**, and named back                                                                               |
+| `attempts`, `waitedMs`                   | How many HTTP attempts produced this, and how long this SDK spent **deliberately asleep** before answering                             |
+
+**`waitedMs` is the number a latency graph needs.** A respected `Retry-After` of up to 60 seconds
+looks, from outside, exactly like one slow call among fast ones — three separate teams reported that
+as a hang. Subtract it from your own wall clock to get what the platform actually spent. It is on
+errors too, so a call that waited and then failed anyway can still explain its duration; the other
+four SDKs cannot answer that one yet.
 
 **`ignoredParameters` is `undefined` when there were none**, because the header is present only when
 there is something to report — so an empty array would claim the gateway looked and found nothing, which

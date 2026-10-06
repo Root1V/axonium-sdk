@@ -231,6 +231,16 @@ correlating a slow call that worked matters as much as correlating one that did 
 <span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">rate_limit</span><span class="p">;</span>
 <span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">waited_for</span><span class="p">;</span>
 <span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">attempts</span><span class="p">;</span></code></pre></div>
+<div class="code" data-language="swift" data-label="Swift"><pre><code class="language-swift"><span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">requestID</span><span class="w">     </span><span class="c1">// take this to the platform team</span>
+<span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">instanceID</span><span class="w">    </span><span class="c1">// which instance served it</span>
+<span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">rateLimit</span><span class="w">     </span><span class="c1">// the budget as of this response</span>
+<span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">waitedFor</span><span class="w">     </span><span class="c1">// seconds this SDK spent deliberately asleep</span>
+<span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">attempts</span><span class="w">      </span><span class="c1">// how many HTTP attempts produced this</span></code></pre></div>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="nx">completion</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">requestId</span><span class="p">;</span><span class="w"> </span><span class="c1">// take this to the platform team</span>
+<span class="nx">completion</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">instanceId</span><span class="p">;</span><span class="w"> </span><span class="c1">// which instance served it</span>
+<span class="nx">completion</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">rateLimit</span><span class="p">;</span><span class="w"> </span><span class="c1">// the budget as of this response</span>
+<span class="nx">completion</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">waitedMs</span><span class="p">;</span><span class="w"> </span><span class="c1">// milliseconds this SDK spent deliberately asleep</span>
+<span class="nx">completion</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">attempts</span><span class="p">;</span><span class="w"> </span><span class="c1">// how many HTTP attempts produced this</span></code></pre></div>
 </div><p><code>waited_s</code> exists because a respected <code>Retry-After</code> of 0–60 seconds looks from the outside like one
 slow call among fast ones. Three separate teams reported exactly that as a hang. The SDK does log
 it, but a log line is invisible by default and a latency metric cannot read one — so the number
@@ -238,19 +248,35 @@ travels on the answer. It is deliberately <strong>excluded</strong> from any dur
 it from your own wall clock to get what the platform actually spent.</p>
 <h2>The rate-limit snapshot</h2>
 <p><code>meta.rate_limit</code> carries the six <code>X-RateLimit-*</code> counters and, importantly, a <code>scope</code> naming
-<strong>which budget</strong> they describe. The endpoints hold separate budgets — <code>embeddings</code>, <code>rerank</code>,
-<code>chat_completions</code> — so a <code>remaining_requests</code> read after a chat call says nothing about your
-embeddings budget.</p>
+<strong>which budget</strong> they describe. The endpoints hold separate budgets, so a <code>remaining_requests</code> read
+after a chat call says nothing about your embeddings budget.</p>
+<p>The set of scope names is <strong>read from the header and not listed here</strong>. This page used to name
+three of them; five SDKs each kept their own list in a doc comment, and they had already drifted —
+one said <code>chat</code> where the header says <code>chat_completions</code>, which is a name you would key a map by and
+never match.</p>
+<p>The window is worth designing against, though, and it is not a sliding one: the budget is a <strong>fixed
+60-second bucket aligned to the wall clock</strong>, and the whole allowance returns at second 0 of each
+minute. So a burst can straddle a boundary and pass where the same burst seconds earlier is refused.
+Pace against the remaining count, never against a rate you assumed.</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">client</span><span class="o">.</span><span class="n">last_rate_limit</span>          <span class="c1"># what the most recent call reported</span>
 <span class="n">client</span><span class="o">.</span><span class="n">rate_limits</span><span class="p">[</span><span class="s2">"embeddings"</span><span class="p">]</span>  <span class="c1"># the most recent reading for that budget</span></code></pre></div>
 <div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="nx">client</span><span class="p">.</span><span class="nx">LastRateLimit</span><span class="p">()</span><span class="w">               </span><span class="c1">// what the most recent call reported</span>
 <span class="nx">client</span><span class="p">.</span><span class="nx">RateLimits</span><span class="p">()[</span><span class="s">"embeddings"</span><span class="p">]</span><span class="w">    </span><span class="c1">// the most recent reading for that budget</span></code></pre></div>
 <div class="code" data-language="rust" data-label="Rust"><pre><code class="language-rust"><span class="n">client</span><span class="p">.</span><span class="n">last_rate_limit</span><span class="p">();</span><span class="w">                  </span><span class="c1">// what the most recent call reported</span>
 <span class="n">client</span><span class="p">.</span><span class="n">rate_limits</span><span class="p">().</span><span class="n">get</span><span class="p">(</span><span class="s">"embeddings"</span><span class="p">);</span><span class="w">    </span><span class="c1">// the most recent reading for that budget</span></code></pre></div>
+<div class="code" data-language="swift" data-label="Swift"><pre><code class="language-swift"><span class="c1">// No client-held map yet: read the budget off the response you just got.</span>
+<span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">rateLimit</span><span class="p">?.</span><span class="n">scope</span><span class="w">              </span><span class="c1">// which budget these numbers describe</span>
+<span class="n">completion</span><span class="p">.</span><span class="n">meta</span><span class="p">.</span><span class="n">rateLimit</span><span class="p">?.</span><span class="n">remainingRequests</span><span class="w">  </span><span class="c1">// what is left of it</span></code></pre></div>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="nx">client</span><span class="p">.</span><span class="nx">lastRateLimit</span><span class="p">;</span><span class="w"> </span><span class="c1">// what the most recent call reported</span>
+<span class="nx">completion</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">rateLimit</span><span class="p">;</span><span class="w"> </span><span class="c1">// the budget as of this response, and the one to key yourself</span></code></pre></div>
 </div><p>Read <code>client.rate_limits</code>, not <code>last_rate_limit</code>, when the question is &quot;how much of budget X is
 left&quot;. The distinction is not pedantry: before <code>scope</code> existed, a suggestion pipeline touching
 three endpoints in a row left <code>last_rate_limit</code> describing whichever answered last, with nothing in
 the numbers saying so.</p>
+<p><strong>The per-scope map exists in Python, Go and Rust only.</strong> TypeScript has <code>lastRateLimit</code> and Swift
+has neither — in both, <code>meta.rate_limit</code> on each response carries the same numbers with the <code>scope</code>
+attached, so keying them yourself is three lines and is what the map does. Said here rather than
+left as a tab that quietly shows something different.</p>
 <p><strong>What it does not do:</strong> the token counters are the gateway's post-hoc accounting, not a
 reservation. They are a strong signal, not a guarantee you will not see a <code>429</code>.</p>
 <h2>Errors</h2>

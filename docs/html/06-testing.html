@@ -205,6 +205,29 @@ exercises your code against the real parsing, the real error typing and the real
 <span class="w">    </span><span class="n">client_secret</span><span class="p">:</span><span class="w"> </span><span class="s">"s"</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span>
 <span class="w">    </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
 <span class="p">})</span><span class="o">?</span><span class="p">;</span></code></pre></div>
+<div class="code" data-language="swift" data-label="Swift"><pre><code class="language-swift"><span class="c1">// URLProtocol, through the configuration's own sessionConfiguration hook -- which exists for this.</span>
+<span class="kr">final</span><span class="w"> </span><span class="kd">class</span><span class="w"> </span><span class="nc">FakeGateway</span><span class="p">:</span><span class="w"> </span><span class="n">URLProtocol</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* canInit, startLoading, ... */</span><span class="w"> </span><span class="p">}</span>
+
+<span class="kd">let</span><span class="w"> </span><span class="nv">session</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">URLSessionConfiguration</span><span class="p">.</span><span class="n">ephemeral</span>
+<span class="n">session</span><span class="p">.</span><span class="n">protocolClasses</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="n">FakeGateway</span><span class="p">.</span><span class="kc">self</span><span class="p">]</span>
+
+<span class="kd">let</span><span class="w"> </span><span class="nv">client</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="n">AxoniumClient</span><span class="p">(</span>
+<span class="w">    </span><span class="n">configuration</span><span class="p">:</span><span class="w"> </span><span class="n">AxoniumConfiguration</span><span class="p">(</span>
+<span class="w">        </span><span class="n">gatewayBaseURL</span><span class="p">:</span><span class="w"> </span><span class="s">"https://gw.test"</span><span class="p">,</span><span class="w"> </span><span class="n">clientID</span><span class="p">:</span><span class="w"> </span><span class="s">"i"</span><span class="p">,</span><span class="w"> </span><span class="n">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="s">"s"</span><span class="p">,</span>
+<span class="w">        </span><span class="n">sessionConfiguration</span><span class="p">:</span><span class="w"> </span><span class="n">session</span><span class="p">))</span></code></pre></div>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="c1">// No mocking library and no patched global: `fetch` is injected, so the fake IS the dependency.</span>
+<span class="c1">// That is why this package's own suite has a test asserting no HTTP-mocking library is installed.</span>
+<span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Axonium</span><span class="p">({</span>
+<span class="w">  </span><span class="nx">gatewayBaseURL</span><span class="o">:</span><span class="w"> </span><span class="s2">"https://gw.test"</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">clientId</span><span class="o">:</span><span class="w"> </span><span class="s2">"i"</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">clientSecret</span><span class="o">:</span><span class="w"> </span><span class="s2">"s"</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">fetch</span><span class="o">:</span><span class="w"> </span><span class="kt">async</span><span class="w"> </span><span class="p">(</span><span class="nx">url</span><span class="p">,</span><span class="w"> </span><span class="nx">init</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">String</span><span class="p">(</span><span class="nx">url</span><span class="p">).</span><span class="nx">endsWith</span><span class="p">(</span><span class="s2">"/oauth2/token"</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="nx">Response</span><span class="p">.</span><span class="nx">json</span><span class="p">({</span><span class="w"> </span><span class="nx">access_token</span><span class="o">:</span><span class="w"> </span><span class="s2">"t"</span><span class="p">,</span><span class="w"> </span><span class="nx">token_type</span><span class="o">:</span><span class="w"> </span><span class="s2">"bearer"</span><span class="p">,</span><span class="w"> </span><span class="nx">expires_in</span><span class="o">:</span><span class="w"> </span><span class="kt">300</span><span class="w"> </span><span class="p">});</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">Response</span><span class="p">.</span><span class="nx">json</span><span class="p">(</span><span class="nx">COMPLETION</span><span class="p">);</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="p">});</span></code></pre></div>
 </div><h2>Make the waits stop costing wall-clock</h2>
 <p>A retry test that honours a real <code>Retry-After</code> takes as long as the wait. Set the policy to remove
 it:</p>
@@ -228,6 +251,17 @@ it:</p>
 <span class="w">    </span><span class="p">},</span>
 <span class="w">    </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
 <span class="p">})</span><span class="o">?</span><span class="p">;</span></code></pre></div>
+<div class="code" data-language="swift" data-label="Swift"><pre><code class="language-swift"><span class="kd">let</span><span class="w"> </span><span class="nv">client</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="n">AxoniumClient</span><span class="p">(</span>
+<span class="w">    </span><span class="n">configuration</span><span class="p">:</span><span class="w"> </span><span class="n">AxoniumConfiguration</span><span class="p">(</span>
+<span class="w">        </span><span class="n">gatewayBaseURL</span><span class="p">:</span><span class="w"> </span><span class="s">"https://gw.test"</span><span class="p">,</span><span class="w"> </span><span class="n">clientID</span><span class="p">:</span><span class="w"> </span><span class="s">"i"</span><span class="p">,</span><span class="w"> </span><span class="n">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="s">"s"</span><span class="p">,</span>
+<span class="w">        </span><span class="n">retry</span><span class="p">:</span><span class="w"> </span><span class="n">RetryPolicy</span><span class="p">(</span><span class="n">maxAttempts</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="n">initialBackoff</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">maxBackoff</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">jitter</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">)))</span></code></pre></div>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="kd">const</span><span class="w"> </span><span class="nx">client</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Axonium</span><span class="p">({</span>
+<span class="w">  </span><span class="nx">gatewayBaseURL</span><span class="o">:</span><span class="w"> </span><span class="s2">"https://gw.test"</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">clientId</span><span class="o">:</span><span class="w"> </span><span class="s2">"i"</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">clientSecret</span><span class="o">:</span><span class="w"> </span><span class="s2">"s"</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">retry</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">maxAttempts</span><span class="o">:</span><span class="w"> </span><span class="kt">3</span><span class="p">,</span><span class="w"> </span><span class="nx">initialBackoff</span><span class="o">:</span><span class="w"> </span><span class="kt">0</span><span class="p">,</span><span class="w"> </span><span class="nx">maxBackoff</span><span class="o">:</span><span class="w"> </span><span class="kt">0</span><span class="p">,</span><span class="w"> </span><span class="nx">jitter</span><span class="o">:</span><span class="w"> </span><span class="kt">false</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nx">fetch</span><span class="o">:</span><span class="w"> </span><span class="kt">fakeGateway</span><span class="p">,</span>
+<span class="p">});</span></code></pre></div>
 </div><p><code>max_backoff=0</code> has a second effect worth knowing: any server-supplied <code>Retry-After</code> above zero is
 then <strong>surfaced as an error rather than slept through</strong>, which is the same rule that keeps a long
 wait from blocking a real caller. If your test asserts that a long wait is handed back, this is how
@@ -246,8 +280,13 @@ will stop matching and nobody will notice.</p>
 <h2>What the SDKs' own tests do</h2>
 <p>Worth knowing, because it tells you what is already covered and what is not:</p>
 <ul>
-<li><strong>One corpus, three runners.</strong> Python, Go and Rust replay the same manifest against the same
-bytes. They share no code, so matching behaviour is verified rather than intended.</li>
+<li><strong>One corpus, five runners.</strong> Python, Go, Rust, TypeScript and Swift replay the same manifest
+against the same bytes. They share no code, so matching behaviour is verified rather than
+intended. Swift vendors the corpus as a submodule; the other four read it from the repository.</li>
+<li><strong>The corpus grows when mutation finds a hole in it</strong>, not on a schedule. The most recent case
+exists because mutating a runner to match the literal string <code>&quot;stream interrupted&quot;</code> left every
+other case green — the corpus could not tell <em>detect the key</em> from <em>compare the text</em>, which is
+the distinction the platform explicitly asked for.</li>
 <li><strong>Every test is written twice</strong> in Python, sync and async, from one parametrised fixture. The
 previous generation of this SDK had zero async tests.</li>
 <li><strong>Mutation testing is the acceptance bar.</strong> A test that passes when the implementation is broken
@@ -255,6 +294,10 @@ did not test anything, and the only way to find those is to break the implementa
 </ul>
 <p>Run the whole thing exactly as CI does:</p>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">./scripts/verify.sh</code></pre></div>
+<p>It mirrors the workflow files deliberately. A local check that is <em>nearly</em> the CI check reports
+green and hides the difference — which this repository has paid for twice, once with a lint step
+that needed a build only present on one machine, and once with a test suite green on the Node
+version the author had and red on the one the package promises.</p>
 <h2>Integration tests</h2>
 <p>Marked and skipped by default. They need <code>AXONIUM_INTEGRATION=1</code> plus real credentials, and they
 never run in CI — a test suite that depends on a deployment being up reports red for reasons that

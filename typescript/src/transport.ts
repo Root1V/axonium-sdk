@@ -78,8 +78,16 @@ export function rateLimitFrom(headers: Headers): RateLimitSnapshot | undefined {
 }
 
 /** The correlation metadata of one response. */
-export function metaFrom(headers: Headers): ResponseMeta {
+/**
+ * `attempts` and `waitedMs` default to "first try, waited for nothing" and are overwritten by
+ * {@link Transport.send} once the retry loop knows better. They are not optional: a caller reading
+ * `meta.waitedMs` to subtract deliberate sleep from its own latency must never get `undefined` and
+ * silently subtract nothing.
+ */
+export function metaFrom(headers: Headers, attempts = 1, waitedMs = 0): ResponseMeta {
   return {
+    attempts,
+    waitedMs,
     requestId: headers.get("X-Request-ID") ?? undefined,
     traceId: headers.get("X-Trace-ID") ?? undefined,
     instance: headers.get("X-Prometheus-Instance") ?? undefined,
@@ -270,6 +278,15 @@ export class Transport {
 
     let attempt = 1;
     let waitedMs = 0;
+    // Stamps the loop's counters onto an error before it leaves. A call that waited 40s across three
+    // attempts and then failed is the one whose duration most needs explaining, and until this
+    // existed it was also the only one that explained nothing: four of the five SDKs still carry
+    // that limit, and the docs say so.
+    const stamp = <E extends Error>(failure: E): E => {
+      const carrier = failure as E & { meta?: ResponseMeta };
+      if (carrier.meta) carrier.meta = { ...carrier.meta, attempts: attempt, waitedMs };
+      return failure;
+    };
     let rejectedToken: string | undefined;
     // Bounded, and the bound is the point. The condition below compares the rejected token with the
     // one just used, which is false again on every refresh -- so without a counter a gateway that
@@ -298,7 +315,7 @@ export class Transport {
         // second billable generation rather than resuming the first.
         const delay =
           failure instanceof TimeoutError ? undefined : delayFor(this.retry, attempt, undefined);
-        if (delay === undefined) throw failure;
+        if (delay === undefined) throw stamp(failure);
         await sleep(delay);
         waitedMs += delay;
         attempt += 1;
@@ -310,7 +327,13 @@ export class Transport {
 
       if (response.ok) {
         this.cooldowns.clear(key);
-        return { response, meta, attempts: { attempts: attempt, waitedMs } };
+        // Rebuilt rather than mutated: ResponseMeta is readonly, and the retry loop is the only
+        // place that knows the final numbers. `stamp` above does the same for the errors it throws.
+        return {
+          response,
+          meta: { ...meta, attempts: attempt, waitedMs },
+          attempts: { attempts: attempt, waitedMs },
+        };
       }
 
       const failure = await errorFrom(response);
@@ -329,9 +352,9 @@ export class Transport {
         this.cooldowns.record(key, failure.retryAfter);
       }
 
-      if (!failure.retryable) throw failure;
+      if (!failure.retryable) throw stamp(failure);
       const delay = delayFor(this.retry, attempt, failure.retryAfter);
-      if (delay === undefined) throw failure;
+      if (delay === undefined) throw stamp(failure);
       await sleep(delay);
       waitedMs += delay;
       attempt += 1;
