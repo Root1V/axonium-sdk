@@ -68,10 +68,19 @@ class _AllowlistRequest(BaseModel):
                 stacklevel=3,
             )
         if unknown:
+            # The old wording said these were withheld "as the gateway would discard them
+            # silently", and that premise expired with ``PRM-127``: the gateway now names every
+            # field it accepted and ignored in ``X-Prometheus-Ignored-Parameters``, so forwarding
+            # one is discoverable rather than silent. Dropping them here is therefore a decision
+            # this SDK is still making, not a consequence of the platform -- and it is the reason an
+            # engine-specific field such as ``chat_template_kwargs`` cannot reach llama.cpp from
+            # Python while it can from the TypeScript SDK. Recorded as AXO-154; the message says
+            # what is true today rather than what was true when it was written.
             warnings.warn(
                 f"Unrecognized request {'fields' if len(unknown) > 1 else 'field'} "
-                f"{', '.join(unknown)}; not sent, as the gateway would discard "
-                f"{'them' if len(unknown) > 1 else 'it'} silently.",
+                f"{', '.join(unknown)}; not sent. This SDK forwards only the fields the contract "
+                f"documents. If you need to reach an engine-specific parameter, that is "
+                f"AXO-154 and not yet decided across the five SDKs.",
                 UnsupportedFieldWarning,
                 stacklevel=3,
             )

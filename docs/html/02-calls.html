@@ -206,10 +206,35 @@ not model is still reachable.</p>
 empty rather than panicking when a response has no choices — which happens on a generation stopped
 before it produced any.</p>
 <h3>Fields the gateway does not support</h3>
-<p>The gateway silently discards request fields it does not implement. Silently is the problem: you
-set <code>frequency_penalty</code>, nothing complains, and nothing applies it. The SDKs check the request
-against an allowlist and emit a <strong>warning</strong> naming each dropped field — a warning rather than an
-error, so a gateway that later adds a field does not break callers who were ahead of it.</p>
+<p>The gateway accepts an allowlisted subset and <strong>names back</strong> what it ignored. It did discard in
+silence until <code>PRM-127</code>, which is the problem the header exists to end: you set <code>frequency_penalty</code>,
+nothing complains, and nothing applies it.</p>
+<p><strong>The five SDKs do three different things with a field they do not recognise</strong>, which is worth
+knowing before you rely on one:</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th></th>
+<th>an unrecognised field</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python</td>
+<td><strong>not sent</strong>, with an <code>UnsupportedFieldWarning</code> naming it</td>
+</tr>
+<tr>
+<td>Go, Rust, Swift</td>
+<td>sent, through an explicit <code>Extra</code> / <code>extra</code> / <code>extraFields</code> channel</td>
+</tr>
+<tr>
+<td>TypeScript</td>
+<td>sent, silently — the request type accepts any key</td>
+</tr>
+</tbody>
+</table></div>
+<p>So an engine-specific parameter such as <code>chat_template_kwargs</code> reaches llama.cpp from TypeScript and
+cannot from Python. That divergence is <code>AXO-154</code> and is not yet decided.</p>
 <p>That allowlist is the SDK's <em>model</em> of what the gateway accepts, and a model can go stale: when the
 platform started honouring <code>response_format</code>, this SDK kept warning that it would be dropped for
 five days. The gateway reports its own verdict in <code>X-Prometheus-Ignored-Parameters</code>, which is the

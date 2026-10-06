@@ -206,10 +206,35 @@ campo que el SDK no modela sigue siendo accesible.</p>
 vez de reventar cuando una respuesta no tiene opciones — algo que pasa en una generación cortada
 antes de producir ninguna.</p>
 <h3>Campos que el gateway no soporta</h3>
-<p>El gateway descarta en silencio los campos de petición que no implementa. El silencio es el problema:
-pones <code>frequency_penalty</code>, nadie se queja, y nada lo aplica. Los SDK comprueban la petición contra
-una lista permitida y emiten un <strong>aviso</strong> nombrando cada campo descartado — un aviso y no un error,
-para que un gateway que luego añada un campo no rompa a quien iba por delante.</p>
+<p>El gateway acepta un subconjunto permitido y <strong>nombra de vuelta</strong> lo que ignoró. Hasta <code>PRM-127</code> sí
+descartaba en silencio, que es el problema que la cabecera vino a terminar: pones <code>frequency_penalty</code>,
+nadie se queja, y nada lo aplica.</p>
+<p><strong>Los cinco SDK hacen tres cosas distintas con un campo que no reconocen</strong>, y conviene saberlo antes
+de apoyarse en uno:</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th></th>
+<th>un campo no reconocido</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python</td>
+<td><strong>no se envía</strong>, con un <code>UnsupportedFieldWarning</code> que lo nombra</td>
+</tr>
+<tr>
+<td>Go, Rust, Swift</td>
+<td>se envía, por un canal explícito: <code>Extra</code> / <code>extra</code> / <code>extraFields</code></td>
+</tr>
+<tr>
+<td>TypeScript</td>
+<td>se envía, en silencio — el tipo de petición acepta cualquier clave</td>
+</tr>
+</tbody>
+</table></div>
+<p>Así que un parámetro específico del motor como <code>chat_template_kwargs</code> llega a llama.cpp desde
+TypeScript y no puede desde Python. Esa divergencia es <code>AXO-154</code> y está sin decidir.</p>
 <p>Esa lista es el <em>modelo</em> que el SDK tiene de lo que el gateway acepta, y un modelo puede caducar:
 cuando la plataforma empezó a honrar <code>response_format</code>, este SDK siguió avisando de que se
 descartaría durante cinco días. El gateway reporta su propio veredicto en

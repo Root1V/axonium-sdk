@@ -35,7 +35,7 @@ equivalent.
 | Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.1` | `v0.6.1` |
 | Rust | `axonium = "0.6"` | [`0.6.1`](https://crates.io/crates/axonium) on crates.io |
 | Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.1")` | [`0.3.1`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
-| TypeScript | `npm install axonium` | [`0.2.1`](https://www.npmjs.com/package/axonium) on npm |
+| TypeScript | `npm install axonium` | [`0.2.2`](https://www.npmjs.com/package/axonium) on npm |
 
 All five are published and implement the same surface.
 

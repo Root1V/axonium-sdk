@@ -65,10 +65,21 @@ before it produced any.
 
 ### Fields the gateway does not support
 
-The gateway silently discards request fields it does not implement. Silently is the problem: you
-set `frequency_penalty`, nothing complains, and nothing applies it. The SDKs check the request
-against an allowlist and emit a **warning** naming each dropped field — a warning rather than an
-error, so a gateway that later adds a field does not break callers who were ahead of it.
+The gateway accepts an allowlisted subset and **names back** what it ignored. It did discard in
+silence until `PRM-127`, which is the problem the header exists to end: you set `frequency_penalty`,
+nothing complains, and nothing applies it.
+
+**The five SDKs do three different things with a field they do not recognise**, which is worth
+knowing before you rely on one:
+
+| | an unrecognised field |
+|---|---|
+| Python | **not sent**, with an `UnsupportedFieldWarning` naming it |
+| Go, Rust, Swift | sent, through an explicit `Extra` / `extra` / `extraFields` channel |
+| TypeScript | sent, silently — the request type accepts any key |
+
+So an engine-specific parameter such as `chat_template_kwargs` reaches llama.cpp from TypeScript and
+cannot from Python. That divergence is `AXO-154` and is not yet decided.
 
 That allowlist is the SDK's *model* of what the gateway accepts, and a model can go stale: when the
 platform started honouring `response_format`, this SDK kept warning that it would be dropped for

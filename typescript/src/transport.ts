@@ -189,6 +189,25 @@ function requestHeaders(config: ResolvedConfig, token: string, options: CallOpti
  * because it reached Node in 20.3 and this package claims 20: a listener does the same job with one
  * more object.
  */
+/**
+ * Node's fetch (undici) timing out while waiting for response headers.
+ *
+ * Matched on the error CODE rather than the message, because the message is localised and has
+ * changed between Node releases. `fetch` wraps it, so the code is on `cause`; checked one level
+ * down as well, since a dispatcher can wrap it again.
+ */
+function isHeadersTimeout(error: unknown): boolean {
+  const codes = new Set(["UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT"]);
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current instanceof Error; depth += 1) {
+    const code = (current as Error & { code?: unknown }).code;
+    if (typeof code === "string" && codes.has(code)) return true;
+    if (current.name === "HeadersTimeoutError" || current.name === "BodyTimeoutError") return true;
+    current = current.cause;
+  }
+  return false;
+}
+
 function combineSignals(timeoutMs: number, caller: AbortSignal | undefined): AbortSignal {
   const timeout = AbortSignal.timeout(timeoutMs);
   if (!caller) return timeout;
@@ -386,6 +405,28 @@ export class Transport {
       cause instanceof Error && (cause.name === "AbortError" || cause.name === "TimeoutError");
     if (aborted && init.signal?.aborted) {
       return new TransportError("The request was cancelled by the caller's signal.", { cause });
+    }
+    // Node's own fetch gives up on a response that has sent no headers after 300 s, whatever this
+    // SDK's `timeouts.request` says, and reports it as `TypeError: fetch failed`. On a NON-STREAMING
+    // generation the headers arrive at the end, so every generation longer than five minutes hits it.
+    //
+    // It is classified here as a timeout, which means NEVER RETRIED, and that is the whole point.
+    // Before this it read as an unrecognised transport failure and was retried: measured, one call
+    // became THREE BILLABLE GENERATIONS while the error said "Could not reach the gateway", which is
+    // false — the gateway answered and was still generating. The retry policy exists to prevent
+    // exactly that, and its own default timeout was unreachable underneath it.
+    if (isHeadersTimeout(cause)) {
+      return new TimeoutError(
+        `Node's fetch gave up after 300s waiting for response headers, which is undici's ` +
+          `\`headersTimeout\` and not this SDK's \`timeouts.request\` (${timeout}ms). A non-streaming ` +
+          `generation sends its headers only when it finishes, so anything slower than five minutes ` +
+          `fails here however high you set the timeout. The backend is probably still generating. ` +
+          `Two fixes: use \`chat.completions.stream()\`, where headers arrive immediately and the ` +
+          `limit never applies; or pass your own \`fetch\` with a larger \`headersTimeout\` — ` +
+          `\`new Axonium({ fetch: (u, i) => undiciFetch(u, { ...i, dispatcher: new Agent({ headersTimeout: 900_000 }) }) })\`. ` +
+          `This SDK cannot raise it for you without taking a dependency on undici.`,
+        { cause },
+      );
     }
     if (aborted) {
       return new TimeoutError(

@@ -811,3 +811,48 @@ test("credentials are the only setting a caller must supply", () => {
     "https://explicit.test",
   );
 });
+
+test("Node's 300s headers timeout is a timeout, so it is never retried", async () => {
+  // Reported by a consumer, and the worst shape this repository has: `timeouts.request` is 600_000,
+  // but Node's fetch gives up on a response with no headers after 300s whatever that says, and on a
+  // NON-STREAMING generation the headers arrive only at the end. So every generation slower than
+  // five minutes hit it.
+  //
+  // It used to read as an unrecognised transport failure and be retried. Measured: ONE call became
+  // THREE BILLABLE GENERATIONS, while the error said "Could not reach the gateway" -- which is false,
+  // the gateway answered and was still generating. The retry policy exists to prevent precisely that.
+  let generations = 0;
+  const stub = {
+    fetch: async (url: URL | RequestInfo): Promise<Response> => {
+      if (String(url).endsWith("/oauth2/token")) {
+        return Response.json({ access_token: "t", token_type: "bearer", expires_in: 300 });
+      }
+      generations += 1;
+      const cause = Object.assign(new Error("Headers Timeout Error"), {
+        name: "HeadersTimeoutError",
+        code: "UND_ERR_HEADERS_TIMEOUT",
+      });
+      throw new TypeError("fetch failed", { cause });
+    },
+  };
+  const client = new Axonium({
+    clientId: "i",
+    clientSecret: "s",
+    gatewayBaseURL: "https://gw.test",
+    fetch: stub.fetch,
+    retry: { maxAttempts: 3, initialBackoff: 1, maxBackoff: 1, jitter: false },
+  });
+
+  await assert.rejects(
+    client.chat.completions.create({ model: "m", messages: [{ role: "user", content: "x" }] }),
+    (error: unknown) => {
+      assert.ok(error instanceof TimeoutError, "classified as something retryable");
+      // The message has to name the real cause: "could not reach the gateway" sent a consumer
+      // looking at their network for a day.
+      assert.match(error.message, /headersTimeout/);
+      assert.match(error.message, /stream\(\)/);
+      return true;
+    },
+  );
+  assert.equal(generations, 1, "a retry here is a second billable generation, not a resumption");
+});

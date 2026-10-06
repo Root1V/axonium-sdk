@@ -9,6 +9,41 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 Nothing yet.
 
+### 0.2.2 — 2026-10-06
+
+**Node's own fetch gives up after 300 s on a response that has sent no headers, and this SDK turned
+that into three billable generations.** Reported by the repo2deck team, who had already diagnosed it
+correctly and worked around it.
+
+`timeouts.request` defaults to 600 000 ms. undici's `headersTimeout` is 300 s and ignores it, and a
+**non-streaming** generation sends its headers only when it finishes — so every generation slower
+than five minutes hit it. `fetch failed` is not an `AbortError`, so it was classified as a
+`TransportError`, **and transport failures are retried**. Measured, with the retry policy at its
+defaults:
+
+```
+error    : TransportError
+mensaje  : Could not reach the gateway at https://gw.test.
+BILLABLE GENERATIONS STARTED: 3
+```
+
+One call, three generations, and an error saying the gateway could not be reached — which is false:
+it answered, and was still generating. **The retry policy exists to prevent exactly this**, and the
+SDK's own default timeout was unreachable underneath it.
+
+Now recognised by `code` (`UND_ERR_HEADERS_TIMEOUT`, and `UND_ERR_BODY_TIMEOUT` with it) and raised
+as a `TimeoutError`, which is never retried. Same reproduction: **one generation**. The message names
+the real cause and both ways out — `chat.completions.stream()`, where headers arrive immediately so
+the limit never applies, or an injected `fetch` with a larger `headersTimeout`. Raising it here is
+not possible without depending on undici, and three tests guard the zero-dependency rule.
+
+**The unrecognised-field warning in Python had an expired premise**, found answering the same team.
+It said a field was withheld *"as the gateway would discard it silently"*, which stopped being true
+with `PRM-127`: the gateway names what it ignored in `X-Prometheus-Ignored-Parameters`. Dropping it
+is a decision this SDK still makes, not a consequence of the platform — and it is why
+`chat_template_kwargs` reaches llama.cpp from TypeScript and cannot from Python. The message says
+what is true; the five-way divergence is `AXO-154`, open.
+
 ### 0.2.1 — 2026-10-06
 
 **Credentials are the only required setting**, which two of the five did not have. `DEFAULT_GATEWAY_BASE_URL` is new and exported, and `gatewayBaseURL` is now optional.

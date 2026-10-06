@@ -1,4 +1,4 @@
-<!-- translated-from: 02-calls.md sha256:383ee3949c -->
+<!-- translated-from: 02-calls.md sha256:6c54017156 -->
 # Hacer llamadas
 
 > **Ya tengo un cliente. ¿Qué le puedo pedir?**
@@ -66,10 +66,21 @@ antes de producir ninguna.
 
 ### Campos que el gateway no soporta
 
-El gateway descarta en silencio los campos de petición que no implementa. El silencio es el problema:
-pones `frequency_penalty`, nadie se queja, y nada lo aplica. Los SDK comprueban la petición contra
-una lista permitida y emiten un **aviso** nombrando cada campo descartado — un aviso y no un error,
-para que un gateway que luego añada un campo no rompa a quien iba por delante.
+El gateway acepta un subconjunto permitido y **nombra de vuelta** lo que ignoró. Hasta `PRM-127` sí
+descartaba en silencio, que es el problema que la cabecera vino a terminar: pones `frequency_penalty`,
+nadie se queja, y nada lo aplica.
+
+**Los cinco SDK hacen tres cosas distintas con un campo que no reconocen**, y conviene saberlo antes
+de apoyarse en uno:
+
+| | un campo no reconocido |
+|---|---|
+| Python | **no se envía**, con un `UnsupportedFieldWarning` que lo nombra |
+| Go, Rust, Swift | se envía, por un canal explícito: `Extra` / `extra` / `extraFields` |
+| TypeScript | se envía, en silencio — el tipo de petición acepta cualquier clave |
+
+Así que un parámetro específico del motor como `chat_template_kwargs` llega a llama.cpp desde
+TypeScript y no puede desde Python. Esa divergencia es `AXO-154` y está sin decidir.
 
 Esa lista es el *modelo* que el SDK tiene de lo que el gateway acepta, y un modelo puede caducar:
 cuando la plataforma empezó a honrar `response_format`, este SDK siguió avisando de que se
