@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Failure, retries and idempotency · Axonium</title>
+<title>Fallos, reintentos e idempotencia · Axonium</title>
 <meta name="description" content="Client SDKs for the Prometheus inference platform">
 <style>
 :root {
@@ -149,8 +149,8 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <nav>
   <div class="brand"><a href="index.html">Axonium</a></div>
   <div class="tag">Client SDKs for the Prometheus inference platform</div>
-  <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html" aria-current="page">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
-  <div class="langs"><a href="03-failure.html" hreflang="en" aria-current="true">English</a><a href="es/03-failure.html" hreflang="es">Español</a></div>
+  <ol><li><a href="index.html">Primeros pasos</a></li><li><a href="01-concepts.html">Conceptos</a></li><li><a href="02-calls.html">Hacer llamadas</a></li><li><a href="03-failure.html" aria-current="page">Fallos, reintentos e idempotencia</a></li><li><a href="04-configuration.html">Configuración y transporte</a></li><li><a href="05-composed.html">Operaciones compuestas</a></li><li><a href="06-testing.html">Probar contra Axonium</a></li><li><a href="07-limits.html">Lo que no hace</a></li><li><a href="08-reference.html">Referencia de la API de Python</a></li></ol>
+  <div class="langs"><a href="../03-failure.html" hreflang="en">English</a><a href="03-failure.html" hreflang="es" aria-current="true">Español</a></div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
@@ -158,89 +158,91 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
   </div>
 </nav>
 <main>
-<h1>Failure, retries and idempotency</h1>
+<h1>Fallos, reintentos e idempotencia</h1>
 <blockquote>
-<p><strong>When is it safe to try again?</strong></p>
+<p><strong>¿Cuándo es seguro volver a intentarlo?</strong></p>
 </blockquote>
-<p>This is the page worth reading. Everything else here is convenience; this is the part that is
-expensive to get right and costs real money to get wrong.</p>
-<h2>The rule</h2>
-<p><strong>A retry is attempted only where the platform states that no generation occurred.</strong></p>
-<p>That is a short sentence hiding the whole problem. An inference request that fails after the model
-started producing tokens has already been billed. Retrying it does not resume anything — it queues
-a second generation and you pay twice. So the SDKs do not retry on &quot;it failed&quot;; they retry on a
-specific list of failures the gateway documents as having fast-failed before reaching a model:</p>
+<p>Esta es la página que merece leerse. Todo lo demás aquí es comodidad; esta es la parte cara de
+acertar y que cuesta dinero de verdad equivocar.</p>
+<h2>La regla</h2>
+<p><strong>Solo se reintenta donde la plataforma afirma que no hubo generación.</strong></p>
+<p>Es una frase corta que esconde el problema entero. Una petición de inferencia que falla después de
+que el modelo empezara a producir tokens ya está facturada. Reintentarla no reanuda nada — encola una
+segunda generación y pagas dos veces. Así que los SDK no reintentan ante «falló»; reintentan ante una
+lista concreta de fallos que el gateway documenta como fallo rápido antes de llegar a un modelo:</p>
 <div class="table-scroll"><table>
 <thead>
 <tr>
-<th>Retried</th>
-<th>Why it is safe</th>
+<th>Se reintenta</th>
+<th>Por qué es seguro</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><code>429 rate-limit-exceeded-requests</code></td>
-<td>Refused at the door</td>
+<td>Rechazado en la puerta</td>
 </tr>
 <tr>
 <td><code>503 backend-unavailable</code></td>
-<td>The circuit breaker was open; nothing was dispatched</td>
+<td>El cortacircuitos estaba abierto; no se despachó nada</td>
 </tr>
 <tr>
 <td><code>503 rate-limiting-unavailable</code></td>
-<td>The limiter's store was down; refused fail-closed</td>
+<td>El almacén del limitador estaba caído; rechazo fail-closed</td>
 </tr>
 <tr>
 <td><code>503 usage-store-unavailable</code></td>
-<td>Refused before dispatch</td>
+<td>Rechazado antes de despachar</td>
 </tr>
 </tbody>
 </table></div>
-<p>Everything else raises. A <code>502 upstream-error</code> is <strong>not</strong> retried by default: it means the
-gateway's own attempts already failed, so a client retry is a fourth attempt at something that
-failed three times. You can opt in (<code>retry_upstream_errors</code>), and even then it is capped at one
-extra attempt regardless of <code>max_attempts</code>.</p>
-<p><strong>A client-side timeout is never retried by default either</strong>, and that one surprises people. The
-backend is probably still generating. The error message says so rather than leaving you to work it
-out.</p>
-<h3>A stream fails in two ways, and only one is retried</h3>
-<p>The rule above decides this too, but a stream makes the two halves look alike when they are not.</p>
-<p><strong>Rejected before the stream begins → retried.</strong> The gateway opens the connection to the engine and
-reads its status <em>before</em> the <code>200</code>/<code>text/event-stream</code> headers exist, so a refusal comes back as an
-ordinary error response — the same status and body the non-streaming form of the endpoint returns.
-Nothing was generated and nothing was billed, so reopening is a first generation rather than a
-second, and it goes through the table above unchanged, <code>Retry-After</code> included. It is also the only
-retry there is: <strong>the gateway performs no internal retries on a streamed request</strong>, so a <code>503 backend-unavailable</code> reaches you after one attempt rather than three. The backoff does not change;
-the time you waited before seeing it does.</p>
-<p><strong>Failed after the stream began → never retried.</strong> Once one chunk exists the headers are committed,
-so the failure arrives in band instead, as a chunk carrying <code>error</code>. Part of the answer was delivered
-and part was billed, so a repeat is a fresh generation rather than a resumption. The SDK raises with
-the partial text attached and lets you decide, because only you know what the partial output was used
-for.</p>
-<p>An <code>Idempotency-Key</code> does not change either half. On a stream it replays one the gateway <em>finished</em>
-and whose delivery your connection dropped — never one the model itself broke.</p>
+<p>Todo lo demás lanza. Un <code>502 upstream-error</code> <strong>no</strong> se reintenta por defecto: significa que los
+intentos del propio gateway ya fallaron, así que un reintento del cliente es un cuarto intento de
+algo que falló tres veces. Puedes activarlo (<code>retry_upstream_errors</code>), y aun así queda limitado a un
+intento extra sin importar <code>max_attempts</code>.</p>
+<p><strong>Un timeout de cliente tampoco se reintenta nunca por defecto</strong>, y ese sorprende. El backend
+probablemente sigue generando. El mensaje de error lo dice en vez de dejarte deducirlo.</p>
+<h3>Un stream falla de dos maneras, y solo una se reintenta</h3>
+<p>La regla de arriba decide esto también, pero un stream hace que las dos mitades parezcan iguales
+cuando no lo son.</p>
+<p><strong>Rechazado antes de que el stream empiece → se reintenta.</strong> El gateway abre la conexión al motor y
+lee su status <em>antes</em> de que existan las cabeceras <code>200</code>/<code>text/event-stream</code>, así que un rechazo
+vuelve como una respuesta de error normal — el mismo status y cuerpo que devuelve la forma
+no-streaming del endpoint. No se generó nada y no se facturó nada, así que reabrir es una primera
+generación y no una segunda, y pasa por la tabla de arriba sin cambios, <code>Retry-After</code> incluido. Es
+además el único reintento que hay: <strong>el gateway no hace reintentos internos en una petición
+streamed</strong>, así que un <code>503 backend-unavailable</code> te llega tras un intento en vez de tres. El backoff
+no cambia; lo que cambia es el tiempo que esperaste antes de verlo.</p>
+<p><strong>Falló después de que el stream empezara → nunca se reintenta.</strong> En cuanto existe un chunk las
+cabeceras están comprometidas, así que el fallo llega en banda, como un chunk que lleva <code>error</code>.
+Parte de la respuesta se entregó y parte se facturó, así que repetir es una generación nueva y no una
+reanudación. El SDK lanza con el texto parcial adjunto y te deja decidir, porque solo tú sabes para
+qué se usó esa salida parcial.</p>
+<p>Una <code>Idempotency-Key</code> no cambia ninguna de las dos mitades. En un stream repite uno que el gateway
+<em>terminó</em> y cuya entrega se cortó por tu conexión — nunca uno que el propio modelo rompió.</p>
 <blockquote>
-<p>Until 2026-09-27 the first half could not be expressed at all: a stream rejected before it began
-arrived as a <code>200</code> whose body was nothing but <code>data: [DONE]</code>, indistinguishable from a legitimately
-empty answer. There was no visible rejection to retry. The platform now returns the engine's real
-status.</p>
+<p>Hasta el 27/09/2026 la primera mitad no se podía expresar en absoluto: un stream rechazado antes de
+empezar llegaba como un <code>200</code> cuyo cuerpo era solo <code>data: [DONE]</code>, indistinguible de una respuesta
+legítimamente vacía. No había rechazo visible que reintentar. La plataforma ya devuelve el status
+real del motor.</p>
 </blockquote>
-<h2>Waiting</h2>
-<p>When the gateway sends <code>Retry-After</code>, the SDK uses it. It is server-supplied and authoritative: for
-an open circuit breaker it is the real expected recovery time, which no local heuristic improves
-on.</p>
-<p>With one exception. <strong>A wait longer than <code>max_backoff</code> is handed back rather than slept through</strong>,
-because blocking a caller for minutes inside one call is worse than telling them. The error carries
-<code>retry_after</code>, so you can schedule the work yourself.</p>
-<p>Without a <code>Retry-After</code>, exponential backoff with jitter — jitter so that callers recovering from
-one outage do not resynchronise into a second one.</p>
-<h3>A wait is not a hang</h3>
-<p><code>Retry-After</code> on a <code>429</code> is seconds until the window resets, so it runs 0–60. An SDK that respects
-it looks, from outside, like one slow call among fast ones. That has now been filed as a hang three
-times by three different teams.</p>
-<p>So the wait is reported twice. Once in the log, at <code>INFO</code> when it is long enough for a person to
-notice — sub-second backoff stays at <code>DEBUG</code>, because the noise worry is frequent small retries,
-not the rare long one. And once as <strong>data on the response</strong>:</p>
+<h2>Esperar</h2>
+<p>Cuando el gateway manda <code>Retry-After</code>, el SDK lo usa. Lo da el servidor y es autoritativo: para un
+cortacircuitos abierto es el tiempo real esperado de recuperación, que ninguna heurística local
+mejora.</p>
+<p>Con una excepción. <strong>Una espera más larga que <code>max_backoff</code> se devuelve en vez de dormirse</strong>, porque
+bloquear a un llamante durante minutos dentro de una llamada es peor que decírselo. El error lleva
+<code>retry_after</code>, así que puedes planificar el trabajo tú.</p>
+<p>Sin <code>Retry-After</code>, backoff exponencial con jitter — jitter para que los llamantes que se recuperan de
+una caída no se resincronicen provocando una segunda.</p>
+<h3>Una espera no es un cuelgue</h3>
+<p>El <code>Retry-After</code> de un <code>429</code> son segundos hasta que se reinicia la ventana, así que va de 0 a 60. Un
+SDK que lo respeta parece, desde fuera, una llamada lenta entre llamadas rápidas. Eso ya se ha
+reportado como cuelgue tres veces, por tres equipos distintos.</p>
+<p>Así que la espera se reporta dos veces. Una en el log, a nivel <code>INFO</code> cuando es larga como para que
+una persona lo note — el backoff de menos de un segundo se queda en <code>DEBUG</code>, porque la preocupación
+por ruido son los reintentos pequeños y frecuentes, no el raro largo. Y otra como <strong>dato en la
+respuesta</strong>:</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span> <span class="n">messages</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">])</span>
 
 <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">waited_s</span>    <span class="c1"># 36.0</span>
@@ -261,24 +263,25 @@ not the rare long one. And once as <strong>data on the response</strong>:</p>
 
 <span class="nx">completion</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">waitedMs</span><span class="p">;</span><span class="w"> </span><span class="c1">// 36000</span>
 <span class="nx">completion</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">attempts</span><span class="p">;</span><span class="w"> </span><span class="c1">// 2</span></code></pre></div>
-</div><p>Use the second. A log line is invisible unless the application configured a handler for it — the
-SDKs install a <code>NullHandler</code> and do not touch your logging — and a latency dashboard cannot read
-one anyway.</p>
+</div><p>Usa el segundo. Una línea de log es invisible salvo que la aplicación haya configurado un handler
+—los SDK instalan un <code>NullHandler</code> y no tocan tu logging— y un panel de latencia no sabe leerla de
+todas formas.</p>
 <blockquote>
-<p><strong>Known limit, in four of the five.</strong> A call that waited and then failed <em>anyway</em> reports none of
-this in Python, Go, Rust or Swift: the exception carries no response metadata. That is the call
-whose duration most needs explaining, and it is on the roadmap rather than done.</p>
-<p><strong>TypeScript answers it</strong>, because its errors already carry <code>meta</code> — so the counters are stamped
-on before the error leaves, and <code>error.meta.waitedMs</code> says how long a failed call spent asleep:</p>
+<p><strong>Límite conocido, en cuatro de los cinco.</strong> Una llamada que esperó y después falló <em>igualmente</em> no
+reporta nada de esto en Python, Go, Rust ni Swift: la excepción no lleva metadatos de respuesta. Esa
+es la llamada cuya duración más necesita explicación, y está en el roadmap en vez de hecha.</p>
+<p><strong>TypeScript sí lo contesta</strong>, porque sus errores ya llevan <code>meta</code> — así que los contadores se
+estampan antes de que el error salga, y <code>error.meta.waitedMs</code> dice cuánto durmió una llamada que
+falló:</p>
 <div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="w"> </span><span class="ow">instanceof</span><span class="w"> </span><span class="nx">APIError</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nx">log</span><span class="p">.</span><span class="nx">warn</span><span class="p">(</span><span class="s2">"gave up"</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">attempts</span><span class="o">:</span><span class="w"> </span><span class="kt">error.meta.attempts</span><span class="p">,</span><span class="w"> </span><span class="nx">waitedMs</span><span class="o">:</span><span class="w"> </span><span class="kt">error.meta.waitedMs</span><span class="w"> </span><span class="p">});</span>
 <span class="w">  </span><span class="p">}</span>
 <span class="p">}</span></code></pre></div>
 </blockquote>
-<h2>Idempotency</h2>
-<p>An <code>Idempotency-Key</code> changes what is safe, and it is the only thing that makes a timed-out request
-retryable:</p>
+<h2>Idempotencia</h2>
+<p>Una <code>Idempotency-Key</code> cambia lo que es seguro, y es lo único que hace reintentable una petición que
+dio timeout:</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
     <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"..."</span><span class="p">}],</span>
@@ -304,13 +307,14 @@ retryable:</p>
 <span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="nx">model</span><span class="o">:</span><span class="w"> </span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span><span class="w"> </span><span class="nx">messages</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nx">role</span><span class="o">:</span><span class="w"> </span><span class="s2">"user"</span><span class="p">,</span><span class="w"> </span><span class="nx">content</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span><span class="p">}]</span><span class="w"> </span><span class="p">},</span>
 <span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="nx">idempotencyKey</span><span class="o">:</span><span class="w"> </span><span class="s2">"order-4417-summary"</span><span class="w"> </span><span class="p">},</span>
 <span class="p">);</span></code></pre></div>
-</div><p>With a key, a repeat returns the <strong>stored</strong> result: no model is reached, no usage is recorded,
-nothing counts against the spend cap. So the retry costs a round trip instead of a generation, and
-the timeout objection disappears. Without a key the old rule stands, because nothing about the
-danger has changed.</p>
-<p>Keys are capped at 255 characters and the SDK checks that before sending — the gateway reports an
-over-length key as a <em>conflict</em>, which points the investigation in the wrong direction.</p>
-<h3>Telling a replay apart from a generation</h3>
+</div><p>Con clave, una repetición devuelve el resultado <strong>almacenado</strong>: no se alcanza ningún modelo, no se
+registra uso, nada cuenta contra el tope de gasto. Así que el reintento cuesta un viaje de ida y
+vuelta en vez de una generación, y la objeción del timeout desaparece. Sin clave sigue en pie la
+regla antigua, porque nada del peligro ha cambiado.</p>
+<p>Las claves están limitadas a 255 caracteres y el SDK lo comprueba antes de enviar — el gateway
+reporta una clave demasiado larga como un <em>conflicto</em>, lo que apunta la investigación en la dirección
+equivocada.</p>
+<h3>Distinguir una repetición de una generación</h3>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="k">if</span> <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">idempotent_replay</span><span class="p">:</span>
     <span class="n">billed</span> <span class="o">=</span> <span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">idempotent_replay_of</span></code></pre></div>
 <div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="k">if</span><span class="w"> </span><span class="nx">completion</span><span class="p">.</span><span class="nx">Meta</span><span class="p">.</span><span class="nx">IdempotentReplay</span><span class="w"> </span><span class="p">{</span>
@@ -326,36 +330,36 @@ over-length key as a <em>conflict</em>, which points the investigation in the wr
 <div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">idempotentReplay</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">billed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">completion</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">idempotentReplayOf</span><span class="p">;</span>
 <span class="p">}</span></code></pre></div>
-</div><p>A replay carries its <strong>own</strong> <code>request_id</code>, and that id has no usage row — looking it up returns
-<code>404</code>, correctly, because replaying reached no model and was not billed.
-<code>idempotent_replay_of</code> is the id of the generation that <em>was</em> billed, and the only route from the
-response you received to the charge it corresponds to.</p>
-<p>If you reconcile usage from response ids, you need this field. Without it an audit starting from a
-replay's id finds nothing <strong>and cannot tell why</strong>.</p>
-<h3>A key is not known to be released by a failure</h3>
-<p>Everything above describes what a key can <strong>replay</strong>. It deliberately says nothing about what
-happens to the key when the first request <em>fails</em>, because we do not know, and the difference
-matters to anyone whose key is derived rather than random.</p>
-<p>A consumer running deterministic keys — <code>(run_id, step_id, body-fingerprint)</code>, so that resuming
-reproduces instead of paying twice — reported that a step which failed once kept returning the
-stored error for the whole 24-hour window, in milliseconds, so their retries never reached a model
-again. We could not reproduce it against our deployment with the failures we can produce
-(<code>400 unknown-instance</code>): the key was still usable afterwards, and a second call with a different
-body succeeded rather than being refused. Their case was a <code>5xx</code>, which we cannot force.</p>
-<p>So the honest statement is: <strong>whether a failed request holds its key is undefined here</strong>, it is
-decided by the gateway and not by this SDK, and it is being asked. Until it is answered, treat a
-derived key whose request failed as possibly unusable for the rest of the window, and note that a
-stored error arrives without <code>Idempotent-Replay</code>, so it is indistinguishable from a fresh one.</p>
-<h2>Cooldowns</h2>
-<p>The gateway runs its own circuit breaker per backend, so the SDKs do not add a second one — it
-would open on signals the server already counted, with worse information.</p>
-<p>What is left uncovered is what the gateway cannot report: the gateway itself being unreachable. For
-that there is a small cooldown registry keyed by <code>(host, model)</code>. When a <code>503</code> arrives with a
-<code>Retry-After</code>, further calls to that model fail locally until it expires, rather than spending a
-request to be told the same thing. The error says so explicitly, so a fast local failure is not
-mistaken for a real gateway answer.</p>
-<p>The cooldown is scoped to the model, not the host: one unavailable backend does not stop the rest.</p>
-<h2>Catching things</h2>
+</div><p>Una repetición lleva su <strong>propio</strong> <code>request_id</code>, y ese id no tiene fila de uso — buscarlo devuelve
+<code>404</code>, correctamente, porque repetir no alcanzó ningún modelo y no se facturó.
+<code>idempotent_replay_of</code> es el id de la generación que <strong>sí</strong> se facturó, y la única ruta desde la
+respuesta que recibiste hasta el cargo que le corresponde.</p>
+<p>Si concilias uso a partir de ids de respuesta, necesitas este campo. Sin él, una auditoría que
+empieza en el id de una repetición no encuentra nada <strong>y no puede decir por qué</strong>.</p>
+<h3>No se sabe si un fallo libera la clave</h3>
+<p>Todo lo de arriba describe lo que una clave puede <strong>repetir</strong>. Deliberadamente no dice nada sobre qué
+le pasa a la clave cuando la primera petición <em>falla</em>, porque no lo sabemos, y la diferencia importa
+a quien derive sus claves en vez de generarlas al azar.</p>
+<p>Un consumidor con claves deterministas — <code>(run_id, step_id, huella-del-cuerpo)</code>, para que reanudar
+reproduzca en vez de pagar dos veces — reportó que un paso que falló una vez siguió devolviendo el
+error almacenado durante toda la ventana de 24 horas, en milisegundos, así que sus reintentos no
+volvieron a alcanzar un modelo. No pudimos reproducirlo contra nuestro despliegue con los fallos que
+sabemos provocar (<code>400 unknown-instance</code>): la clave seguía usable después, y una segunda llamada con
+otro cuerpo tuvo éxito en vez de ser rechazada. Su caso era un <code>5xx</code>, que no podemos forzar.</p>
+<p>Así que la afirmación honesta es: <strong>si una petición fallida retiene su clave es indefinido aquí</strong>, lo
+decide el gateway y no este SDK, y está preguntado. Hasta que se conteste, trata una clave derivada
+cuya petición falló como posiblemente inusable el resto de la ventana, y ten en cuenta que un error
+almacenado llega sin <code>Idempotent-Replay</code>, así que es indistinguible de uno nuevo.</p>
+<h2>Enfriamientos</h2>
+<p>El gateway corre su propio cortacircuitos por backend, así que los SDK no añaden un segundo — se
+abriría con señales que el servidor ya contó, y con peor información.</p>
+<p>Lo que queda sin cubrir es lo que el gateway no puede reportar: que el propio gateway sea
+inalcanzable. Para eso hay un pequeño registro de enfriamiento indexado por <code>(host, modelo)</code>. Cuando
+llega un <code>503</code> con <code>Retry-After</code>, las llamadas siguientes a ese modelo fallan en local hasta que
+expira, en vez de gastar una petición para que te digan lo mismo. El error lo dice explícitamente,
+para que un fallo local rápido no se confunda con una respuesta real del gateway.</p>
+<p>El enfriamiento es por modelo, no por host: un backend caído no detiene el resto.</p>
+<h2>Capturar cosas</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">RateLimitError</span><span class="p">,</span> <span class="n">SpendCapExceededError</span><span class="p">,</span> <span class="n">APIError</span>
 
 <span class="k">try</span><span class="p">:</span>
@@ -396,14 +400,13 @@ mistaken for a real gateway answer.</p>
 <span class="w">  </span><span class="k">else</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">error</span><span class="w"> </span><span class="ow">instanceof</span><span class="w"> </span><span class="nx">APIError</span><span class="p">)</span><span class="w"> </span><span class="nx">log</span><span class="p">.</span><span class="nx">warn</span><span class="p">(</span><span class="s2">"gateway said no"</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">requestId</span><span class="o">:</span><span class="w"> </span><span class="kt">error.requestId</span><span class="w"> </span><span class="p">});</span>
 <span class="w">  </span><span class="k">else</span><span class="w"> </span><span class="k">throw</span><span class="w"> </span><span class="nx">error</span><span class="p">;</span>
 <span class="p">}</span></code></pre></div>
-</div><p>Every error carries <code>request_id</code>, and <code>trace_id</code> too on a current deployment. The rate-limit
-envelope used to omit <code>trace_id</code>; since guide <code>2026-09-19b</code> that envelope is a strict superset of
-the standard one, so both ids are there. The SDKs still model <code>trace_id</code> as optional, because a
-deployment predating that fix omits it. Those two ids are what
-a platform team needs; an error report without them is a description of a feeling.</p>
-<p>Next: <a href="04-configuration.html">Configuration and transport</a>.</p>
+</div><p>Cada error lleva <code>request_id</code>, y también <code>trace_id</code> en un despliegue actual. El sobre de rate-limit
+llegó a omitir <code>trace_id</code>; desde la guía <code>2026-09-19b</code> ese sobre es un superconjunto estricto del
+estándar, así que los dos ids están. Los SDK siguen modelando <code>trace_id</code> como opcional, porque un
+despliegue anterior a ese arreglo lo omite. Esos dos ids son lo que necesita un equipo de plataforma;
+un reporte de error sin ellos es la descripción de una sensación.</p>
 
-<div class="pager"><a class="prev" href="02-calls.html"><span class="dir">Previous</span>Making calls</a><a class="next" href="04-configuration.html"><span class="dir">Next</span>Configuration and transport</a></div>
+<div class="pager"><a class="prev" href="02-calls.html"><span class="dir">Previous</span>Hacer llamadas</a><a class="next" href="04-configuration.html"><span class="dir">Next</span>Configuración y transporte</a></div>
 <footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
 </main>
 </div>

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Getting started · Axonium</title>
+<title>Primeros pasos · Axonium</title>
 <meta name="description" content="Client SDKs for the Prometheus inference platform">
 <style>
 :root {
@@ -149,8 +149,8 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <nav>
   <div class="brand"><a href="index.html">Axonium</a></div>
   <div class="tag">Client SDKs for the Prometheus inference platform</div>
-  <ol><li><a href="index.html" aria-current="page">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
-  <div class="langs"><a href="index.html" hreflang="en" aria-current="true">English</a><a href="es/index.html" hreflang="es">Español</a></div>
+  <ol><li><a href="index.html" aria-current="page">Primeros pasos</a></li><li><a href="01-concepts.html">Conceptos</a></li><li><a href="02-calls.html">Hacer llamadas</a></li><li><a href="03-failure.html">Fallos, reintentos e idempotencia</a></li><li><a href="04-configuration.html">Configuración y transporte</a></li><li><a href="05-composed.html">Operaciones compuestas</a></li><li><a href="06-testing.html">Probar contra Axonium</a></li><li><a href="07-limits.html">Lo que no hace</a></li><li><a href="08-reference.html">Referencia de la API de Python</a></li></ol>
+  <div class="langs"><a href="../index.html" hreflang="en">English</a><a href="index.html" hreflang="es" aria-current="true">Español</a></div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
@@ -158,32 +158,33 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
   </div>
 </nav>
 <main>
-<h1>Getting started</h1>
-<p><strong>Axonium</strong> is a set of client SDKs for the <strong>Prometheus</strong> inference platform, in Python, Go,
-Rust, Swift and TypeScript.</p>
-<p><strong>Prometheus</strong> is a self-hosted inference platform: a catalog of small language, embedding,
-reranking and image models, served across managed instances behind one authenticated API, with
-per-model access control, rate limits, spend caps and per-request usage accounting.</p>
-<p>Your client talks to exactly one of its components — the <strong>gateway</strong>, which serves inference and
-issues tokens at a single address. The rest of the platform sits behind it: the model registry and
-the instances it schedules across, the auth service, the rate limiter and per-backend circuit
-breaker, and the usage store. These SDKs never address any of those directly, which is why there is
-one host to configure and not six.</p>
-<p>Five SDKs, one contract. They are separate implementations that share no code — what keeps them
-identical is a corpus of recorded wire bytes that all five replay. Behaviour that matches is
-verified, not intended.</p>
-<p><strong>This site is also available <a href="es/index.md">in Spanish</a>.</strong> Every example on it is shown in all five languages. If a tab is missing, that is a bug in the site and a
-test fails for it.</p>
-<h2>Install</h2>
+<h1>Primeros pasos</h1>
+<p><strong>Axonium</strong> es un conjunto de SDK cliente para la plataforma de inferencia <strong>Prometheus</strong>, en
+Python, Go, Rust, Swift y TypeScript.</p>
+<p><strong>Prometheus</strong> es una plataforma de inferencia autoalojada: un catálogo de modelos pequeños de
+lenguaje, embeddings, reranking e imagen, servidos en instancias gestionadas detrás de una sola API
+autenticada, con control de acceso por modelo, límites de tasa, topes de gasto y contabilidad de
+uso por petición.</p>
+<p>Tu cliente habla con exactamente uno de sus componentes — el <strong>gateway</strong>, que sirve la inferencia y
+emite los tokens en una sola dirección. El resto de la plataforma queda detrás: el registro de
+modelos y las instancias sobre las que planifica, el servicio de autenticación, el limitador de tasa
+y el cortacircuitos por backend, y el almacén de uso. Estos SDK nunca se dirigen a ninguno de ellos
+directamente, y por eso hay un host que configurar y no seis.</p>
+<p>Cinco SDK, un contrato. Son implementaciones separadas que no comparten código — lo que los mantiene
+idénticos es un corpus de bytes de cable grabados que los cinco reproducen. El comportamiento que
+coincide está <strong>verificado</strong>, no pretendido.</p>
+<p><strong>Este sitio también está <a href="../index.html">en inglés</a>.</strong> Cada ejemplo se muestra en los cinco
+lenguajes, y si falta una pestaña es un fallo del sitio y hay un test que lo caza.</p>
+<h2>Instalación</h2>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">pip<span class="w"> </span>install<span class="w"> </span>axonium</code></pre></div>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">go<span class="w"> </span>get<span class="w"> </span>github.com/Root1V/axonium-sdk/go</code></pre></div>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">cargo<span class="w"> </span>add<span class="w"> </span>axonium</code></pre></div>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash"><span class="c1"># Package.swift: .package(url: "https://github.com/Root1V/axonium-sdk-swift", from: "0.3.0")</span>
 swift<span class="w"> </span>package<span class="w"> </span>add-dependency<span class="w"> </span>https://github.com/Root1V/axonium-sdk-swift<span class="w"> </span>--from<span class="w"> </span><span class="m">0</span>.3.0</code></pre></div>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">npm<span class="w"> </span>install<span class="w"> </span>axonium</code></pre></div>
-<h2>The smallest thing that works</h2>
-<p>Credentials are the only setting you must supply. The gateway issues its own tokens, so there is
-one address, and usually none to give:</p>
+<h2>Lo más pequeño que funciona</h2>
+<p>Las credenciales son el único ajuste que tienes que dar. El gateway emite sus propios tokens, así
+que hay una sola dirección, y normalmente ninguna que indicar:</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">Axonium</span>
 
 <span class="k">with</span> <span class="n">Axonium</span><span class="p">(</span><span class="n">client_id</span><span class="o">=</span><span class="s2">"..."</span><span class="p">,</span> <span class="n">client_secret</span><span class="o">=</span><span class="s2">"..."</span><span class="p">)</span> <span class="k">as</span> <span class="n">client</span><span class="p">:</span>
@@ -236,44 +237,49 @@ one address, and usually none to give:</p>
 <span class="w">  </span><span class="nx">messages</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nx">role</span><span class="o">:</span><span class="w"> </span><span class="s2">"user"</span><span class="p">,</span><span class="w"> </span><span class="nx">content</span><span class="o">:</span><span class="w"> </span><span class="s2">"Say hello"</span><span class="w"> </span><span class="p">}],</span>
 <span class="p">});</span>
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">content</span><span class="p">);</span></code></pre></div>
-</div><p>Credentials can come from the environment instead — <code>AXONIUM_CLIENT_ID</code> and
-<code>AXONIUM_CLIENT_SECRET</code>. The SDK never reads a <code>.env</code> file itself; loading one is the
-application's job, and <a href="04-configuration.html">Configuration</a> says why.</p>
-<h2>What you get that a plain HTTP call does not give you</h2>
-<p>A <code>POST</code> to the gateway is not hard. What takes time to get right is everything around it, and
-that is what these SDKs are:</p>
+</div><p>Las credenciales pueden venir del entorno — <code>AXONIUM_CLIENT_ID</code> y <code>AXONIUM_CLIENT_SECRET</code>. El SDK
+nunca lee un fichero <code>.env</code> por su cuenta; cargarlo es trabajo de la aplicación, y
+<a href="04-configuration.html">Configuración</a> explica por qué.</p>
+<h2>Lo que te da esto y no te da una llamada HTTP a secas</h2>
+<p>Un <code>POST</code> al gateway no es difícil. Lo que cuesta acertar es todo lo que lo rodea, y eso es lo que
+son estos SDK:</p>
 <ul>
-<li><strong>Tokens</strong> fetched, cached and refreshed ahead of expiry, with a single retry on a <code>401</code>.</li>
-<li><strong>Typed errors</strong>, one class per entry in the gateway's error catalog, so <code>except SpendCapExceededError</code> is a thing you can write.</li>
-<li><strong>Retries that cannot double-bill.</strong> A retry is attempted only where the platform states no
-generation occurred. See <a href="03-failure.html">Failure</a> — this is the part worth reading.</li>
-<li><strong>Streaming</strong> with in-band error detection, real cancellation, and tool calls reassembled into
-the same shape non-streaming returns.</li>
-<li><strong>Rate-limit visibility</strong> on every response, per budget.</li>
+<li><strong>Tokens</strong> pedidos, cacheados y refrescados antes de caducar, con un único reintento ante un <code>401</code>.</li>
+<li><strong>Errores tipados</strong>, una clase por cada fila del catálogo de errores del gateway, para que
+<code>except SpendCapExceededError</code> sea algo que puedas escribir.</li>
+<li><strong>Reintentos que no pueden cobrar dos veces.</strong> Solo se reintenta donde la plataforma afirma que no
+hubo generación. Ver <a href="03-failure.html">Fallos</a> — esa es la parte que merece la pena leer.</li>
+<li><strong>Streaming</strong> con detección de errores en banda, cancelación de verdad, y llamadas a herramientas
+reensambladas en la misma forma que devuelve la llamada no-streaming.</li>
+<li><strong>Visibilidad de los límites de tasa</strong> en cada respuesta, por presupuesto.</li>
 </ul>
-<h2>Where to go next</h2>
+<h2>Dónde seguir</h2>
 <ul>
-<li><a href="01-concepts.html">Concepts</a> — the pieces and what each one is for.</li>
-<li><a href="02-calls.html">Making calls</a> — the client and the six things it can ask for.</li>
-<li><a href="03-failure.html">Failure, retries and idempotency</a> — the expensive part.</li>
-<li><a href="04-configuration.html">Configuration and transport</a> — pointing this at your deployment.</li>
-<li><a href="05-composed.html">Composed operations</a> — when one call is not enough.</li>
-<li><a href="06-testing.html">Testing against Axonium</a> — building on top without spending anything.</li>
-<li><a href="07-limits.html">What it does not do</a> — the limits, said out loud.</li>
-<li><a href="08-reference.html">Python API reference</a> — every exported symbol.</li>
+<li><a href="01-concepts.html">Conceptos</a> — las piezas y para qué sirve cada una.</li>
+<li><a href="02-calls.html">Hacer llamadas</a> — el cliente y las seis cosas que puede pedir.</li>
+<li><a href="03-failure.html">Fallos, reintentos e idempotencia</a> — la parte cara.</li>
+<li><a href="04-configuration.html">Configuración y transporte</a> — apuntar esto a tu despliegue.</li>
+<li><a href="05-composed.html">Operaciones compuestas</a> — cuando una llamada no basta.</li>
+<li><a href="06-testing.html">Probar contra Axonium</a> — construir encima sin gastar nada.</li>
+<li><a href="07-limits.html">Lo que no hace</a> — los límites, dichos en voz alta.</li>
+<li><a href="08-reference.html">Referencia de la API de Python</a> — cada símbolo exportado.</li>
 </ul>
-<p>Reference documentation for the other four is generated by their own ecosystems:
-<a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">pkg.go.dev</a> for Go,
-<a href="https://docs.rs/axonium/latest/axonium/">docs.rs</a> for Rust, DocC in the
-<a href="https://github.com/Root1V/axonium-sdk-swift">Swift repository</a>, and the <code>.d.ts</code> files plus
-<a href="https://github.com/Root1V/axonium-sdk/blob/main/typescript/docs/api.md"><code>docs/api.md</code></a> for
-TypeScript, which also ships a
-<a href="https://github.com/Root1V/axonium-sdk/blob/main/typescript/docs/migrating-from-python.md">migration guide from Python</a>.</p>
+<p>La documentación de referencia de los otros cuatro la generan sus propios ecosistemas:
+<a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">pkg.go.dev</a> para Go,
+<a href="https://docs.rs/axonium/latest/axonium/">docs.rs</a> para Rust, DocC en el
+<a href="https://github.com/Root1V/axonium-sdk-swift">repositorio de Swift</a>, y los ficheros <code>.d.ts</code> más
+<a href="https://github.com/Root1V/axonium-sdk/blob/main/typescript/docs/api.md"><code>docs/api.md</code></a> para
+TypeScript, que además incluye una
+<a href="https://github.com/Root1V/axonium-sdk/blob/main/typescript/docs/migrating-from-python.md">guía de migración desde Python</a>.</p>
 <hr />
-<p><em>This page and the rest of this site are generated from <code>docs/*.md</code>. A test fails if the rendered
-HTML stops matching its source, and another fails if the reference stops matching the package.</em></p>
+<p><em>Los bloques de código son <strong>idénticos</strong> a los de la versión en inglés, a propósito: lo que se pega
+en un editor no se traduce, y mantenerlos iguales es lo que evita que las dos versiones del sitio se
+separen sin que nadie lo note.</em></p>
+<p><em>Esta página y el resto del sitio se generan desde <code>docs/es/*.md</code>. Un test falla si el HTML deja de
+coincidir con su Markdown, y otro falla si la traducción se queda atrás respecto al original en
+inglés.</em></p>
 
-<div class="pager"><a class="next" href="01-concepts.html"><span class="dir">Next</span>Concepts</a></div>
+<div class="pager"><a class="next" href="01-concepts.html"><span class="dir">Next</span>Conceptos</a></div>
 <footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
 </main>
 </div>

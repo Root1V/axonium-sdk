@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>What it does not do · Axonium</title>
+<title>Lo que no hace · Axonium</title>
 <meta name="description" content="Client SDKs for the Prometheus inference platform">
 <style>
 :root {
@@ -149,8 +149,8 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <nav>
   <div class="brand"><a href="index.html">Axonium</a></div>
   <div class="tag">Client SDKs for the Prometheus inference platform</div>
-  <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html" aria-current="page">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
-  <div class="langs"><a href="07-limits.html" hreflang="en" aria-current="true">English</a><a href="es/07-limits.html" hreflang="es">Español</a></div>
+  <ol><li><a href="index.html">Primeros pasos</a></li><li><a href="01-concepts.html">Conceptos</a></li><li><a href="02-calls.html">Hacer llamadas</a></li><li><a href="03-failure.html">Fallos, reintentos e idempotencia</a></li><li><a href="04-configuration.html">Configuración y transporte</a></li><li><a href="05-composed.html">Operaciones compuestas</a></li><li><a href="06-testing.html">Probar contra Axonium</a></li><li><a href="07-limits.html" aria-current="page">Lo que no hace</a></li><li><a href="08-reference.html">Referencia de la API de Python</a></li></ol>
+  <div class="langs"><a href="../07-limits.html" hreflang="en">English</a><a href="07-limits.html" hreflang="es" aria-current="true">Español</a></div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
@@ -158,71 +158,72 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
   </div>
 </nav>
 <main>
-<h1>What it does not do</h1>
+<h1>Lo que no hace</h1>
 <blockquote>
-<p><strong>Where does this stop?</strong></p>
+<p><strong>¿Dónde se para esto?</strong></p>
 </blockquote>
-<p>The page that is easiest to skip writing and the one that saves the most time. If a limit here is
-wrong for you, that is useful to find out now rather than three days in.</p>
-<h2>It does not normalise responses</h2>
-<p>Inference responses are passed through close to verbatim. The SDKs model the fields the contract
-guarantees, keep the rest reachable as raw, and do <strong>not</strong> reshape backend-specific output into a
-vocabulary of their own.</p>
-<p>This is deliberate. Backends are heterogeneous, and a normalising layer inside five separate
-language SDKs is five implementations of the same opinion, drifting. Normalisation belongs above
-the SDK, in whatever framework consumes the models, where there is one of it.</p>
-<h2>It does not retry streams</h2>
-<p>Ever, and there is no flag. A retry after partial output has been delivered is a fresh billable
-generation, not a resumption. The gateway does not retry them either.</p>
-<p>If a stream fails, you get <code>StreamInterruptedError</code> carrying what arrived. Deciding whether to start
-a new one is yours, because only you know whether the partial output was used.</p>
-<h2>It does not run a circuit breaker</h2>
-<p>The gateway runs one per backend and reports <code>503 backend-unavailable</code> with a <code>Retry-After</code>
-computed from real recovery time. A second breaker on the client would open on signals the server
-already counted, using worse information.</p>
-<p>What is here is smaller: a cooldown registry that respects <code>Retry-After</code> and fails fast locally
-until it expires. If you want full <code>CLOSED</code>/<code>OPEN</code>/<code>HALF_OPEN</code>, put it above the SDK.</p>
-<h2>It does not log prompts or completions</h2>
-<p>Not at any level, and there is no flag to turn it on. That is where personal data leaks, and a flag
-for it is a flag someone sets during an incident and never unsets. The <code>Authorization</code> header is
-never logged either.</p>
-<p>Correlation is by <code>request_id</code>, <code>trace_id</code> and <code>instance_id</code>, which are on every response.</p>
-<h2>It does not configure your logging</h2>
-<p><code>NullHandler</code> in Python, no subscriber installed in Rust, an injected <code>slog.Logger</code> in Go. A library
-that calls <code>basicConfig()</code> overwrites its host's configuration.</p>
-<p>The consequence is real and worth stating: <strong>if you have not attached a handler, you will not see
-the SDK's logs</strong> — including the line saying it is waiting out a <code>429</code>. That is why the wait is also
-data on the response. See <a href="03-failure.html">Failure</a>.</p>
-<h2>It does not read <code>.env</code></h2>
-<p>Loading one is the application's decision. See <a href="04-configuration.html">Configuration</a>.</p>
-<h2>It does not report metadata on failures</h2>
-<p>A call that waited 90 seconds across three attempts and then failed reports none of that in
-Python, Go, Rust or Swift: the exception carries no <code>ResponseMeta</code>. Successes carry <code>waited_s</code> and
-<code>attempts</code>; failures do not. This is a known gap on the roadmap, not a design decision.</p>
-<p><strong>TypeScript answers it</strong>, because its errors already carry <code>meta</code> — <code>error.meta.waitedMs</code> and
-<code>error.meta.attempts</code> are stamped on before the error leaves.</p>
-<h2>It does not propagate W3C trace context</h2>
-<p>No <code>traceparent</code> is sent by default. The gateway's documented behaviour is that a client-supplied
-<code>X-Trace-ID</code> is ignored or honoured conditionally depending on deployment mode, and W3C propagation
-is not documented at all. Sending a header that may be silently dropped produces traces with
-invisible gaps, which is worse than no propagation.</p>
-<p>OpenTelemetry spans are available behind an optional extra, off by default, spans only.</p>
-<h2>It does not validate your prompts</h2>
-<p>No content filtering, no PII detection, no token counting before send. The previous generation of
-this SDK did some of that and it belongs elsewhere: the SDK cannot know your policy, and a partial
-implementation of one invites the belief that it is complete.</p>
-<p>It does validate what the <strong>contract</strong> constrains: parameter ranges, message roles, idempotency key
-length, and image URLs with an <code>http(s)</code> scheme — the last rejected with an explicit SSRF-policy
-message rather than a generic validation error.</p>
-<h2>It is not a framework</h2>
-<p>No agent loop, no workflow abstractions, no chain builders, no LangChain or LangGraph bridges. The
-previous generation had them and they were the first thing to rot, because they encoded opinions
-about orchestration that changed faster than the transport did.</p>
-<p>This is a transport client. Build the loop you need; <a href="05-composed.html">Composed operations</a> shows
-what the pieces look like together.</p>
-<p>Next: <a href="08-reference.html">Python API reference</a>.</p>
+<p>La página más fácil de no escribir y la que más tiempo ahorra. Si alguno de estos límites no te vale,
+eso es útil descubrirlo ahora y no tres días después.</p>
+<h2>No normaliza respuestas</h2>
+<p>Las respuestas de inferencia se pasan casi verbatim. Los SDK modelan los campos que el contrato
+garantiza, mantienen el resto accesible como <code>raw</code>, y <strong>no</strong> reescriben la salida específica de un
+backend en un vocabulario propio.</p>
+<p>Es deliberado. Los backends son heterogéneos, y una capa de normalización dentro de cinco SDK
+distintos son cinco implementaciones de la misma opinión, separándose. La normalización va por encima
+del SDK, en el framework que consuma los modelos, donde hay una sola.</p>
+<h2>No reintenta streams</h2>
+<p>Nunca, y no hay bandera. Un reintento después de haber entregado salida parcial es una generación
+nueva y facturable, no una reanudación. El gateway tampoco los reintenta.</p>
+<p>Si un stream falla, recibes <code>StreamInterruptedError</code> con lo que llegó. Decidir si empezar otro es
+tuyo, porque solo tú sabes si la salida parcial se usó.</p>
+<h2>No corre un cortacircuitos</h2>
+<p>El gateway corre uno por backend y reporta <code>503 backend-unavailable</code> con un <code>Retry-After</code> calculado
+del tiempo real de recuperación. Un segundo cortacircuitos en el cliente se abriría con señales que
+el servidor ya contó, y con peor información.</p>
+<p>Lo que sí hay es más pequeño: un registro de enfriamiento que respeta el <code>Retry-After</code> y falla rápido
+en local hasta que expira. Si quieres <code>CLOSED</code>/<code>OPEN</code>/<code>HALF_OPEN</code> completo, ponlo encima del SDK.</p>
+<h2>No registra prompts ni completions</h2>
+<p>A ningún nivel, y no hay bandera para activarlo. Por ahí se filtran los datos personales, y una
+bandera para eso es una bandera que alguien activa durante un incidente y nadie desactiva después.
+La cabecera <code>Authorization</code> tampoco se registra nunca.</p>
+<p>La correlación es por <code>request_id</code>, <code>trace_id</code> e <code>instance_id</code>, que van en cada respuesta.</p>
+<h2>No configura tu logging</h2>
+<p><code>NullHandler</code> en Python, ningún subscriber instalado en Rust, un <code>slog.Logger</code> inyectado en Go. Una
+biblioteca que llama a <code>basicConfig()</code> pisa la configuración de quien la hospeda.</p>
+<p>La consecuencia es real y merece decirse: <strong>si no has enganchado un handler, no vas a ver los logs
+del SDK</strong> — incluida la línea que dice que está esperando un <code>429</code>. Por eso la espera también viaja
+como dato en la respuesta. Ver <a href="03-failure.html">Fallos</a>.</p>
+<h2>No lee tu <code>.env</code></h2>
+<p>Cargarlo es decisión de la aplicación. Ver <a href="04-configuration.html">Configuración</a>.</p>
+<h2>No reporta metadatos en los fallos</h2>
+<p>Una llamada que esperó 90 segundos en tres intentos y después falló no reporta nada de eso en Python,
+Go, Rust ni Swift: la excepción no lleva <code>ResponseMeta</code>. Los éxitos llevan <code>waited_s</code> y <code>attempts</code>;
+los fallos no. Es un hueco conocido en el roadmap, no una decisión de diseño.</p>
+<p><strong>TypeScript sí lo contesta</strong>, porque sus errores ya llevan <code>meta</code> — <code>error.meta.waitedMs</code> y
+<code>error.meta.attempts</code> se estampan antes de que el error salga.</p>
+<h2>No propaga el contexto de traza W3C</h2>
+<p>No se manda <code>traceparent</code> por defecto. El comportamiento documentado del gateway es que un
+<code>X-Trace-ID</code> del cliente se ignora o se honra condicionalmente según el modo de despliegue, y la
+propagación W3C no está documentada en absoluto. Mandar una cabecera que puede descartarse en
+silencio produce trazas con huecos invisibles, que es peor que no propagar.</p>
+<p>Los spans de OpenTelemetry están disponibles tras un extra opcional, apagados por defecto, solo
+spans.</p>
+<h2>No valida tus prompts</h2>
+<p>Ni filtrado de contenido, ni detección de datos personales, ni conteo de tokens antes de enviar. La
+generación anterior de este SDK hacía algo de eso y pertenece a otro sitio: el SDK no puede conocer
+tu política, y una implementación parcial de una invita a creer que está completa.</p>
+<p>Lo que sí valida es lo que el <strong>contrato</strong> restringe: rangos de parámetros, roles de los mensajes,
+longitud de la clave de idempotencia, y URLs de imagen con esquema <code>http(s)</code> — esta última rechazada
+con un mensaje explícito de política SSRF y no con un error de validación genérico.</p>
+<h2>No es un framework</h2>
+<p>Ni bucle de agente, ni abstracciones de workflow, ni constructores de cadenas, ni puentes a LangChain
+o LangGraph. La generación anterior los tenía y fueron lo primero que se pudrió, porque codificaban
+opiniones sobre orquestación que cambiaban más rápido que el transporte.</p>
+<p>Esto es un cliente de transporte. Construye el bucle que necesites; <a href="05-composed.html">Operaciones
+compuestas</a> enseña cómo se ven las piezas juntas.</p>
+<p>Siguiente: <a href="08-reference.html">Referencia de la API de Python</a>.</p>
 
-<div class="pager"><a class="prev" href="06-testing.html"><span class="dir">Previous</span>Testing against Axonium</a><a class="next" href="08-reference.html"><span class="dir">Next</span>Python API reference</a></div>
+<div class="pager"><a class="prev" href="06-testing.html"><span class="dir">Previous</span>Probar contra Axonium</a><a class="next" href="08-reference.html"><span class="dir">Next</span>Referencia de la API de Python</a></div>
 <footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
 </main>
 </div>

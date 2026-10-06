@@ -442,3 +442,61 @@ class TestEveryPackageLinksToTheDocumentation:
         # The one field npm shows most prominently, and the repository is already in `repository`.
         manifest = json.loads((REPO / "typescript" / "package.json").read_text(encoding="utf-8"))
         assert manifest["homepage"] == self.SITE
+
+
+SPANISH = DOCS / "es"
+
+
+def spanish_pages() -> list[Path]:
+    return sorted(SPANISH.glob("*.md"))
+
+
+class TestTheSpanishSiteHasNotDrifted:
+    """A translation that quietly stops matching is worse than no translation.
+
+    A reader cannot tell. They read a page that was true once, act on it, and the mistake surfaces
+    somewhere unrelated — so the whole mechanism here exists to make falling behind **loud** rather
+    than to prevent it: every Spanish page records the digest of the English revision it was made
+    from, and these tests fail the moment that revision moves.
+
+    The translation is then stale *on purpose* and says so, which is a position you can be in.
+    Silently wrong is not.
+    """
+
+    def test_no_translation_has_fallen_behind_its_source(self) -> None:
+        problems = _load_renderer().stale_translations()
+        assert not problems, "\n".join(["translations need attention:", *problems])
+
+    @pytest.mark.parametrize("page", spanish_pages(), ids=lambda p: p.name)
+    def test_the_code_blocks_are_byte_identical_to_the_english(self, page: Path) -> None:
+        """Prose is translated; code never is.
+
+        This is the guard that matters most, because it is the one failure a reader cannot survive:
+        a translated identifier does not compile, and a reordered block is a snippet that belongs to
+        a different paragraph. It is also not hypothetical — writing these pages produced exactly
+        that, a Spanish page with the right *number* of blocks in the wrong *places*, which read as
+        correct until the two sequences were compared.
+        """
+        if page.name in _load_renderer().GENERATED:
+            pytest.skip("stands in for a generated page rather than translating it")
+
+        fences = re.compile(r"```.*?```", re.S)
+        english = fences.findall((DOCS / page.name).read_text(encoding="utf-8"))
+        spanish = fences.findall(page.read_text(encoding="utf-8"))
+
+        assert spanish == english, (
+            f"docs/es/{page.name}: the code blocks differ from docs/{page.name}. "
+            f"English has {len(english)}, Spanish has {len(spanish)}. Code is never translated: "
+            f"splice the English blocks in rather than retyping them."
+        )
+
+    @pytest.mark.parametrize("page", spanish_pages(), ids=lambda p: p.name)
+    def test_a_group_showing_one_sdk_language_shows_them_all(self, page: Path) -> None:
+        # The same guard the English pages get. It cannot fail while the test above passes, and it
+        # is here anyway: the day somebody adds a Spanish-only example, this is what catches it.
+        incomplete = [
+            group
+            for group in code_groups(page)
+            if set(group) & SDK_LANGUAGES and not set(group) >= SDK_LANGUAGES
+        ]
+        assert not incomplete, f"es/{page.name}: groups missing a language: {incomplete}"

@@ -52,6 +52,15 @@ nav a { display: block; padding: 0.3rem 0.6rem; margin-left: -0.6rem; border-rad
   color: var(--muted); text-decoration: none; font-size: 0.9rem; }
 nav a:hover { color: var(--ink); background: var(--accent-soft); }
 nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); font-weight: 560; }
+/* Both languages are always shown, with the current one marked rather than hidden: a switch that
+   removes the language you are reading leaves you guessing which one that is. */
+nav .langs { display: flex; gap: 0.4rem; margin-top: 1.4rem; font-size: 0.84rem; }
+nav .langs a { padding: 0.15rem 0.5rem; border: 1px solid var(--line); border-radius: 0.3rem;
+  color: var(--muted); text-decoration: none; }
+nav .langs a:hover { color: var(--fg); border-color: var(--muted); }
+nav .langs a[aria-current="true"] { color: var(--accent); border-color: var(--accent);
+  background: var(--code-bg); }
+
 nav .ext { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 nav .ext a { font-size: 0.84rem; }
 
@@ -141,6 +150,7 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
   <div class="brand"><a href="index.html">Axonium</a></div>
   <div class="tag">Client SDKs for the Prometheus inference platform</div>
   <ol><li><a href="index.html" aria-current="page">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
+  <div class="langs"><a href="index.html" hreflang="en" aria-current="true">English</a><a href="es/index.html" hreflang="es">Español</a></div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
@@ -162,8 +172,8 @@ one host to configure and not six.</p>
 <p>Five SDKs, one contract. They are separate implementations that share no code — what keeps them
 identical is a corpus of recorded wire bytes that all five replay. Behaviour that matches is
 verified, not intended.</p>
-<p>Every example on this site is shown in all five. If a tab is missing, that is a bug in the site and
-a test fails for it.</p>
+<p><strong>This site is also available <a href="es/index.md">in Spanish</a>.</strong> Every example on it is shown in all five languages. If a tab is missing, that is a bug in the site and a
+test fails for it.</p>
 <h2>Install</h2>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">pip<span class="w"> </span>install<span class="w"> </span>axonium</code></pre></div>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">go<span class="w"> </span>get<span class="w"> </span>github.com/Root1V/axonium-sdk/go</code></pre></div>

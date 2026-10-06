@@ -11,8 +11,8 @@ Inference responses are passed through close to verbatim. The SDKs model the fie
 guarantees, keep the rest reachable as raw, and do **not** reshape backend-specific output into a
 vocabulary of their own.
 
-This is deliberate. Backends are heterogeneous, and a normalising layer inside three separate
-language SDKs is three implementations of the same opinion, drifting. Normalisation belongs above
+This is deliberate. Backends are heterogeneous, and a normalising layer inside five separate
+language SDKs is five implementations of the same opinion, drifting. Normalisation belongs above
 the SDK, in whatever framework consumes the models, where there is one of it.
 
 ## It does not retry streams
@@ -55,9 +55,12 @@ Loading one is the application's decision. See [Configuration](04-configuration.
 
 ## It does not report metadata on failures
 
-A call that waited 90 seconds across three attempts and then failed reports none of that: the
-exception carries no `ResponseMeta`. Successes carry `waited_s` and `attempts`; failures do not.
-This is a known gap on the roadmap, not a design decision.
+A call that waited 90 seconds across three attempts and then failed reports none of that in
+Python, Go, Rust or Swift: the exception carries no `ResponseMeta`. Successes carry `waited_s` and
+`attempts`; failures do not. This is a known gap on the roadmap, not a design decision.
+
+**TypeScript answers it**, because its errors already carry `meta` — `error.meta.waitedMs` and
+`error.meta.attempts` are stamped on before the error leaves.
 
 ## It does not propagate W3C trace context
 

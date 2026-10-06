@@ -12,6 +12,7 @@ which is what keeps that guarantee from being a promise.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import re
 import sys
@@ -26,6 +27,86 @@ from pygments.util import ClassNotFound
 REPO = Path(__file__).resolve().parents[1]
 SOURCE = REPO / "docs"
 OUTPUT = SOURCE / "html"
+
+# The site is published in two languages. English is the source: a page exists in English first, and
+# a Spanish page is a TRANSLATION OF ONE, which is why it records which revision it was made from.
+#
+# The risk a second language adds is not the writing, it is the drift -- a translation that quietly
+# stops matching is worse than no translation, because a reader cannot tell. So every Spanish page
+# carries the digest of the English file it was translated from, and a test fails the moment the
+# English one changes. The translation is then stale ON PURPOSE and says so, instead of being wrong
+# in silence.
+LOCALES = {
+    "en": {"dir": SOURCE, "out": OUTPUT, "label": "English", "other": "es"},
+    "es": {"dir": SOURCE / "es", "out": OUTPUT / "es", "label": "Español", "other": "en"},
+}
+
+#: Pages that are GENERATED rather than written, and so are not translated.
+#:
+#: `08-reference.md` is produced by `render_reference.py` from the Python package's own exports. A
+#: translation of it would need redoing on every release and would be stale between every two, which
+#: is the drift this whole mechanism exists to refuse -- so the Spanish site carries a short page
+#: pointing at the English one and saying why, rather than a copy that is wrong most of the time.
+GENERATED = {"08-reference.md"}
+
+#: What a non-translated page declares instead of a digest.
+NOT_A_TRANSLATION = re.compile(r"^<!-- not-a-translation: (?P<reason>[^>]*[^ >]) -->")
+
+#: The first line of every translated page. The digest is of the English source's bytes.
+TRANSLATED_FROM = re.compile(r"^<!-- translated-from: (?P<name>[\w.-]+) sha256:(?P<digest>[0-9a-f]+) -->")
+
+#: Ten hex characters of SHA-256. Long enough that a collision is not a thing that happens, short
+#: enough to read in a diff and to retype when updating a translation by hand.
+DIGEST_LENGTH = 10
+
+
+def digest_of(path: Path) -> str:
+    """The identity of an English page, as its translation records it."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:DIGEST_LENGTH]
+
+
+def stale_translations() -> list[str]:
+    """Spanish pages whose English source has changed since they were translated.
+
+    Also reports a translation whose source no longer exists, and an English page with no
+    translation at all -- a site offering a language switch that lands on a 404 is worse than one
+    that does not offer it.
+    """
+    problems: list[str] = []
+    english = {p.name for p in LOCALES["en"]["dir"].glob("*.md")}
+    spanish_dir = LOCALES["es"]["dir"]
+    if not spanish_dir.exists():
+        return [f"{spanish_dir.relative_to(REPO)} does not exist"]
+
+    translated = {p.name for p in spanish_dir.glob("*.md")}
+    for name in sorted(english - translated):
+        problems.append(f"docs/{name} has no Spanish translation")
+    for name in sorted(translated - english):
+        problems.append(f"docs/es/{name} translates a page that no longer exists")
+
+    for name in sorted(english & translated):
+        header = (spanish_dir / name).read_text(encoding="utf-8").split("\n", 1)[0]
+        if name in GENERATED:
+            if not NOT_A_TRANSLATION.match(header):
+                problems.append(
+                    f"docs/es/{name} stands in for a generated page, so its first line must be "
+                    f"<!-- not-a-translation: ... --> saying why"
+                )
+            continue
+        match = TRANSLATED_FROM.match(header)
+        if not match:
+            problems.append(
+                f"docs/es/{name}: first line must be "
+                f"<!-- translated-from: {name} sha256:{digest_of(LOCALES['en']['dir'] / name)} -->"
+            )
+            continue
+        current = digest_of(LOCALES["en"]["dir"] / name)
+        if match["digest"] != current:
+            problems.append(
+                f"docs/es/{name} was translated from docs/{name} at {match['digest']}, "
+                f"which is now {current} -- re-translate, then update the marker"
+            )
+    return problems
 
 SITE = "Axonium"
 TAGLINE = "Client SDKs for the Prometheus inference platform"
@@ -49,13 +130,13 @@ TAB_LANGUAGES = {
 }
 
 
-def pages() -> list[Path]:
+def pages(directory: Path = SOURCE) -> list[Path]:
     """Source pages in reading order.
 
     Sorting alone puts index.md *after* 07-, because "i" > "0". The symptom is that "Getting
     started" is the last item in the menu and the pagination runs from the end to the beginning.
     """
-    everything = sorted(SOURCE.glob("*.md"))
+    everything = sorted(directory.glob("*.md"))
     return [p for p in everything if p.stem == "index"] + [
         p for p in everything if p.stem != "index"
     ]
@@ -177,6 +258,15 @@ nav a { display: block; padding: 0.3rem 0.6rem; margin-left: -0.6rem; border-rad
   color: var(--muted); text-decoration: none; font-size: 0.9rem; }
 nav a:hover { color: var(--ink); background: var(--accent-soft); }
 nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); font-weight: 560; }
+/* Both languages are always shown, with the current one marked rather than hidden: a switch that
+   removes the language you are reading leaves you guessing which one that is. */
+nav .langs { display: flex; gap: 0.4rem; margin-top: 1.4rem; font-size: 0.84rem; }
+nav .langs a { padding: 0.15rem 0.5rem; border: 1px solid var(--line); border-radius: 0.3rem;
+  color: var(--muted); text-decoration: none; }
+nav .langs a:hover { color: var(--fg); border-color: var(--muted); }
+nav .langs a[aria-current="true"] { color: var(--accent); border-color: var(--accent);
+  background: var(--code-bg); }
+
 nav .ext { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 nav .ext a { font-size: 0.84rem; }
 
@@ -317,7 +407,7 @@ SCRIPT = """
 """
 
 TEMPLATE = """<!DOCTYPE html>
-<html lang="en">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -331,6 +421,7 @@ TEMPLATE = """<!DOCTYPE html>
   <div class="brand"><a href="index.html">{site}</a></div>
   <div class="tag">{tagline}</div>
   <ol>{menu}</ol>
+  <div class="langs">{langs}</div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
@@ -349,8 +440,28 @@ TEMPLATE = """<!DOCTYPE html>
 """
 
 
-def build_page(page: Path, index: int, ordered: list[Path]) -> str:
-    body = markdown(page.read_text(encoding="utf-8"))
+def language_switch(locale: str, stem: str) -> str:
+    """Both languages, always, with the current one marked rather than removed.
+
+    A switch that hides the language you are reading leaves a reader guessing which one that is.
+    """
+    links = []
+    for code, meta in LOCALES.items():
+        href = f"{stem}.html" if code == locale else (
+            f"es/{stem}.html" if code == "es" else f"../{stem}.html"
+        )
+        current = ' aria-current="true"' if code == locale else ""
+        links.append(f'<a href="{href}" hreflang="{code}"{current}>{meta["label"]}</a>')
+    return "".join(links)
+
+
+def build_page(page: Path, index: int, ordered: list[Path], locale: str = "en") -> str:
+    source = page.read_text(encoding="utf-8")
+    # The translation marker is machinery, not content: it identifies which English revision this
+    # page was made from, and the reader has no use for it.
+    source = TRANSLATED_FROM.sub("", source, count=1)
+    source = NOT_A_TRANSLATION.sub("", source, count=1).lstrip("\n")
+    body = markdown(source)
     body = rewrite_links(body)
     body = group_code_tabs(body)
     body = re.sub(r"<table>", '<div class="table-scroll"><table>', body)
@@ -379,6 +490,8 @@ def build_page(page: Path, index: int, ordered: list[Path]) -> str:
     pager = f'<div class="pager">{"".join(links)}</div>' if links else ""
 
     return TEMPLATE.format(
+        lang=locale,
+        langs=language_switch(locale, page.stem),
         title=html.escape(title_of(page)),
         site=SITE,
         tagline=html.escape(TAGLINE),
@@ -401,40 +514,54 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    ordered = pages()
-    if not ordered:
+    if not pages():
         print("no pages in docs/", file=sys.stderr)
         return 1
 
+    drift = stale_translations()
+
     if args.check:
-        stale = []
-        for index, page in enumerate(ordered):
-            target = OUTPUT / f"{page.stem}.html"
-            if not target.exists():
-                stale.append(f"{target.relative_to(REPO)} is missing")
-            elif target.read_text(encoding="utf-8") != build_page(page, index, ordered):
-                stale.append(f"{target.relative_to(REPO)} does not match {page.name}")
+        stale = list(drift)
+        for locale, meta in LOCALES.items():
+            ordered = pages(meta["dir"])
+            for index, page in enumerate(ordered):
+                target = meta["out"] / f"{page.stem}.html"
+                if not target.exists():
+                    stale.append(f"{target.relative_to(REPO)} is missing")
+                elif target.read_text(encoding="utf-8") != build_page(page, index, ordered, locale):
+                    stale.append(f"{target.relative_to(REPO)} does not match {page.name}")
         if stale:
             print("The rendered documentation is out of date:", file=sys.stderr)
             for line in stale:
                 print(f"  {line}", file=sys.stderr)
             print("\nRun: python scripts/render_docs.py", file=sys.stderr)
             return 1
-        print(f"up to date · {len(ordered)} pages")
+        print(f"up to date · {sum(len(pages(m['dir'])) for m in LOCALES.values())} pages")
         return 0
 
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-    for index, page in enumerate(ordered):
-        (OUTPUT / f"{page.stem}.html").write_text(
-            build_page(page, index, ordered), encoding="utf-8"
-        )
+    # A translation that has fallen behind still RENDERS -- taking the page down would punish the
+    # reader for a maintenance failure -- but it cannot be written without the build saying so.
+    if drift:
+        print("Translations need attention:", file=sys.stderr)
+        for line in drift:
+            print(f"  {line}", file=sys.stderr)
+
+    written = 0
+    for locale, meta in LOCALES.items():
+        ordered = pages(meta["dir"])
+        meta["out"].mkdir(parents=True, exist_ok=True)
+        for index, page in enumerate(ordered):
+            (meta["out"] / f"{page.stem}.html").write_text(
+                build_page(page, index, ordered, locale), encoding="utf-8"
+            )
+        written += len(ordered)
     # GitHub Pages serves 404.html for unknown paths; the index is a better landing than a bare 404.
     (OUTPUT / "404.html").write_text(
         (OUTPUT / "index.html").read_text(encoding="utf-8"), encoding="utf-8"
     )
     (OUTPUT / ".nojekyll").write_text("", encoding="utf-8")
-    print(f"wrote {len(ordered)} pages to {OUTPUT.relative_to(REPO)}")
-    return 0
+    print(f"wrote {written} pages to {OUTPUT.relative_to(REPO)} in {len(LOCALES)} languages")
+    return 1 if drift else 0
 
 
 if __name__ == "__main__":

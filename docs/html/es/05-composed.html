@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Composed operations · Axonium</title>
+<title>Operaciones compuestas · Axonium</title>
 <meta name="description" content="Client SDKs for the Prometheus inference platform">
 <style>
 :root {
@@ -149,8 +149,8 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <nav>
   <div class="brand"><a href="index.html">Axonium</a></div>
   <div class="tag">Client SDKs for the Prometheus inference platform</div>
-  <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html" aria-current="page">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
-  <div class="langs"><a href="05-composed.html" hreflang="en" aria-current="true">English</a><a href="es/05-composed.html" hreflang="es">Español</a></div>
+  <ol><li><a href="index.html">Primeros pasos</a></li><li><a href="01-concepts.html">Conceptos</a></li><li><a href="02-calls.html">Hacer llamadas</a></li><li><a href="03-failure.html">Fallos, reintentos e idempotencia</a></li><li><a href="04-configuration.html">Configuración y transporte</a></li><li><a href="05-composed.html" aria-current="page">Operaciones compuestas</a></li><li><a href="06-testing.html">Probar contra Axonium</a></li><li><a href="07-limits.html">Lo que no hace</a></li><li><a href="08-reference.html">Referencia de la API de Python</a></li></ol>
+  <div class="langs"><a href="../05-composed.html" hreflang="en">English</a><a href="05-composed.html" hreflang="es" aria-current="true">Español</a></div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
@@ -158,16 +158,15 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
   </div>
 </nav>
 <main>
-<h1>Composed operations</h1>
+<h1>Operaciones compuestas</h1>
 <blockquote>
-<p><strong>What about when one call is not enough?</strong></p>
+<p><strong>¿Y cuando una llamada no basta?</strong></p>
 </blockquote>
-<p>Three patterns that come up in every real integration, and the detail in each that is easy to get
-wrong.</p>
-<h2>A tool-use loop</h2>
-<p>The model asks for a tool, you run it, you send the result back. What makes this awkward in most
-SDKs is that the shape you <em>receive</em> is not the shape you <em>send</em>, so every loop has a conversion in
-the middle. Here it is the same type in both directions:</p>
+<p>Tres patrones que salen en toda integración real, y el detalle de cada uno que es fácil equivocar.</p>
+<h2>Un bucle de uso de herramientas</h2>
+<p>El modelo pide una herramienta, tú la ejecutas, le devuelves el resultado. Lo que lo vuelve incómodo
+en la mayoría de SDK es que la forma que <em>recibes</em> no es la forma que <em>envías</em>, así que todo bucle
+lleva una conversión en medio. Aquí es el mismo tipo en las dos direcciones:</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">messages</span> <span class="o">=</span> <span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"What is the weather in Lima?"</span><span class="p">}]</span>
 
 <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
@@ -269,16 +268,18 @@ the middle. Here it is the same type in both directions:</p>
 <span class="w">    </span><span class="nx">messages</span><span class="p">.</span><span class="nx">push</span><span class="p">({</span><span class="w"> </span><span class="nx">role</span><span class="o">:</span><span class="w"> </span><span class="s2">"tool"</span><span class="p">,</span><span class="w"> </span><span class="nx">tool_call_id</span><span class="o">:</span><span class="w"> </span><span class="kt">call.id</span><span class="p">,</span><span class="w"> </span><span class="nx">content</span><span class="o">:</span><span class="w"> </span><span class="kt">result</span><span class="w"> </span><span class="p">});</span>
 <span class="w">  </span><span class="p">}</span>
 <span class="p">}</span></code></pre></div>
-</div><p>Two things to know:</p>
-<p><strong><code>arguments</code> stays the model's JSON string.</strong> Decoding it eagerly would mean a response model that
-blows up from the inside when <code>max_tokens</code> cuts a call in half. <code>parse_arguments()</code> decodes it and
-fails with its own error, leaving the raw string reachable — because a truncated tool call is a
-thing you want to <em>see</em>, not a thing you want to have become an empty object. An empty object would
-run the tool with no arguments, which is worse than failing.</p>
-<p><strong>Streamed tool calls arrive in fragments</strong> that are individually invalid JSON, keyed by <code>index</code>,
-with the identity only in the first. The SDKs reassemble them into exactly the non-streaming shape,
-so the loop above is the same loop whether you streamed or not.</p>
-<h2>Retrieval: embed, rank, answer</h2>
+</div><p>Dos cosas que conviene saber:</p>
+<p><strong><code>arguments</code> sigue siendo la cadena JSON del modelo.</strong> Decodificarla con ansia significaría un
+modelo de respuesta que revienta desde dentro cuando <code>max_tokens</code> parte una llamada por la mitad.
+<code>parse_arguments()</code> la decodifica y falla con su propio error, dejando la cadena cruda accesible —
+porque una llamada a herramienta truncada es algo que quieres <em>ver</em>, no algo que quieres que se
+convierta en un objeto vacío. Un objeto vacío ejecutaría la herramienta sin argumentos, que es peor
+que fallar.</p>
+<p><strong>Las llamadas a herramientas en streaming llegan en fragmentos</strong> que individualmente son JSON
+inválido, indexados por <code>index</code>, con la identidad solo en el primero. Los SDK los reensamblan en
+exactamente la forma no-streaming, así que el bucle de arriba es el mismo bucle hayas hecho streaming
+o no.</p>
+<h2>Recuperación: embeber, ordenar, responder</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">query_vector</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">embeddings</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-embedding"</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="n">query</span><span class="p">)</span>
 
 <span class="n">candidates</span> <span class="o">=</span> <span class="n">vector_store</span><span class="o">.</span><span class="n">nearest</span><span class="p">(</span><span class="n">query_vector</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">embedding</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">50</span><span class="p">)</span>
@@ -362,9 +363,9 @@ so the loop above is the same loop whether you streamed or not.</p>
 <span class="w">  </span><span class="nx">model</span><span class="o">:</span><span class="w"> </span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
 <span class="w">  </span><span class="nx">messages</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nx">role</span><span class="o">:</span><span class="w"> </span><span class="s2">"user"</span><span class="p">,</span><span class="w"> </span><span class="nx">content</span><span class="o">:</span><span class="w"> </span><span class="kt">promptWith</span><span class="p">(</span><span class="nx">best</span><span class="p">,</span><span class="w"> </span><span class="nx">query</span><span class="p">)</span><span class="w"> </span><span class="p">}],</span>
 <span class="p">});</span></code></pre></div>
-</div><p>Three calls, three <strong>separate</strong> rate-limit budgets: each endpoint holds its own, and the response
-names which one it is reporting in <code>rate_limit.scope</code>. So this pipeline costs one unit from each, not three from one, and the budget
-you need to watch is the one for the endpoint you are about to call:</p>
+</div><p>Tres llamadas, tres presupuestos de rate-limit <strong>separados</strong>: cada endpoint tiene el suyo, y la
+respuesta dice cuál está reportando en <code>rate_limit.scope</code>. Así que esta tubería cuesta una unidad de
+cada uno, no tres de uno, y el presupuesto que hay que vigilar es el del endpoint que vas a llamar:</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">budget</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">rate_limits</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"embeddings"</span><span class="p">)</span>
 <span class="k">if</span> <span class="n">budget</span> <span class="ow">and</span> <span class="n">budget</span><span class="o">.</span><span class="n">remaining_requests</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
     <span class="o">...</span></code></pre></div>
@@ -386,10 +387,10 @@ you need to watch is the one for the endpoint you are about to call:</p>
 <span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">queryVector</span><span class="p">.</span><span class="nx">meta</span><span class="p">.</span><span class="nx">rateLimit</span><span class="o">?</span><span class="p">.</span><span class="nx">remainingRequests</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="mf">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="c1">// ...</span>
 <span class="p">}</span></code></pre></div>
-</div><p>Do not read <code>client.last_rate_limit</code> here. After the chat call it describes the <strong>chat</strong> budget,
-and nothing in the numbers says so.</p>
-<p>The reranker scores all 50 candidates in <strong>one</strong> request. Doing the same through chat would be 50.</p>
-<h2>Reconciling what you were charged</h2>
+</div><p>No leas <code>client.last_rate_limit</code> aquí. Después de la llamada de chat describe el presupuesto de
+<strong>chat</strong>, y nada en los números lo dice.</p>
+<p>El reranker puntúa los 50 candidatos en <strong>una</strong> petición. Hacer lo mismo por chat serían 50.</p>
+<h2>Conciliar lo que te cobraron</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span> <span class="n">messages</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">])</span>
 
 <span class="n">row</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">usage</span><span class="o">.</span><span class="n">retrieve</span><span class="p">(</span><span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">request_id</span><span class="p">)</span>
@@ -420,17 +421,17 @@ and nothing in the numbers says so.</p>
 <span class="nx">row</span><span class="p">.</span><span class="nx">usage</span><span class="p">.</span><span class="nx">totalTokens</span><span class="p">;</span>
 <span class="nx">row</span><span class="p">.</span><span class="nx">costUsd</span><span class="p">;</span>
 <span class="nx">row</span><span class="p">.</span><span class="nx">terminationReason</span><span class="p">;</span><span class="w"> </span><span class="c1">// "complete", or why it stopped early</span></code></pre></div>
-</div><p>No <code>admin:read</code> needed — this is per-request, and it is your request.</p>
-<p>Two traps:</p>
-<p><strong>A replay has no usage row.</strong> If <code>meta.idempotent_replay</code> is true, <code>retrieve</code> on that
-<code>request_id</code> returns <code>404</code> — correctly, since replaying reached no model. Use
-<code>meta.idempotent_replay_of</code> instead. See <a href="03-failure.html">Failure</a>.</p>
-<p><strong><code>cost_usd</code> can be null, and null is not zero.</strong> It is <code>None</code> where no price is configured. If you
-store it in a column that is <code>NOT NULL DEFAULT 0</code>, an unpriced call and a free call become the same
-row, and a dashboard sums them into a total that is wrong in the direction nobody checks.</p>
-<h2>Running calls concurrently</h2>
-<p>One client, many tasks. The token is fetched once — the manager uses double-checked locking, so a
-burst of first calls produces one token request rather than one each.</p>
+</div><p>No hace falta <code>admin:read</code> — esto es por petición, y es tu petición.</p>
+<p>Dos trampas:</p>
+<p><strong>Una repetición no tiene fila de uso.</strong> Si <code>meta.idempotent_replay</code> es cierto, <code>retrieve</code> sobre ese
+<code>request_id</code> devuelve <code>404</code> — correctamente, porque repetir no alcanzó ningún modelo. Usa
+<code>meta.idempotent_replay_of</code> en su lugar. Ver <a href="03-failure.html">Fallos</a>.</p>
+<p><strong><code>cost_usd</code> puede ser nulo, y nulo no es cero.</strong> Es <code>None</code> donde no hay precio configurado. Si lo
+guardas en una columna <code>NOT NULL DEFAULT 0</code>, una llamada sin tarificar y una llamada gratis acaban
+siendo la misma fila, y un panel las suma en un total equivocado en la dirección que nadie comprueba.</p>
+<h2>Lanzar llamadas en paralelo</h2>
+<p>Un cliente, muchas tareas. El token se pide una vez — el gestor usa double-checked locking, así que
+una ráfaga de primeras llamadas produce una petición de token y no una por cada una.</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">AsyncAxonium</span>
 
@@ -480,11 +481,11 @@ burst of first calls produces one token request rather than one each.</p>
 <span class="w">    </span><span class="p">}),</span>
 <span class="w">  </span><span class="p">),</span>
 <span class="p">);</span></code></pre></div>
-</div><p>Concurrency is bounded by your rate-limit budget, not by the client. Sixty requests a minute
-against one endpoint is sixty, however many tasks you start.</p>
-<p>Next: <a href="06-testing.html">Testing against Axonium</a>.</p>
+</div><p>La concurrencia la acota tu presupuesto de rate-limit, no el cliente. Sesenta peticiones por minuto
+contra un endpoint son sesenta, por muchas tareas que arranques.</p>
+<p>Siguiente: <a href="06-testing.html">Probar contra Axonium</a>.</p>
 
-<div class="pager"><a class="prev" href="04-configuration.html"><span class="dir">Previous</span>Configuration and transport</a><a class="next" href="06-testing.html"><span class="dir">Next</span>Testing against Axonium</a></div>
+<div class="pager"><a class="prev" href="04-configuration.html"><span class="dir">Previous</span>Configuración y transporte</a><a class="next" href="06-testing.html"><span class="dir">Next</span>Probar contra Axonium</a></div>
 <footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
 </main>
 </div>

@@ -17,8 +17,8 @@ Five SDKs, one contract. They are separate implementations that share no code â€
 identical is a corpus of recorded wire bytes that all five replay. Behaviour that matches is
 verified, not intended.
 
-Every example on this site is shown in all five. If a tab is missing, that is a bug in the site and
-a test fails for it.
+**This site is also available [in Spanish](es/index.md).** Every example on it is shown in all five languages. If a tab is missing, that is a bug in the site and a
+test fails for it.
 
 ## Install
 

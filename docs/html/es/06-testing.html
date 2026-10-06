@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Testing against Axonium · Axonium</title>
+<title>Probar contra Axonium · Axonium</title>
 <meta name="description" content="Client SDKs for the Prometheus inference platform">
 <style>
 :root {
@@ -149,8 +149,8 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <nav>
   <div class="brand"><a href="index.html">Axonium</a></div>
   <div class="tag">Client SDKs for the Prometheus inference platform</div>
-  <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html" aria-current="page">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
-  <div class="langs"><a href="06-testing.html" hreflang="en" aria-current="true">English</a><a href="es/06-testing.html" hreflang="es">Español</a></div>
+  <ol><li><a href="index.html">Primeros pasos</a></li><li><a href="01-concepts.html">Conceptos</a></li><li><a href="02-calls.html">Hacer llamadas</a></li><li><a href="03-failure.html">Fallos, reintentos e idempotencia</a></li><li><a href="04-configuration.html">Configuración y transporte</a></li><li><a href="05-composed.html">Operaciones compuestas</a></li><li><a href="06-testing.html" aria-current="page">Probar contra Axonium</a></li><li><a href="07-limits.html">Lo que no hace</a></li><li><a href="08-reference.html">Referencia de la API de Python</a></li></ol>
+  <div class="langs"><a href="../06-testing.html" hreflang="en">English</a><a href="06-testing.html" hreflang="es" aria-current="true">Español</a></div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
@@ -158,16 +158,16 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
   </div>
 </nav>
 <main>
-<h1>Testing against Axonium</h1>
+<h1>Probar contra Axonium</h1>
 <blockquote>
-<p><strong>How do I build on this without spending anything or depending on a live deployment?</strong></p>
+<p><strong>¿Cómo construyo encima de esto sin gastar nada ni depender de un despliegue vivo?</strong></p>
 </blockquote>
-<h2>Do not mock the SDK</h2>
-<p>Mocking <code>client.chat.completions.create</code> tests that you called a function. It cannot tell you
-whether you handled a <code>429</code>, whether your tool loop survives a truncated <code>arguments</code> string, or
-whether your reconciliation copes with a replay that has no usage row.</p>
-<p>Mock the <strong>transport</strong> instead. Every SDK here is an HTTP client and nothing more, so a fake gateway
-exercises your code against the real parsing, the real error typing and the real retry logic.</p>
+<h2>No simules el SDK</h2>
+<p>Simular <code>client.chat.completions.create</code> prueba que llamaste a una función. No te dice si manejaste
+un <code>429</code>, si tu bucle de herramientas sobrevive a un <code>arguments</code> truncado, ni si tu conciliación
+aguanta una repetición que no tiene fila de uso.</p>
+<p>Simula el <strong>transporte</strong>. Cada SDK de aquí es un cliente HTTP y nada más, así que un gateway falso
+ejercita tu código contra el parseo real, el tipado de errores real y la lógica de reintentos real.</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">import</span><span class="w"> </span><span class="nn">httpx</span><span class="o">,</span><span class="w"> </span><span class="nn">respx</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">Axonium</span>
 
@@ -238,9 +238,8 @@ exercises your code against the real parsing, the real error typing and the real
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">Response</span><span class="p">.</span><span class="nx">json</span><span class="p">(</span><span class="nx">COMPLETION</span><span class="p">);</span>
 <span class="w">  </span><span class="p">},</span>
 <span class="p">});</span></code></pre></div>
-</div><h2>Make the waits stop costing wall-clock</h2>
-<p>A retry test that honours a real <code>Retry-After</code> takes as long as the wait. Set the policy to remove
-it:</p>
+</div><h2>Haz que las esperas dejen de costar reloj</h2>
+<p>Un test de reintentos que honra un <code>Retry-After</code> real tarda lo que la espera. Pon la política a cero:</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">RetryPolicy</span>
 
 <span class="n">client</span> <span class="o">=</span> <span class="n">Axonium</span><span class="p">(</span><span class="o">...</span><span class="p">,</span> <span class="n">retry</span><span class="o">=</span><span class="n">RetryPolicy</span><span class="p">(</span><span class="n">initial_backoff</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">max_backoff</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span> <span class="n">jitter</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span></code></pre></div>
@@ -272,49 +271,51 @@ it:</p>
 <span class="w">  </span><span class="nx">retry</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">maxAttempts</span><span class="o">:</span><span class="w"> </span><span class="kt">3</span><span class="p">,</span><span class="w"> </span><span class="nx">initialBackoff</span><span class="o">:</span><span class="w"> </span><span class="kt">0</span><span class="p">,</span><span class="w"> </span><span class="nx">maxBackoff</span><span class="o">:</span><span class="w"> </span><span class="kt">0</span><span class="p">,</span><span class="w"> </span><span class="nx">jitter</span><span class="o">:</span><span class="w"> </span><span class="kt">false</span><span class="w"> </span><span class="p">},</span>
 <span class="w">  </span><span class="nx">fetch</span><span class="o">:</span><span class="w"> </span><span class="kt">fakeGateway</span><span class="p">,</span>
 <span class="p">});</span></code></pre></div>
-</div><p><code>max_backoff=0</code> has a second effect worth knowing: any server-supplied <code>Retry-After</code> above zero is
-then <strong>surfaced as an error rather than slept through</strong>, which is the same rule that keeps a long
-wait from blocking a real caller. If your test asserts that a long wait is handed back, this is how
-you produce one.</p>
-<h2>Use the recorded envelopes</h2>
-<p>The repository carries the error bodies and SSE streams these SDKs are tested against, in
-<a href="https://github.com/Root1V/axonium-sdk/tree/main/spec/fixtures"><code>spec/fixtures/</code></a>, indexed by
+</div><p><code>max_backoff=0</code> tiene un segundo efecto que conviene conocer: cualquier <code>Retry-After</code> del servidor
+por encima de cero pasa entonces a <strong>devolverse como error en vez de dormirse</strong>, que es la misma
+regla que evita que una espera larga bloquee a un llamante real. Si tu test afirma que una espera
+larga se devuelve, así es como produces una.</p>
+<h2>Usa los sobres grabados</h2>
+<p>El repositorio lleva los cuerpos de error y los streams SSE contra los que se prueban estos SDK, en
+<a href="https://github.com/Root1V/axonium-sdk/tree/main/spec/fixtures"><code>spec/fixtures/</code></a>, indexados por
 <a href="https://github.com/Root1V/axonium-sdk/blob/main/spec/cases/manifest.json"><code>spec/cases/manifest.json</code></a>.
-They are literal wire captures — blank-line record separators included — not hand-written
-approximations.</p>
-<p>Using them means your fake gateway answers the way the real one does, including the parts nobody
-remembers: that the rate-limit envelope omits <code>trace_id</code>, that a <code>429</code> puts its <code>scope</code> in the body
-rather than the header, that a stream's error event is <code>{&quot;error&quot;: &quot;...&quot;}</code> at the top level.</p>
-<p>Point your fixtures at that directory rather than copying the JSON into your test file, where it
-will stop matching and nobody will notice.</p>
-<h2>What the SDKs' own tests do</h2>
-<p>Worth knowing, because it tells you what is already covered and what is not:</p>
+Son capturas literales de cable — separadores de registro en línea en blanco incluidos — no
+aproximaciones escritas a mano.</p>
+<p>Usarlos significa que tu gateway falso contesta como el real, incluidas las partes que nadie
+recuerda: que el sobre de rate-limit omite <code>trace_id</code>, que un <code>429</code> pone su <code>scope</code> en el cuerpo y no
+en la cabecera, que el evento de error de un stream es <code>{&quot;error&quot;: &quot;...&quot;}</code> en el nivel superior.</p>
+<p>Apunta tus fixtures a ese directorio en vez de copiar el JSON a tu fichero de test, donde dejará de
+coincidir y nadie se dará cuenta.</p>
+<h2>Qué hacen los propios tests de los SDK</h2>
+<p>Merece conocerse, porque dice qué está cubierto ya y qué no:</p>
 <ul>
-<li><strong>One corpus, five runners.</strong> Python, Go, Rust, TypeScript and Swift replay the same manifest
-against the same bytes. They share no code, so matching behaviour is verified rather than
-intended. Swift vendors the corpus as a submodule; the other four read it from the repository.</li>
-<li><strong>The corpus grows when mutation finds a hole in it</strong>, not on a schedule. The most recent case
-exists because mutating a runner to match the literal string <code>&quot;stream interrupted&quot;</code> left every
-other case green — the corpus could not tell <em>detect the key</em> from <em>compare the text</em>, which is
-the distinction the platform explicitly asked for.</li>
-<li><strong>Every test is written twice</strong> in Python, sync and async, from one parametrised fixture. The
-previous generation of this SDK had zero async tests.</li>
-<li><strong>Mutation testing is the acceptance bar.</strong> A test that passes when the implementation is broken
-did not test anything, and the only way to find those is to break the implementation on purpose.</li>
+<li><strong>Un corpus, cinco runners.</strong> Python, Go, Rust, TypeScript y Swift reproducen el mismo manifest
+contra los mismos bytes. No comparten código, así que el comportamiento que coincide está
+verificado y no pretendido. Swift vendoriza el corpus como submódulo; los otros cuatro lo leen del
+repositorio.</li>
+<li><strong>El corpus crece cuando la mutación encuentra un hueco</strong>, no por calendario. El caso más reciente
+existe porque mutar un runner para comparar la cadena literal <code>&quot;stream interrupted&quot;</code> dejó verdes
+todos los demás casos — el corpus no sabía distinguir <em>detectar la clave</em> de <em>comparar el texto</em>,
+que es justo la distinción que la plataforma había pedido explícitamente.</li>
+<li><strong>Cada test está escrito dos veces</strong> en Python, sync y async, desde una sola fixture
+parametrizada. La generación anterior de este SDK tenía cero tests async.</li>
+<li><strong>La prueba de mutación es el listón de aceptación.</strong> Un test que pasa cuando la implementación
+está rota no probó nada, y la única forma de encontrar esos es romper la implementación a
+propósito.</li>
 </ul>
-<p>Run the whole thing exactly as CI does:</p>
+<p>Ejecuta todo exactamente como lo ejecuta CI:</p>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">./scripts/verify.sh</code></pre></div>
-<p>It mirrors the workflow files deliberately. A local check that is <em>nearly</em> the CI check reports
-green and hides the difference — which this repository has paid for twice, once with a lint step
-that needed a build only present on one machine, and once with a test suite green on the Node
-version the author had and red on the one the package promises.</p>
-<h2>Integration tests</h2>
-<p>Marked and skipped by default. They need <code>AXONIUM_INTEGRATION=1</code> plus real credentials, and they
-never run in CI — a test suite that depends on a deployment being up reports red for reasons that
-have nothing to do with the change under review.</p>
-<p>Next: <a href="07-limits.html">What it does not do</a>.</p>
+<p>Es un espejo deliberado de los ficheros de workflow. Una comprobación local que es <em>casi</em> la de CI
+reporta verde y esconde la diferencia — algo que este repositorio ha pagado dos veces, una con un
+paso de lint que necesitaba un build que solo existía en una máquina, y otra con una suite verde en
+la versión de Node que tenía el autor y roja en la que el paquete promete.</p>
+<h2>Tests de integración</h2>
+<p>Marcados y saltados por defecto. Necesitan <code>AXONIUM_INTEGRATION=1</code> más credenciales reales, y nunca
+corren en CI — una suite que depende de que un despliegue esté en pie reporta rojo por motivos que no
+tienen nada que ver con el cambio bajo revisión.</p>
+<p>Siguiente: <a href="07-limits.html">Lo que no hace</a>.</p>
 
-<div class="pager"><a class="prev" href="05-composed.html"><span class="dir">Previous</span>Composed operations</a><a class="next" href="07-limits.html"><span class="dir">Next</span>What it does not do</a></div>
+<div class="pager"><a class="prev" href="05-composed.html"><span class="dir">Previous</span>Operaciones compuestas</a><a class="next" href="07-limits.html"><span class="dir">Next</span>Lo que no hace</a></div>
 <footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
 </main>
 </div>

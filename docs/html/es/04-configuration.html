@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Configuration and transport · Axonium</title>
+<title>Configuración y transporte · Axonium</title>
 <meta name="description" content="Client SDKs for the Prometheus inference platform">
 <style>
 :root {
@@ -149,8 +149,8 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <nav>
   <div class="brand"><a href="index.html">Axonium</a></div>
   <div class="tag">Client SDKs for the Prometheus inference platform</div>
-  <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html" aria-current="page">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
-  <div class="langs"><a href="04-configuration.html" hreflang="en" aria-current="true">English</a><a href="es/04-configuration.html" hreflang="es">Español</a></div>
+  <ol><li><a href="index.html">Primeros pasos</a></li><li><a href="01-concepts.html">Conceptos</a></li><li><a href="02-calls.html">Hacer llamadas</a></li><li><a href="03-failure.html">Fallos, reintentos e idempotencia</a></li><li><a href="04-configuration.html" aria-current="page">Configuración y transporte</a></li><li><a href="05-composed.html">Operaciones compuestas</a></li><li><a href="06-testing.html">Probar contra Axonium</a></li><li><a href="07-limits.html">Lo que no hace</a></li><li><a href="08-reference.html">Referencia de la API de Python</a></li></ol>
+  <div class="langs"><a href="../04-configuration.html" hreflang="en">English</a><a href="04-configuration.html" hreflang="es" aria-current="true">Español</a></div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
@@ -158,35 +158,35 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
   </div>
 </nav>
 <main>
-<h1>Configuration and transport</h1>
+<h1>Configuración y transporte</h1>
 <blockquote>
-<p><strong>How do I point this at my deployment?</strong></p>
+<p><strong>¿Cómo apunto esto a mi despliegue?</strong></p>
 </blockquote>
-<h2>One address</h2>
-<p>There is <strong>one</strong> address, and usually none to supply. The gateway issues its own tokens and serves
-inference, so <code>gateway_base_url</code> is the only host setting that exists.</p>
-<p>It did not always work that way, and the reason it changed is worth keeping: an auth address and a
-gateway address meant that pointing the SDK at your own deployment required changing <strong>two</strong>
-things. Forgetting the second left the client asking the official platform for a token and using it
-somewhere else. <strong>Nothing failed.</strong> The token was simply issued by the wrong party. A setting whose
-misuse is silent is worse than a setting that is missing, so the second address was removed
-entirely rather than given a good default — an optional field still teaches consumers that a second
-address exists.</p>
-<p>If you have <code>AXONIUM_AUTH_BASE_URL</code> left in an environment, it is ignored.</p>
-<h2>Precedence</h2>
-<p>First one wins:</p>
+<h2>Una sola dirección</h2>
+<p>Hay <strong>una</strong> dirección, y normalmente ninguna que indicar. El gateway emite sus propios tokens y
+sirve la inferencia, así que <code>gateway_base_url</code> es el único ajuste de host que existe.</p>
+<p>No siempre fue así, y el motivo del cambio merece guardarse: una dirección de autenticación y otra de
+gateway significaban que apuntar el SDK a tu propio despliegue requería cambiar <strong>dos</strong> cosas.
+Olvidar la segunda dejaba al cliente pidiéndole un token a la plataforma oficial y usándolo en otro
+sitio. <strong>Nada fallaba.</strong> El token simplemente lo emitía quien no debía. Un ajuste cuyo mal uso es
+silencioso es peor que un ajuste que falta, así que la segunda dirección se eliminó del todo en vez
+de darle un buen valor por defecto — un campo opcional sigue enseñando a los consumidores que existe
+una segunda dirección.</p>
+<p>Si te queda un <code>AXONIUM_AUTH_BASE_URL</code> en un entorno, se ignora.</p>
+<h2>Precedencia</h2>
+<p>Gana el primero:</p>
 <ol>
-<li>A per-call argument</li>
-<li>A constructor argument</li>
-<li>An environment variable</li>
-<li>Otherwise: <code>ConfigurationError</code>, naming the setting <strong>and</strong> its environment variable</li>
+<li>Un argumento por llamada</li>
+<li>Un argumento del constructor</li>
+<li>Una variable de entorno</li>
+<li>Si no: <code>ConfigurationError</code>, nombrando el ajuste <strong>y</strong> su variable de entorno</li>
 </ol>
 <div class="table-scroll"><table>
 <thead>
 <tr>
-<th>Setting</th>
-<th>Environment variable</th>
-<th>Default</th>
+<th>Ajuste</th>
+<th>Variable de entorno</th>
+<th>Por defecto</th>
 </tr>
 </thead>
 <tbody>
@@ -198,36 +198,40 @@ address exists.</p>
 <tr>
 <td><code>client_id</code></td>
 <td><code>AXONIUM_CLIENT_ID</code></td>
-<td>— required</td>
+<td>— obligatorio</td>
 </tr>
 <tr>
 <td><code>client_secret</code></td>
 <td><code>AXONIUM_CLIENT_SECRET</code></td>
-<td>— required</td>
+<td>— obligatorio</td>
 </tr>
 <tr>
 <td><code>scope</code></td>
 <td><code>AXONIUM_SCOPE</code></td>
-<td>unset: the gateway decides</td>
+<td>sin poner: decide el gateway</td>
 </tr>
 <tr>
 <td><code>ca_bundle</code></td>
 <td><code>AXONIUM_CA_BUNDLE</code></td>
-<td>system trust store</td>
+<td>almacén de confianza del sistema</td>
 </tr>
 </tbody>
 </table></div>
-<p>Requesting no <code>scope</code> is not the same as requesting all of them. Leave it unset unless you want a
-<strong>narrower</strong> token than your client is entitled to; the granted scope is always read back from the
-response rather than assumed.</p>
-<h2>The SDK does not read <code>.env</code></h2>
-<p>Loading a <code>.env</code> file is the application's decision, not a library's. A library that reads one
-changes behaviour based on a file the caller did not mention, and in a server process that is a
-surprise nobody asked for.</p>
+<p><strong>Las credenciales son lo único obligatorio.</strong> La dirección por defecto es de bucle local, que es lo
+que hace seguro tenerla: equivocarse llega a tu propia máquina —normalmente una conexión rechazada, y
+suficientemente claro— y nunca puede mandar calladamente una credencial a algún sitio real.</p>
+<p>Pedir <em>ningún</em> <code>scope</code> no es lo mismo que pedirlos todos. Déjalo sin poner salvo que quieras un token
+<strong>más estrecho</strong> del que tu cliente tiene derecho; el scope concedido siempre se lee de vuelta de la
+respuesta en vez de asumirse.</p>
+<h2>El SDK no lee <code>.env</code></h2>
+<p>Cargar un fichero <code>.env</code> es decisión de la aplicación, no de una biblioteca. Una biblioteca que lee
+uno cambia su comportamiento según un fichero que el llamante no mencionó, y en un proceso de
+servidor eso es una sorpresa que nadie pidió.</p>
 <div class="code" data-language="bash" data-label="bash"><pre><code class="language-bash">uv<span class="w"> </span>run<span class="w"> </span>--env-file<span class="w"> </span>.env<span class="w"> </span>python<span class="w"> </span>my_script.py</code></pre></div>
-<p>Python resolves the environment <strong>at construction time</strong>, not at import — which removes a class of
-bug the previous generation of this SDK had, where a field defaulted from <code>os.getenv</code> in a class
-body was evaluated once, at import, before anything had been configured.</p>
+<p>Python resuelve el entorno <strong>en el momento de construir</strong>, no al importar — lo que elimina una clase
+de bug que tenía la generación anterior de este SDK, donde un campo con valor por defecto de
+<code>os.getenv</code> en el cuerpo de una clase se evaluaba una sola vez, al importar, antes de que nada
+estuviera configurado.</p>
 <h2>Timeouts</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">Axonium</span><span class="p">,</span> <span class="n">Timeouts</span>
 
@@ -270,15 +274,15 @@ body was evaluated once, at import, before anything had been configured.</p>
 <span class="w">  </span><span class="c1">// boundary is one more place to be wrong by a factor of a thousand.</span>
 <span class="w">  </span><span class="nx">timeouts</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">connect</span><span class="o">:</span><span class="w"> </span><span class="kt">10_000</span><span class="p">,</span><span class="w"> </span><span class="nx">request</span><span class="o">:</span><span class="w"> </span><span class="kt">600_000</span><span class="p">,</span><span class="w"> </span><span class="nx">stream</span><span class="o">:</span><span class="w"> </span><span class="kt">180_000</span><span class="w"> </span><span class="p">},</span>
 <span class="p">});</span></code></pre></div>
-</div><p>The five do not carve the budget up identically, and the docs will not pretend they do. Python
-exposes httpx's four phases (<code>connect</code>, <code>read</code>, <code>write</code>, <code>pool</code>); Go, Rust and Swift bound the whole
-call with <code>request</code>; TypeScript counts in milliseconds because that is what its runtime's timers
-take. What matters is the same everywhere: the read budget is generous because generation is slow,
-and the streaming one is separate and shorter.</p>
-<p>Read timeouts are generous because generation is slow. The streaming read timeout is separate and
-shorter: it bounds the gap <strong>between chunks</strong>, not the length of the whole stream, so a stalled
-stream is detected without capping a long one.</p>
-<p>Any call can override:</p>
+</div><p>Los cinco no reparten el presupuesto igual, y la documentación no va a fingir que sí. Python expone
+las cuatro fases de httpx (<code>connect</code>, <code>read</code>, <code>write</code>, <code>pool</code>); Go, Rust y Swift acotan la llamada
+entera con <code>request</code>; TypeScript cuenta en milisegundos porque es lo que toman los temporizadores de
+su runtime. Lo que importa es igual en todas partes: el presupuesto de lectura es generoso porque
+generar es lento, y el de streaming es aparte y más corto.</p>
+<p>Los timeouts de lectura son generosos porque generar es lento. El de streaming es aparte y más
+corto: acota el hueco <strong>entre chunks</strong>, no la duración del stream entero, así que un stream atascado
+se detecta sin poner techo a uno largo.</p>
+<p>Cualquier llamada puede sobrescribirlo:</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span> <span class="n">messages</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span> <span class="n">timeout</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span></code></pre></div>
 <div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">cancel</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">WithTimeout</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="mi">30</span><span class="o">*</span><span class="nx">time</span><span class="p">.</span><span class="nx">Second</span><span class="p">)</span>
 <span class="k">defer</span><span class="w"> </span><span class="nx">cancel</span><span class="p">()</span>
@@ -295,13 +299,13 @@ stream is detected without capping a long one.</p>
 <div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="c1">// Either a per-call timeout, or your own AbortSignal -- whichever fires first wins.</span>
 <span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">chat</span><span class="p">.</span><span class="nx">completions</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="nx">request</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">timeout</span><span class="o">:</span><span class="w"> </span><span class="kt">30_000</span><span class="w"> </span><span class="p">});</span>
 <span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">chat</span><span class="p">.</span><span class="nx">completions</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span><span class="nx">request</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">signal</span><span class="o">:</span><span class="w"> </span><span class="kt">AbortSignal.timeout</span><span class="p">(</span><span class="mf">30</span><span class="nx">_000</span><span class="p">)</span><span class="w"> </span><span class="p">});</span></code></pre></div>
-</div><p><strong>Python and TypeScript take a per-call <code>timeout</code>; Go, Rust and Swift deliberately do not.</strong> A
-deadline on a single call is already what <code>context.Context</code>, <code>tokio::time::timeout</code> and task
-cancellation are, and a second mechanism beside them is one more place for the two to disagree.
-TypeScript has no such built-in, so it carries its own — and also accepts your <code>AbortSignal</code>, with
-whichever fires first winning.</p>
-<p><strong>A client-side timeout is not retried</strong>, and the error says why — see <a href="03-failure.html">Failure</a>.</p>
-<h2>Retry policy</h2>
+</div><p><strong>Python y TypeScript aceptan un <code>timeout</code> por llamada; Go, Rust y Swift deliberadamente no.</strong> Una
+fecha límite sobre una llamada concreta es ya lo que son <code>context.Context</code>, <code>tokio::time::timeout</code> y
+la cancelación de tareas, y un segundo mecanismo al lado es un sitio más para que los dos discrepen.
+TypeScript no tiene nada equivalente integrado, así que lleva el suyo — y además acepta tu
+<code>AbortSignal</code>, ganando el que dispare primero.</p>
+<p><strong>Un timeout de cliente no se reintenta</strong>, y el error dice por qué — ver <a href="03-failure.html">Fallos</a>.</p>
+<h2>Política de reintentos</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="kn">from</span><span class="w"> </span><span class="nn">axonium</span><span class="w"> </span><span class="kn">import</span> <span class="n">RetryPolicy</span>
 
 <span class="n">client</span> <span class="o">=</span> <span class="n">Axonium</span><span class="p">(</span>
@@ -346,26 +350,27 @@ whichever fires first winning.</p>
 <span class="c1">// Or turn it off entirely, which is a policy and not an absence of one.</span>
 <span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">NO_RETRY</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s2">"axonium"</span><span class="p">;</span>
 <span class="kd">const</span><span class="w"> </span><span class="nx">strict</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="ow">new</span><span class="w"> </span><span class="nx">Axonium</span><span class="p">({</span><span class="w"> </span><span class="nx">clientId</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nx">clientSecret</span><span class="o">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nx">retry</span><span class="o">:</span><span class="w"> </span><span class="kt">NO_RETRY</span><span class="w"> </span><span class="p">});</span></code></pre></div>
-</div><p><code>max_backoff</code> does double duty: it is the backoff ceiling <strong>and</strong> the longest server-supplied
-<code>Retry-After</code> the SDK will sit through. Setting it to zero turns every wait into an immediate
-error carrying <code>retry_after</code> — which is what you want in a request handler that must not block.</p>
+</div><p><code>max_backoff</code> hace doble función: es el techo del backoff <strong>y</strong> el <code>Retry-After</code> más largo del
+servidor que el SDK va a aguantar sentado. Ponerlo a cero convierte cada espera en un error inmediato
+que lleva <code>retry_after</code> — que es lo que quieres en un manejador de peticiones que no puede
+bloquearse.</p>
 <h2>TLS</h2>
-<p>Point <code>ca_bundle</code> at your deployment's trust chain. There is no flag to disable verification, and
-there will not be one: the failure mode of that flag is that it gets set during an incident and
-never unset.</p>
-<p>Swift takes <code>additionalTrustAnchors</code> as <strong>data</strong> rather than a path, because an app bundles a
-certificate as a resource or pulls it from an MDM profile, and a path into a sandboxed container is
-not something a caller can usefully name.</p>
-<p><strong>TypeScript has no equivalent and cannot have one</strong> without breaking its zero-dependency promise:
-native <code>fetch</code> does not expose TLS trust. On Node, set <code>NODE_EXTRA_CA_CERTS</code> on the process. That is
-a real gap rather than a design preference, and it is said here instead of being discovered.</p>
-<h2>Connection reuse</h2>
-<p>One client per process. The connection pool and the cached token live on it, so constructing one
-per request throws both away — and re-fetches a token you already had.</p>
-<p>All five clients are safe for concurrent use.</p>
-<p>Next: <a href="05-composed.html">Composed operations</a>.</p>
+<p>Apunta <code>ca_bundle</code> a la cadena de confianza de tu despliegue. No hay bandera para desactivar la
+verificación, y no la va a haber: el modo de fallo de esa bandera es que se activa durante un
+incidente y nadie la desactiva.</p>
+<p>Swift toma <code>additionalTrustAnchors</code> como <strong>datos</strong> y no como una ruta, porque una app empaqueta un
+certificado como recurso o lo saca de un perfil MDM, y una ruta dentro de un contenedor en sandbox no
+es algo que un llamante pueda nombrar de forma útil.</p>
+<p><strong>TypeScript no tiene equivalente y no puede tenerlo</strong> sin romper su promesa de cero dependencias: el
+<code>fetch</code> nativo no expone la confianza TLS. En Node, pon <code>NODE_EXTRA_CA_CERTS</code> en el proceso. Eso es
+un hueco real y no una preferencia de diseño, y se dice aquí en vez de dejar que se descubra.</p>
+<h2>Reutilización de conexiones</h2>
+<p>Un cliente por proceso. El pool de conexiones y el token cacheado viven en él, así que construir uno
+por petición tira los dos — y vuelve a pedir un token que ya tenías.</p>
+<p>Los cinco clientes son seguros para uso concurrente.</p>
+<p>Siguiente: <a href="05-composed.html">Operaciones compuestas</a>.</p>
 
-<div class="pager"><a class="prev" href="03-failure.html"><span class="dir">Previous</span>Failure, retries and idempotency</a><a class="next" href="05-composed.html"><span class="dir">Next</span>Composed operations</a></div>
+<div class="pager"><a class="prev" href="03-failure.html"><span class="dir">Previous</span>Fallos, reintentos e idempotencia</a><a class="next" href="05-composed.html"><span class="dir">Next</span>Operaciones compuestas</a></div>
 <footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
 </main>
 </div>

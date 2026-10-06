@@ -52,6 +52,15 @@ nav a { display: block; padding: 0.3rem 0.6rem; margin-left: -0.6rem; border-rad
   color: var(--muted); text-decoration: none; font-size: 0.9rem; }
 nav a:hover { color: var(--ink); background: var(--accent-soft); }
 nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); font-weight: 560; }
+/* Both languages are always shown, with the current one marked rather than hidden: a switch that
+   removes the language you are reading leaves you guessing which one that is. */
+nav .langs { display: flex; gap: 0.4rem; margin-top: 1.4rem; font-size: 0.84rem; }
+nav .langs a { padding: 0.15rem 0.5rem; border: 1px solid var(--line); border-radius: 0.3rem;
+  color: var(--muted); text-decoration: none; }
+nav .langs a:hover { color: var(--fg); border-color: var(--muted); }
+nav .langs a[aria-current="true"] { color: var(--accent); border-color: var(--accent);
+  background: var(--code-bg); }
+
 nav .ext { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 nav .ext a { font-size: 0.84rem; }
 
@@ -141,6 +150,7 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
   <div class="brand"><a href="index.html">Axonium</a></div>
   <div class="tag">Client SDKs for the Prometheus inference platform</div>
   <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html" aria-current="page">Python API reference</a></li></ol>
+  <div class="langs"><a href="08-reference.html" hreflang="en" aria-current="true">English</a><a href="es/08-reference.html" hreflang="es">Español</a></div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>

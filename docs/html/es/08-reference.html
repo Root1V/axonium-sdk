@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>What it does not do · Axonium</title>
+<title>Referencia de la API de Python · Axonium</title>
 <meta name="description" content="Client SDKs for the Prometheus inference platform">
 <style>
 :root {
@@ -149,8 +149,8 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <nav>
   <div class="brand"><a href="index.html">Axonium</a></div>
   <div class="tag">Client SDKs for the Prometheus inference platform</div>
-  <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html" aria-current="page">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
-  <div class="langs"><a href="07-limits.html" hreflang="en" aria-current="true">English</a><a href="es/07-limits.html" hreflang="es">Español</a></div>
+  <ol><li><a href="index.html">Primeros pasos</a></li><li><a href="01-concepts.html">Conceptos</a></li><li><a href="02-calls.html">Hacer llamadas</a></li><li><a href="03-failure.html">Fallos, reintentos e idempotencia</a></li><li><a href="04-configuration.html">Configuración y transporte</a></li><li><a href="05-composed.html">Operaciones compuestas</a></li><li><a href="06-testing.html">Probar contra Axonium</a></li><li><a href="07-limits.html">Lo que no hace</a></li><li><a href="08-reference.html" aria-current="page">Referencia de la API de Python</a></li></ol>
+  <div class="langs"><a href="../08-reference.html" hreflang="en">English</a><a href="08-reference.html" hreflang="es" aria-current="true">Español</a></div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
@@ -158,71 +158,38 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
   </div>
 </nav>
 <main>
-<h1>What it does not do</h1>
-<blockquote>
-<p><strong>Where does this stop?</strong></p>
-</blockquote>
-<p>The page that is easiest to skip writing and the one that saves the most time. If a limit here is
-wrong for you, that is useful to find out now rather than three days in.</p>
-<h2>It does not normalise responses</h2>
-<p>Inference responses are passed through close to verbatim. The SDKs model the fields the contract
-guarantees, keep the rest reachable as raw, and do <strong>not</strong> reshape backend-specific output into a
-vocabulary of their own.</p>
-<p>This is deliberate. Backends are heterogeneous, and a normalising layer inside five separate
-language SDKs is five implementations of the same opinion, drifting. Normalisation belongs above
-the SDK, in whatever framework consumes the models, where there is one of it.</p>
-<h2>It does not retry streams</h2>
-<p>Ever, and there is no flag. A retry after partial output has been delivered is a fresh billable
-generation, not a resumption. The gateway does not retry them either.</p>
-<p>If a stream fails, you get <code>StreamInterruptedError</code> carrying what arrived. Deciding whether to start
-a new one is yours, because only you know whether the partial output was used.</p>
-<h2>It does not run a circuit breaker</h2>
-<p>The gateway runs one per backend and reports <code>503 backend-unavailable</code> with a <code>Retry-After</code>
-computed from real recovery time. A second breaker on the client would open on signals the server
-already counted, using worse information.</p>
-<p>What is here is smaller: a cooldown registry that respects <code>Retry-After</code> and fails fast locally
-until it expires. If you want full <code>CLOSED</code>/<code>OPEN</code>/<code>HALF_OPEN</code>, put it above the SDK.</p>
-<h2>It does not log prompts or completions</h2>
-<p>Not at any level, and there is no flag to turn it on. That is where personal data leaks, and a flag
-for it is a flag someone sets during an incident and never unsets. The <code>Authorization</code> header is
-never logged either.</p>
-<p>Correlation is by <code>request_id</code>, <code>trace_id</code> and <code>instance_id</code>, which are on every response.</p>
-<h2>It does not configure your logging</h2>
-<p><code>NullHandler</code> in Python, no subscriber installed in Rust, an injected <code>slog.Logger</code> in Go. A library
-that calls <code>basicConfig()</code> overwrites its host's configuration.</p>
-<p>The consequence is real and worth stating: <strong>if you have not attached a handler, you will not see
-the SDK's logs</strong> — including the line saying it is waiting out a <code>429</code>. That is why the wait is also
-data on the response. See <a href="03-failure.html">Failure</a>.</p>
-<h2>It does not read <code>.env</code></h2>
-<p>Loading one is the application's decision. See <a href="04-configuration.html">Configuration</a>.</p>
-<h2>It does not report metadata on failures</h2>
-<p>A call that waited 90 seconds across three attempts and then failed reports none of that in
-Python, Go, Rust or Swift: the exception carries no <code>ResponseMeta</code>. Successes carry <code>waited_s</code> and
-<code>attempts</code>; failures do not. This is a known gap on the roadmap, not a design decision.</p>
-<p><strong>TypeScript answers it</strong>, because its errors already carry <code>meta</code> — <code>error.meta.waitedMs</code> and
-<code>error.meta.attempts</code> are stamped on before the error leaves.</p>
-<h2>It does not propagate W3C trace context</h2>
-<p>No <code>traceparent</code> is sent by default. The gateway's documented behaviour is that a client-supplied
-<code>X-Trace-ID</code> is ignored or honoured conditionally depending on deployment mode, and W3C propagation
-is not documented at all. Sending a header that may be silently dropped produces traces with
-invisible gaps, which is worse than no propagation.</p>
-<p>OpenTelemetry spans are available behind an optional extra, off by default, spans only.</p>
-<h2>It does not validate your prompts</h2>
-<p>No content filtering, no PII detection, no token counting before send. The previous generation of
-this SDK did some of that and it belongs elsewhere: the SDK cannot know your policy, and a partial
-implementation of one invites the belief that it is complete.</p>
-<p>It does validate what the <strong>contract</strong> constrains: parameter ranges, message roles, idempotency key
-length, and image URLs with an <code>http(s)</code> scheme — the last rejected with an explicit SSRF-policy
-message rather than a generic validation error.</p>
-<h2>It is not a framework</h2>
-<p>No agent loop, no workflow abstractions, no chain builders, no LangChain or LangGraph bridges. The
-previous generation had them and they were the first thing to rot, because they encoded opinions
-about orchestration that changed faster than the transport did.</p>
-<p>This is a transport client. Build the loop you need; <a href="05-composed.html">Composed operations</a> shows
-what the pieces look like together.</p>
-<p>Next: <a href="08-reference.html">Python API reference</a>.</p>
+<h1>Referencia de la API de Python</h1>
+<p>Esta página <strong>no está traducida</strong>, y es a propósito.</p>
+<p>La genera <a href="https://github.com/Root1V/axonium-sdk/blob/main/scripts/render_reference.py"><code>scripts/render_reference.py</code></a>
+leyendo lo que el paquete de Python exporta de verdad: cada clase, cada firma y cada docstring salen
+del código, no de un documento que alguien mantiene al lado. Hay un test que falla si las dos dejan
+de coincidir.</p>
+<p>Una traducción de esta página habría que rehacerla en cada <em>release</em>, y estaría desfasada entre cada
+dos. Eso es exactamente la deriva que el resto de este sitio en español evita: cada página traducida
+lleva grabado de qué revisión del original salió, y la compilación falla cuando el inglés cambia y la
+traducción no. Una página que no puede cumplir esa regla es mejor no tenerla que tenerla mintiendo.</p>
+<p><strong>La referencia está aquí:</strong> <a href="../08-reference.html">versión en inglés</a>.</p>
+<p>Las firmas, los nombres de parámetros y los tipos son idénticos en los dos idiomas — el código no se
+traduce — así que lo único que se pierde son las descripciones en prosa.</p>
+<h2>El resto de la referencia</h2>
+<p>Los otros cuatro SDK generan la suya con las herramientas de su propio ecosistema, y tampoco están
+traducidas:</p>
+<ul>
+<li><strong>Go</strong> — <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">pkg.go.dev</a></li>
+<li><strong>Rust</strong> — <a href="https://docs.rs/axonium/latest/axonium/">docs.rs</a></li>
+<li><strong>Swift</strong> — DocC en el <a href="https://github.com/Root1V/axonium-sdk-swift">repositorio</a></li>
+<li><strong>TypeScript</strong> — los ficheros <code>.d.ts</code> más
+<a href="https://github.com/Root1V/axonium-sdk/blob/main/typescript/docs/api.md"><code>docs/api.md</code></a>, que
+además incluye una
+<a href="https://github.com/Root1V/axonium-sdk/blob/main/typescript/docs/migrating-from-python.md">guía de migración desde Python</a></li>
+</ul>
+<p>Lo que sí está traducido por completo es la guía: <a href="index.html">Primeros pasos</a>,
+<a href="01-concepts.html">Conceptos</a>, <a href="02-calls.html">Hacer llamadas</a>,
+<a href="03-failure.html">Fallos</a>, <a href="04-configuration.html">Configuración</a>,
+<a href="05-composed.html">Operaciones compuestas</a>, <a href="06-testing.html">Probar</a> y
+<a href="07-limits.html">Lo que no hace</a>.</p>
 
-<div class="pager"><a class="prev" href="06-testing.html"><span class="dir">Previous</span>Testing against Axonium</a><a class="next" href="08-reference.html"><span class="dir">Next</span>Python API reference</a></div>
+<div class="pager"><a class="prev" href="07-limits.html"><span class="dir">Previous</span>Lo que no hace</a></div>
 <footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
 </main>
 </div>

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Making calls · Axonium</title>
+<title>Hacer llamadas · Axonium</title>
 <meta name="description" content="Client SDKs for the Prometheus inference platform">
 <style>
 :root {
@@ -149,8 +149,8 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
 <nav>
   <div class="brand"><a href="index.html">Axonium</a></div>
   <div class="tag">Client SDKs for the Prometheus inference platform</div>
-  <ol><li><a href="index.html">Getting started</a></li><li><a href="01-concepts.html">Concepts</a></li><li><a href="02-calls.html" aria-current="page">Making calls</a></li><li><a href="03-failure.html">Failure, retries and idempotency</a></li><li><a href="04-configuration.html">Configuration and transport</a></li><li><a href="05-composed.html">Composed operations</a></li><li><a href="06-testing.html">Testing against Axonium</a></li><li><a href="07-limits.html">What it does not do</a></li><li><a href="08-reference.html">Python API reference</a></li></ol>
-  <div class="langs"><a href="02-calls.html" hreflang="en" aria-current="true">English</a><a href="es/02-calls.html" hreflang="es">Español</a></div>
+  <ol><li><a href="index.html">Primeros pasos</a></li><li><a href="01-concepts.html">Conceptos</a></li><li><a href="02-calls.html" aria-current="page">Hacer llamadas</a></li><li><a href="03-failure.html">Fallos, reintentos e idempotencia</a></li><li><a href="04-configuration.html">Configuración y transporte</a></li><li><a href="05-composed.html">Operaciones compuestas</a></li><li><a href="06-testing.html">Probar contra Axonium</a></li><li><a href="07-limits.html">Lo que no hace</a></li><li><a href="08-reference.html">Referencia de la API de Python</a></li></ol>
+  <div class="langs"><a href="../02-calls.html" hreflang="en">English</a><a href="02-calls.html" hreflang="es" aria-current="true">Español</a></div>
   <div class="ext">
     <a href="https://pkg.go.dev/github.com/Root1V/axonium-sdk/go">Go reference ↗</a>
     <a href="https://docs.rs/axonium/latest/axonium/">Rust reference ↗</a>
@@ -158,12 +158,12 @@ footer { margin-top: 2.5rem; color: var(--muted); font-size: 0.82rem; }
   </div>
 </nav>
 <main>
-<h1>Making calls</h1>
+<h1>Hacer llamadas</h1>
 <blockquote>
-<p><strong>I have a client. What can I ask it for?</strong></p>
+<p><strong>Ya tengo un cliente. ¿Qué le puedo pedir?</strong></p>
 </blockquote>
-<p>Six resources. Each returns a typed object that also keeps the raw payload, so a field the SDK does
-not model is still reachable.</p>
+<p>Seis recursos. Cada uno devuelve un objeto tipado que además conserva el payload crudo, así que un
+campo que el SDK no modela sigue siendo accesible.</p>
 <h2>Chat completions</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
@@ -202,25 +202,26 @@ not model is still reachable.</p>
 <span class="p">});</span>
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">content</span><span class="p">);</span><span class="w"> </span><span class="c1">// the first choice's text</span>
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">usage</span><span class="o">?</span><span class="p">.</span><span class="nx">totalTokens</span><span class="p">);</span></code></pre></div>
-</div><p><code>content</code> is an accessor, not a field. It reaches into the first choice's message, and returns
-empty rather than panicking when a response has no choices — which happens on a generation stopped
-before it produced any.</p>
-<h3>Fields the gateway does not support</h3>
-<p>The gateway silently discards request fields it does not implement. Silently is the problem: you
-set <code>frequency_penalty</code>, nothing complains, and nothing applies it. The SDKs check the request
-against an allowlist and emit a <strong>warning</strong> naming each dropped field — a warning rather than an
-error, so a gateway that later adds a field does not break callers who were ahead of it.</p>
-<p>That allowlist is the SDK's <em>model</em> of what the gateway accepts, and a model can go stale: when the
-platform started honouring <code>response_format</code>, this SDK kept warning that it would be dropped for
-five days. The gateway reports its own verdict in <code>X-Prometheus-Ignored-Parameters</code>, which is the
-authoritative answer because it is the gateway's and not a guess about it.</p>
-<p><strong>TypeScript surfaces it as <code>meta.ignoredParameters</code></strong> — <code>undefined</code> when the header is absent,
-because the header is present only when there is something to report, and an empty array would
-claim the gateway looked and found nothing. The other four read the header and discard it; the name
-here is the one they will copy.</p>
-<p>Pass <code>require_parameters: true</code> to turn a silent drop into a <code>400 unknown-parameter</code> instead, when
-being quietly given less than you asked for is worse than failing.</p>
-<h3>Structured output</h3>
+</div><p><code>content</code> es un accesorio, no un campo. Entra al mensaje de la primera opción, y devuelve vacío en
+vez de reventar cuando una respuesta no tiene opciones — algo que pasa en una generación cortada
+antes de producir ninguna.</p>
+<h3>Campos que el gateway no soporta</h3>
+<p>El gateway descarta en silencio los campos de petición que no implementa. El silencio es el problema:
+pones <code>frequency_penalty</code>, nadie se queja, y nada lo aplica. Los SDK comprueban la petición contra
+una lista permitida y emiten un <strong>aviso</strong> nombrando cada campo descartado — un aviso y no un error,
+para que un gateway que luego añada un campo no rompa a quien iba por delante.</p>
+<p>Esa lista es el <em>modelo</em> que el SDK tiene de lo que el gateway acepta, y un modelo puede caducar:
+cuando la plataforma empezó a honrar <code>response_format</code>, este SDK siguió avisando de que se
+descartaría durante cinco días. El gateway reporta su propio veredicto en
+<code>X-Prometheus-Ignored-Parameters</code>, que es la respuesta autoritativa porque es suya y no una conjetura
+sobre él.</p>
+<p><strong>TypeScript lo expone como <code>meta.ignoredParameters</code></strong> — <code>undefined</code> cuando la cabecera no está,
+porque la cabecera solo aparece cuando hay algo que reportar, y un array vacío afirmaría que el
+gateway miró y no encontró nada. Los otros cuatro leen la cabecera y la tiran; el nombre de aquí es
+el que copiarán.</p>
+<p>Pasa <code>require_parameters: true</code> para convertir un descarte silencioso en un <code>400 unknown-parameter</code>,
+cuando que te den calladamente menos de lo que pediste es peor que fallar.</p>
+<h3>Salida estructurada</h3>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">schema</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"json_schema"</span><span class="p">,</span> <span class="s2">"json_schema"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"capital"</span><span class="p">,</span> <span class="s2">"schema"</span><span class="p">:</span> <span class="p">{</span>
     <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span> <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"capital"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span> <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"capital"</span><span class="p">]}}}</span>
 
@@ -263,12 +264,12 @@ being quietly given less than you asked for is worse than failing.</p>
 <span class="w">  </span><span class="nx">response_format</span><span class="o">:</span><span class="w"> </span><span class="kt">jsonSchema</span><span class="p">(</span><span class="s2">"capital"</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">"object"</span><span class="p">,</span><span class="w"> </span><span class="nx">properties</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">capital</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="kr">type</span><span class="o">:</span><span class="w"> </span><span class="s2">"string"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}),</span>
 <span class="p">});</span>
 <span class="kd">const</span><span class="w"> </span><span class="nx">answer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">content</span><span class="p">);</span><span class="w"> </span><span class="c1">// a JSON string, not a nested object</span></code></pre></div>
-</div><p>The grammar is the engine's, and the schema is forwarded verbatim — validating it here would be a
-second copy of the engine's rules, drifting from the first.</p>
-<h3>How confident the model was</h3>
-<p><code>logprobs</code> returns the chosen token's own probability; <code>top_logprobs</code> adds the N most likely
-alternatives at each position. The point is an agent deciding when to <strong>escalate to a person</strong>
-instead of acting on a guess.</p>
+</div><p>La gramática es del motor, y el esquema se reenvía verbatim — validarlo aquí sería una segunda copia
+de las reglas del motor, separándose de la primera.</p>
+<h3>Cuánta confianza tenía el modelo</h3>
+<p><code>logprobs</code> devuelve la probabilidad del token elegido; <code>top_logprobs</code> añade las N alternativas más
+probables en cada posición. El objetivo es que un agente decida cuándo <strong>escalar a una persona</strong> en
+vez de actuar sobre una suposición.</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
     <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"yes or no?"</span><span class="p">}],</span>
@@ -317,26 +318,28 @@ instead of acting on a guess.</p>
 <span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kd">const</span><span class="w"> </span><span class="nx">token</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="nx">completion</span><span class="p">.</span><span class="nx">logprobs</span><span class="w"> </span><span class="o">??</span><span class="w"> </span><span class="p">[])</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">token</span><span class="p">.</span><span class="nx">token</span><span class="p">,</span><span class="w"> </span><span class="nx">token</span><span class="p">.</span><span class="nx">probability</span><span class="p">);</span><span class="w"> </span><span class="c1">// 0.99946, not -0.00054</span>
 <span class="p">}</span></code></pre></div>
-</div><p><strong>These are natural logarithms.</strong> <code>-0.00054</code> is about 99.95% and <code>-7.6</code> is about 0.05%. Read as a
-probability it looks like a number near zero meaning &quot;unlikely&quot;, and the mistake is silent — so all
-five expose <code>probability</code> rather than making you remember to call <code>exp</code>. It is absent rather than
-zero when the backend sent no <code>logprob</code>: a token it said nothing about is a different fact from one
-it said was impossible.</p>
-<p><strong><code>top_logprobs</code> requires <code>logprobs</code>.</strong> Sending it alone, or beside <code>logprobs: false</code>, is a <code>422</code>
-the gateway raises before the engine sees it — the rule is llama.cpp's and the gateway enforces it so
-the refusal reaches you in the usual envelope. All five SDKs refuse it at the call site instead,
-because a round trip to be told that buys nothing.</p>
-<p><strong>Absent <code>logprobs</code> on the response means the engine does not have the feature</strong>, not that the model
-was uncertain. The response simply carries no key. Send <code>require_parameters</code> to be told rather than
-inferring it from an absence.</p>
-<p><strong>The answer arrives as a JSON string in the content, not as a nested object</strong>, and the SDKs do not
-parse it for you. Same reason tool-call <code>arguments</code> stays a string: a generation stopped by
-<code>max_tokens</code> leaves it truncated, and a response model that raises from the inside is worse than
-one that hands you what arrived. That is not hypothetical — the first structured response measured
-while writing this came back as <code>{\n  &quot;capital&quot;: &quot;Lima&quot;\n</code> with <code>finish_reason: length</code>.</p>
+</div><p><strong>Son logaritmos naturales.</strong> <code>-0,00054</code> es alrededor del 99,95 % y <code>-7,6</code> alrededor del 0,05 %.
+Leído como probabilidad parece un número cercano a cero que significa «improbable», y el error no
+hace ruido — así que los cinco exponen <code>probability</code> en vez de obligarte a recordar que hay que
+llamar a <code>exp</code>. Es <strong>ausente y no cero</strong> cuando el backend no mandó <code>logprob</code>: un token del que no
+dijo nada es un hecho distinto de uno que dijo imposible.</p>
+<p><strong><code>top_logprobs</code> necesita <code>logprobs</code>.</strong> Mandarlo solo, o junto a <code>logprobs: false</code>, es un <code>422</code> que
+el gateway lanza antes de que el motor lo vea — la regla es de llama.cpp y el gateway la aplica para
+que el rechazo te llegue en el sobre de siempre. Los cinco SDK lo rechazan en el sitio de la llamada,
+porque un viaje de ida y vuelta para que te lo digan no aporta nada.</p>
+<p><strong>Que <code>logprobs</code> no venga en la respuesta significa que el motor no tiene la capacidad</strong>, no que el
+modelo dudara. La respuesta simplemente no lleva la clave. Manda <code>require_parameters</code> para que te lo
+digan en vez de deducirlo de una ausencia.</p>
+<p><strong>La respuesta llega como una cadena JSON en el contenido, no como un objeto anidado</strong>, y los SDK no
+la parsean por ti. El mismo motivo por el que los <code>arguments</code> de una herramienta siguen siendo una
+cadena: una generación cortada por <code>max_tokens</code> la deja truncada, y un modelo de respuesta que lanza
+desde dentro es peor que uno que te entrega lo que llegó. No es hipotético — la primera respuesta
+estructurada que medimos escribiendo esto volvió como <code>{\n  &quot;capital&quot;: &quot;Lima&quot;\n</code> con
+<code>finish_reason: length</code>.</p>
 <h2>Streaming</h2>
-<p>A separate method, not a flag. That keeps the return type honest, makes the <code>inference:stream</code>
-scope check explicit, and gives one place to say which of a stream's two failures is retried.</p>
+<p>Un método aparte, no una bandera. Eso mantiene honesto el tipo de retorno, hace explícita la
+comprobación del scope <code>inference:stream</code>, y da un solo sitio donde decir cuál de los dos fallos de
+un stream se reintenta.</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="k">with</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span>
     <span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
     <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"Count to five"</span><span class="p">}],</span>
@@ -376,23 +379,23 @@ scope check explicit, and gives one place to say which of a stream's two failure
 <span class="w">  </span><span class="nx">process</span><span class="p">.</span><span class="nx">stdout</span><span class="p">.</span><span class="nx">write</span><span class="p">(</span><span class="nx">chunk</span><span class="p">.</span><span class="nx">content</span><span class="w"> </span><span class="o">??</span><span class="w"> </span><span class="s2">""</span><span class="p">);</span>
 <span class="p">}</span>
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">stream</span><span class="p">.</span><span class="nx">usage</span><span class="p">);</span></code></pre></div>
-</div><p>Four things the stream handles that a naive SSE reader does not:</p>
+</div><p>Cuatro cosas que el stream maneja y un lector SSE ingenuo no:</p>
 <ul>
-<li><strong>The <code>[DONE]</code> sentinel</strong> ends iteration; it is not delivered as a chunk.</li>
-<li><strong>A rejection that arrives instead of the stream</strong> is a real HTTP status, not an SSE frame — the
-gateway reads the engine's status before the <code>200</code>/<code>text/event-stream</code> headers exist. It raises the
-same typed error the non-streaming call would, and <strong>it is retried like any other request</strong>. See
-<a href="03-failure.html">Failure</a>.</li>
-<li><strong>An in-band error</strong> — a decoded event carrying a top-level <code>error</code> key — raises
-<code>StreamInterruptedError</code> <strong>with the text accumulated so far</strong>, so a partial answer is not lost to
-the exception. Detection is by key presence, not by matching the message string, because only one
-message is documented and there is no reason to believe it is the only one. This one is <strong>never
-retried</strong>: part of the answer was delivered and part was billed.</li>
-<li><strong>A stream cut short without <code>[DONE]</code></strong> ends iteration with what arrived, rather than hanging.</li>
+<li><strong>El centinela <code>[DONE]</code></strong> termina la iteración; no se entrega como chunk.</li>
+<li><strong>Un rechazo que llega en vez del stream</strong> es un status HTTP real, no un frame SSE — el gateway lee
+el status del motor antes de que existan las cabeceras <code>200</code>/<code>text/event-stream</code>. Lanza el mismo
+error tipado que lanzaría la llamada no-streaming, y <strong>se reintenta como cualquier otra petición</strong>.
+Ver <a href="03-failure.html">Fallos</a>.</li>
+<li><strong>Un error en banda</strong> — un evento decodificado con una clave <code>error</code> de nivel superior — lanza
+<code>StreamInterruptedError</code> <strong>con el texto acumulado hasta ese momento</strong>, para que una respuesta
+parcial no se pierda con la excepción. La detección es por presencia de la clave, no por comparar
+el texto del mensaje, porque solo hay un mensaje documentado y no hay motivo para creer que sea el
+único. Este <strong>nunca se reintenta</strong>: parte de la respuesta se entregó y parte se facturó.</li>
+<li><strong>Un stream cortado sin <code>[DONE]</code></strong> termina la iteración con lo que llegó, en vez de colgarse.</li>
 </ul>
-<p>Dropping the stream cancels the request. In Rust that is <code>Drop</code>; in Go it is the <code>context</code>; in
-Python it is leaving the <code>with</code> block.</p>
-<h2>Embeddings, images, rerank</h2>
+<p>Soltar el stream cancela la petición. En Rust eso es <code>Drop</code>; en Go es el <code>context</code>; en Python es
+salir del bloque <code>with</code>.</p>
+<h2>Embeddings, imágenes, rerank</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">vectors</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">embeddings</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-embedding"</span><span class="p">,</span> <span class="nb">input</span><span class="o">=</span><span class="p">[</span><span class="s2">"first"</span><span class="p">,</span> <span class="s2">"second"</span><span class="p">])</span>
 
 <span class="n">image</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">images</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">"sd-turbo"</span><span class="p">,</span> <span class="n">prompt</span><span class="o">=</span><span class="s2">"a lighthouse at dusk"</span><span class="p">)</span>
@@ -447,19 +450,20 @@ Python it is leaving the <code>with</code> block.</p>
 <span class="w">  </span><span class="nx">documents</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"Rates schedule"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Opening hours"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Card benefits"</span><span class="p">],</span>
 <span class="p">});</span>
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">ranked</span><span class="p">.</span><span class="nx">ranking</span><span class="p">);</span><span class="w"> </span><span class="c1">// indices into the documents you sent, best first</span></code></pre></div>
-</div><p><strong><code>raw_scores</code> asks for the logit instead of the probability.</strong> A reranker's probabilities saturate
-near 1.0 — 0.99 was measured for a document only loosely related to its query — and a saturated
-probability cannot be calibrated while the logit behind it can. Not every engine has it; where it
-does not, the request still succeeds and the field comes back named in
-<code>X-Prometheus-Ignored-Parameters</code>, so sending it unconditionally is safe and being dropped is
-discoverable rather than silent.</p>
-<p><strong>Rerank scores the whole document set in one request.</strong> Against a 60 RPM budget, scoring 50
-candidates costs one unit rather than fifty. Each result's <code>index</code> points into the array <strong>you</strong>
-sent, never into the results, which is what keeps a reordered result attributable to its input.</p>
-<h2>Predict — the tasks OpenAI has no shape for</h2>
-<p>Three modalities route here and nowhere else: <code>classification</code>, <code>zero_shot</code> and <code>typed_decision</code>.
-Every other endpoint is OpenAI-shaped because every task it serves has an OpenAI endpoint to be
-shaped like. These do not.</p>
+</div><p><strong><code>raw_scores</code> pide el logit en vez de la probabilidad.</strong> Las probabilidades de un reranker se
+saturan cerca de 1,0 — se midió 0,99 para un documento solo vagamente relacionado con su consulta — y
+una probabilidad saturada no se puede calibrar mientras que el logit de detrás sí. No todos los
+motores lo tienen; donde no, la petición sigue teniendo éxito y el campo vuelve nombrado en
+<code>X-Prometheus-Ignored-Parameters</code>, así que mandarlo siempre es seguro y que se descarte es
+descubrible y no silencioso.</p>
+<p><strong>Rerank puntúa el conjunto entero de documentos en una petición.</strong> Contra un presupuesto de 60 RPM,
+puntuar 50 candidatos cuesta una unidad y no cincuenta. El <code>index</code> de cada resultado apunta al array
+que <strong>tú</strong> mandaste, nunca a los resultados, que es lo que mantiene un resultado reordenado
+atribuible a su entrada.</p>
+<h2>Predict — las tareas para las que OpenAI no tiene forma</h2>
+<p>Tres modalidades van aquí y a ningún otro sitio: <code>classification</code>, <code>zero_shot</code> y <code>typed_decision</code>.
+Todos los demás endpoints tienen forma de OpenAI porque cada tarea que sirven tiene un endpoint de
+OpenAI al que parecerse. Estas no.</p>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">result</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">predict</span><span class="o">.</span><span class="n">create</span><span class="p">(</span><span class="s2">"sst2-clf"</span><span class="p">,</span> <span class="p">{</span><span class="s2">"inputs"</span><span class="p">:</span> <span class="s2">"El servicio ha sido excelente"</span><span class="p">})</span>
 <span class="n">result</span><span class="o">.</span><span class="n">value</span>        <span class="c1"># [{"label": "POSITIVE", "score": 0.9783}]  -- a LIST, not a dict</span>
 
@@ -500,19 +504,19 @@ shaped like. These do not.</p>
 <span class="w">  </span><span class="nx">inputs</span><span class="o">:</span><span class="w"> </span><span class="s2">"Me cobraron dos veces la misma factura"</span><span class="p">,</span>
 <span class="w">  </span><span class="nx">parameters</span><span class="o">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">candidate_labels</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"cargo duplicado"</span><span class="p">,</span><span class="w"> </span><span class="s2">"cliente satisfecho"</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
 <span class="p">});</span></code></pre></div>
-</div><p><strong>The body goes to the engine verbatim and its answer comes back verbatim.</strong> Inventing a body for
-these would be the gateway deciding, on the engine's behalf, what the engine's API should look like.</p>
-<p><strong>So the answer is handed back undecoded, and that is not defensive typing.</strong> <code>sst2-clf</code> answers a
-top-level <strong>array</strong>; <code>von-decide</code> and <code>laya-decide</code> answer objects. A client that modelled this as a
-dictionary would report &quot;this is not JSON&quot; about valid JSON, for the first engine the platform
-shipped on the route.</p>
-<p><strong>Dispatch on <code>payload_schema</code>, not on <code>modality</code>.</strong> <code>sst2-clf</code> and <code>von-decide</code> are both
-classifiers and want different bodies, so there is no <code>classify(text)</code> here — a typed method would
-promise a stability the endpoint does not offer. The catalog says which contract a model speaks:</p>
+</div><p><strong>El cuerpo va al motor verbatim y su respuesta vuelve verbatim.</strong> Inventar un cuerpo para estas
+sería el gateway decidiendo, en nombre del motor, cómo debería ser la API del motor.</p>
+<p><strong>Así que la respuesta se entrega sin decodificar, y eso no es tipado defensivo.</strong> <code>sst2-clf</code> contesta
+un <strong>array</strong> de nivel superior; <code>von-decide</code> y <code>laya-decide</code> contestan objetos. Un cliente que modelara
+esto como un diccionario reportaría «esto no es JSON» sobre JSON válido, para el primer motor que la
+plataforma sacó en esta ruta.</p>
+<p><strong>Despacha por <code>payload_schema</code>, no por <code>modality</code>.</strong> <code>sst2-clf</code> y <code>von-decide</code> son los dos
+clasificadores y quieren cuerpos distintos, así que aquí no hay un <code>classify(text)</code> — un método tipado
+prometería una estabilidad que el endpoint no ofrece. El catálogo dice qué contrato habla cada modelo:</p>
 <div class="table-scroll"><table>
 <thead>
 <tr>
-<th>model</th>
+<th>modelo</th>
 <th><code>modality</code></th>
 <th><code>payload_schema</code></th>
 </tr>
@@ -545,26 +549,28 @@ promise a stability the endpoint does not offer. The catalog says which contract
 </tr>
 </tbody>
 </table></div>
-<p><strong>The last two rows are why that table matters.</strong> <code>von-decide</code> and <code>nli-tei</code> are both <code>zero_shot</code>
-and answer <em>different things that both sum to 1</em>: the first normalises across the candidate labels
-<strong>you</strong> supplied, the second across the <strong>model's own</strong> classes and has no notion of candidate
-labels at all. Dispatch on <code>modality</code> and you read one as the other, silently.</p>
-<p><code>tei.predict.v1</code> also carries a trap worth knowing before you batch:</p>
+<p><strong>Las dos últimas filas son por lo que esa tabla importa.</strong> <code>von-decide</code> y <code>nli-tei</code> son los dos
+<code>zero_shot</code> y contestan <em>cosas distintas que las dos suman 1</em>: el primero normaliza entre las
+etiquetas candidatas que <strong>tú</strong> diste, el segundo entre las clases <strong>del propio modelo</strong> y no tiene
+noción de candidatas en absoluto. Despacha por <code>modality</code> y lees una como la otra, en silencio.</p>
+<p><code>tei.predict.v1</code> lleva además una trampa que conviene conocer antes de lotear:</p>
 <div class="code" data-language="text" data-label="text"><pre><code class="language-text">inputs: "a text"                     → one flat list of {label, score}
 inputs: ["premise", "hypothesis"]    → ONE PAIR, not a batch of two texts
 inputs: ["a", "b", "c"]              → 422
 inputs: [["a"], ["b"]]               → a batch of two single texts → two lists</code></pre></div>
-<p><strong>A batch is always a list of lists.</strong> The obvious &quot;send my N texts as an array&quot; is the one form
-that quietly returns a single wrong answer. It is also why the result is handed back undecoded: one
-input returns a flat list and a batch returns a list of lists, from the same model and endpoint.</p>
-<p><strong>What does not pass through is the policy.</strong> The model still resolves, <code>inference:read</code> plus the
-specific <code>model:&lt;id&gt;</code> scope is still required, a dead replica is still skipped, and the request is
-still metered and still counts against a spend cap. All three modalities share <strong>one</strong> rate-limit
-budget, named <code>predict</code> — so classification requests and typed decisions eat the same 60 RPM.</p>
-<p><strong>A model that has an OpenAI endpoint is refused here</strong> with <code>400 modality-mismatch</code>, the inverse of
-every other handler's check. Without it the same model would be reachable two ways, with two billing
-paths, and the one that billed correctly would be whichever you did not use.</p>
-<h2>The catalog</h2>
+<p><strong>Un lote es siempre una lista de listas.</strong> El obvio «manda mis N textos como array» es la única forma
+que devuelve calladamente una sola respuesta equivocada. Es también por lo que el resultado se entrega
+sin decodificar: una entrada devuelve lista plana y un lote devuelve lista de listas, del mismo modelo
+y el mismo endpoint.</p>
+<p><strong>Lo que no pasa a través es la política.</strong> El modelo sigue resolviéndose, siguen haciendo falta
+<code>inference:read</code> más el scope específico <code>model:&lt;id&gt;</code>, una réplica muerta se sigue saltando, y la
+petición se sigue midiendo y sigue contando contra un tope de gasto. Las tres modalidades comparten
+<strong>un</strong> presupuesto de rate-limit, llamado <code>predict</code> — así que las peticiones de clasificación y las
+decisiones tipadas se comen los mismos 60 RPM.</p>
+<p><strong>Un modelo que sí tiene endpoint de OpenAI se rechaza aquí</strong> con <code>400 modality-mismatch</code>, el inverso
+de la comprobación de todos los demás manejadores. Sin eso el mismo modelo sería alcanzable por dos
+caminos, con dos rutas de facturación, y la que facturara bien sería la que no usaste.</p>
+<h2>El catálogo</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">client</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">list</span><span class="p">()</span>    <span class="c1"># what this token may call</span>
 <span class="n">client</span><span class="o">.</span><span class="n">models</span><span class="o">.</span><span class="n">mine</span><span class="p">()</span>    <span class="c1"># the subset your token is scoped to, cached</span></code></pre></div>
 <div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="nx">client</span><span class="p">.</span><span class="nx">Models</span><span class="p">.</span><span class="nx">List</span><span class="p">(</span><span class="nx">ctx</span><span class="p">)</span><span class="w">   </span><span class="c1">// what this token may call</span>
@@ -575,15 +581,14 @@ paths, and the one that billed correctly would be whichever you did not use.</p>
 <span class="k">try</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">modelsMine</span><span class="p">()</span><span class="w">   </span><span class="c1">// the subset your token is scoped to, cached</span></code></pre></div>
 <div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">models</span><span class="p">.</span><span class="nx">list</span><span class="p">();</span><span class="w"> </span><span class="c1">// what this token may call</span>
 <span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">models</span><span class="p">.</span><span class="nx">mine</span><span class="p">();</span><span class="w"> </span><span class="c1">// the subset your token is scoped to, cached</span></code></pre></div>
-</div><p><strong>The catalog lists running instances intersected with your scopes</strong>, measured 2026-10-05. A model
-that is registered but stopped disappears exactly like one that does not exist, and like one your
-token cannot call — three different facts behind one absence, and only an operator can tell them
-apart. So an empty list is never evidence that the deployment has no models.</p>
-<p>Access is deny-by-default and granted per model, and streaming needs a different scope from
-non-streaming: holding <code>inference:read</code> does not grant <code>inference:stream</code>. When a <code>403</code> arrives and
-<code>models.mine()</code> has been read, the SDK says which of the two you are missing rather than only that
-access was refused.</p>
-<h2>Usage for one request</h2>
+</div><p><strong>El catálogo lista las instancias en marcha intersecadas con tus scopes</strong>, medido el 05/10/2026. Un
+modelo registrado pero parado desaparece exactamente igual que uno que no existe, e igual que uno que
+tu token no puede llamar — tres hechos distintos detrás de una ausencia, y solo un operador los
+distingue. Así que una lista vacía nunca es evidencia de que el despliegue no tenga modelos.</p>
+<p>El acceso es denegar-por-defecto y se concede por modelo, y el streaming necesita un scope distinto
+del no-streaming: tener <code>inference:read</code> no concede <code>inference:stream</code>. Cuando llega un <code>403</code> y ya se
+ha leído <code>models.mine()</code>, el SDK dice cuál de los dos te falta en vez de solo que se denegó el acceso.</p>
+<h2>Uso de una petición</h2>
 <div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">row</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">usage</span><span class="o">.</span><span class="n">retrieve</span><span class="p">(</span><span class="n">completion</span><span class="o">.</span><span class="n">meta</span><span class="o">.</span><span class="n">request_id</span><span class="p">)</span>
 <span class="n">row</span><span class="o">.</span><span class="n">usage</span><span class="o">.</span><span class="n">total_tokens</span>
 <span class="n">row</span><span class="o">.</span><span class="n">cost_usd</span>            <span class="c1"># None where no price is configured — not 0.0</span>
@@ -604,12 +609,12 @@ access was refused.</p>
 <span class="nx">row</span><span class="p">.</span><span class="nx">usage</span><span class="p">.</span><span class="nx">totalTokens</span><span class="p">;</span>
 <span class="nx">row</span><span class="p">.</span><span class="nx">costUsd</span><span class="p">;</span><span class="w"> </span><span class="c1">// undefined where no price is configured -- not 0</span>
 <span class="nx">row</span><span class="p">.</span><span class="nx">terminationReason</span><span class="p">;</span></code></pre></div>
-</div><p>This needs no <code>admin:read</code>. <code>cost_usd</code> is nullable on purpose: &quot;nobody priced this&quot; and &quot;it cost
-nothing&quot; are different facts, and a column that cannot tell them apart reports <code>$0.00</code> for traffic
-that was never free.</p>
-<p>Next: <a href="03-failure.html">Failure, retries and idempotency</a>.</p>
+</div><p>Esto no necesita <code>admin:read</code>. <code>cost_usd</code> es anulable a propósito: «nadie puso precio a esto» y «no
+costó nada» son hechos distintos, y una columna que no los distingue reporta <code>0,00 $</code> para tráfico
+que nunca fue gratis.</p>
+<p>Siguiente: <a href="03-failure.html">Fallos, reintentos e idempotencia</a>.</p>
 
-<div class="pager"><a class="prev" href="01-concepts.html"><span class="dir">Previous</span>Concepts</a><a class="next" href="03-failure.html"><span class="dir">Next</span>Failure, retries and idempotency</a></div>
+<div class="pager"><a class="prev" href="01-concepts.html"><span class="dir">Previous</span>Conceptos</a><a class="next" href="03-failure.html"><span class="dir">Next</span>Fallos, reintentos e idempotencia</a></div>
 <footer>Axonium · <a href="https://github.com/Root1V/axonium-sdk">github.com/Root1V/axonium-sdk</a> · MIT</footer>
 </main>
 </div>

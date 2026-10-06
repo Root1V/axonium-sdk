@@ -3,6 +3,7 @@
 The Axonium SDK for the Prometheus inference platform, for Node, Bun, Deno and edge runtimes.
 
 📖 **Documentation: https://root1v.github.io/axonium-sdk/** — concepts, every call, failure and retries, configuration, composed operations and testing, with every example in Python, Go, Rust, Swift and TypeScript.
+También [en español](https://root1v.github.io/axonium-sdk/es/).
 
 > **Status: [`0.2.0`](https://www.npmjs.com/package/axonium) on npm.** Every resource, streaming, vision, tool
 > calling and structured output; **49 of 49** shared contract cases; 77 unit tests and 16 integration
