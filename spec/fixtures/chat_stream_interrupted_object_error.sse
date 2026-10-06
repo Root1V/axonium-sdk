@@ -2,3 +2,5 @@ data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"Se cay"},"fi
 
 data: {"error":{"code":"backend_disconnected","message":"upstream closed the connection"}}
 
+data: [DONE]
+

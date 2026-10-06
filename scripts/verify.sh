@@ -28,6 +28,7 @@ step() {
 cd "$root" || exit 1
 step "spec: catalog matches guide" ./scripts/check_catalog_matches_guide.py
 step "roadmap: ids are unique" ./scripts/check_roadmap_ids.py
+step "spec: cases, fixtures and framing" ./scripts/check_spec.py
 
 # --- ts-ci.yml ---
 # Skipped rather than failed when the package is not installed: a Rust-only change should not oblige
