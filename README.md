@@ -31,11 +31,11 @@ equivalent.
 
 | Language | Install | Version |
 |---|---|---|
-| Python | `pip install axonium` | [`1.0.0rc6`](https://pypi.org/project/axonium/) on PyPI — `1.0.0rc8` is tagged and waiting on TestPyPI |
-| Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.1` | `v0.6.1` |
-| Rust | `axonium = "0.6"` | [`0.6.1`](https://crates.io/crates/axonium) on crates.io |
-| Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.1")` | [`0.3.1`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
-| TypeScript | `npm install axonium` | [`0.2.2`](https://www.npmjs.com/package/axonium) on npm |
+| Python | `pip install axonium` | [`1.0.0rc6`](https://pypi.org/project/axonium/) on PyPI — `1.0.0rc9` is tagged and rehearsed |
+| Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.2` | `v0.6.2` |
+| Rust | `axonium = "0.6"` | [`0.6.2`](https://crates.io/crates/axonium) on crates.io |
+| Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.2")` | [`0.3.2`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
+| TypeScript | `npm install axonium` | [`0.2.3`](https://www.npmjs.com/package/axonium) on npm |
 
 All five are published and implement the same surface.
 
