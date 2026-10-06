@@ -207,8 +207,19 @@ def group_code_tabs(body: str) -> str:
 
 
 def rewrite_links(body: str) -> str:
-    """Markdown links point at .md -- correct in the repository and for an agent. HTML needs .html."""
-    return re.sub(r'href="([^":/]+)\.md(#[^"]*)?"', r'href="\1.html\2"', body)
+    """Markdown links point at .md -- correct in the repository and for an agent. HTML needs .html.
+
+    The first version excluded `/` from the matched path, which quietly meant *any link into a
+    subdirectory was left as `.md`*. It had nothing to rewrite until the Spanish site existed, and
+    then `[in Spanish](es/index.md)` shipped as a link to a raw Markdown file. That alone would be a
+    dead link; combined with a 404 page that was a copy of the English index it compounded, because
+    the browser then sat at `/es/index.md` and resolved that page's relative links against `/es/`,
+    so each click added another `es/`.
+
+    So the rule is now the right one: rewrite every `.md` href that is not an absolute URL, however
+    many directories deep, and leave anything with a scheme alone.
+    """
+    return re.sub(r'href="(?!\w+:)([^"#]+)\.md(#[^"]*)?"', r'href="\1.html\2"', body)
 
 
 STYLE = """
@@ -418,7 +429,7 @@ TEMPLATE = """<!DOCTYPE html>
 <body>
 <div class="shell">
 <nav>
-  <div class="brand"><a href="index.html">{site}</a></div>
+  <div class="brand"><a href="{home}">{site}</a></div>
   <div class="tag">{tagline}</div>
   <ol>{menu}</ol>
   <div class="langs">{langs}</div>
@@ -491,6 +502,7 @@ def build_page(page: Path, index: int, ordered: list[Path], locale: str = "en") 
 
     return TEMPLATE.format(
         lang=locale,
+        home="index.html",
         langs=language_switch(locale, page.stem),
         title=html.escape(title_of(page)),
         site=SITE,
@@ -500,6 +512,43 @@ def build_page(page: Path, index: int, ordered: list[Path], locale: str = "en") 
         menu=menu,
         body=body,
         pager=pager,
+        repo=REPO_URL,
+        repo_label=REPO_URL.replace("https://", ""),
+    )
+
+
+#: Where the site is served from. Root-relative links on the 404 page need it, because that page is
+#: reached from a path nobody chose and cannot use relative ones.
+SITE_BASE = "/axonium-sdk/"
+
+
+def build_not_found() -> str:
+    """A 404 that says so, in both languages, and cannot send a reader further astray."""
+    body = f"""<h1>404</h1>
+<p>This page does not exist. It may have moved, or the link that brought you here may be
+pointing at a file rather than a page.</p>
+<p><strong>Esta página no existe.</strong> Puede que se haya movido, o que el enlace que te trajo
+apunte a un fichero en vez de a una página.</p>
+<ul>
+<li><a href="{SITE_BASE}index.html">Getting started</a> — the documentation, in English</li>
+<li><a href="{SITE_BASE}es/index.html">Primeros pasos</a> — la documentación, en español</li>
+<li><a href="{REPO_URL}">{REPO_URL.replace("https://", "")}</a> — the source</li>
+</ul>"""
+    return TEMPLATE.format(
+        lang="en",
+        home=f"{SITE_BASE}index.html",
+        langs=(
+            f'<a href="{SITE_BASE}index.html" hreflang="en">English</a>'
+            f'<a href="{SITE_BASE}es/index.html" hreflang="es">Español</a>'
+        ),
+        title="Not found",
+        site=SITE,
+        tagline=html.escape(TAGLINE),
+        style=STYLE,
+        script=SCRIPT,
+        menu=f'<li><a href="{SITE_BASE}index.html">Getting started</a></li>',
+        body=body,
+        pager="",
         repo=REPO_URL,
         repo_label=REPO_URL.replace("https://", ""),
     )
@@ -555,10 +604,16 @@ def main() -> int:
                 build_page(page, index, ordered, locale), encoding="utf-8"
             )
         written += len(ordered)
-    # GitHub Pages serves 404.html for unknown paths; the index is a better landing than a bare 404.
-    (OUTPUT / "404.html").write_text(
-        (OUTPUT / "index.html").read_text(encoding="utf-8"), encoding="utf-8"
-    )
+    # GitHub Pages serves ONE 404.html for every unknown path on the site, whatever directory the
+    # browser thinks it is in. It used to be a copy of index.html, which looked friendlier and was a
+    # trap: served at `/es/index.md`, that copy's relative links resolve against `/es/`, so the
+    # language switch pointed at `/es/es/index.html` and every click added another `es/`. A reader
+    # who followed one dead link was walked further away from the site by the page meant to rescue
+    # them.
+    #
+    # So it is a real 404 now, and every link on it is ROOT-RELATIVE: those resolve the same from any
+    # depth, which is the property this page needs and the only one that matters here.
+    (OUTPUT / "404.html").write_text(build_not_found(), encoding="utf-8")
     (OUTPUT / ".nojekyll").write_text("", encoding="utf-8")
     print(f"wrote {written} pages to {OUTPUT.relative_to(REPO)} in {len(LOCALES)} languages")
     return 1 if drift else 0

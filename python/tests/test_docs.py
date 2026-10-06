@@ -500,3 +500,66 @@ class TestTheSpanishSiteHasNotDrifted:
             if set(group) & SDK_LANGUAGES and not set(group) >= SDK_LANGUAGES
         ]
         assert not incomplete, f"es/{page.name}: groups missing a language: {incomplete}"
+
+
+class TestEveryLinkResolves:
+    """Both of these are bugs a reader hit, and neither was visible to any test here.
+
+    A link to `es/index.md` shipped because the rewriter's pattern excluded `/`, so it rewrote only
+    links in the same directory and had nothing to rewrite until a second directory existed. And the
+    404 page was a copy of the English index, which turned that one dead link into a loop: served at
+    `/es/index.md`, the copy's relative links resolve against `/es/`, so each click added another
+    `es/` — `/es/es/es/index.html`.
+    """
+
+    @pytest.mark.parametrize("page", sorted(HTML.rglob("*.html")), ids=lambda p: str(p.name))
+    def test_no_page_links_to_a_markdown_file_on_this_site(self, page: Path) -> None:
+        # An external `.md` (a file on GitHub) is fine and common; one of ours is a link to a raw
+        # file the browser will download or 404 on.
+        ours = [
+            href
+            for href in re.findall(r'href="([^"]+)"', page.read_text(encoding="utf-8"))
+            if href.endswith(".md") and not re.match(r"\w+:", href)
+        ]
+        assert not ours, f"{page.name} links to Markdown rather than to a page: {ours}"
+
+    @pytest.mark.parametrize("page", sorted(HTML.rglob("*.html")), ids=lambda p: str(p.name))
+    def test_every_internal_link_points_at_a_file_that_exists(self, page: Path) -> None:
+        missing = []
+        for href in re.findall(r'href="([^"]+)"', page.read_text(encoding="utf-8")):
+            if re.match(r"\w+:", href) or href.startswith("#"):
+                continue
+            target = href.split("#")[0]
+            if not target:
+                continue
+            # Root-relative means from the site root, which is HTML/ here.
+            resolved = (
+                (HTML / target[len("/axonium-sdk/") :])
+                if target.startswith("/")
+                else (page.parent / target)
+            )
+            if not resolved.exists():
+                missing.append(href)
+        assert not missing, f"{page.name} links to files that do not exist: {missing}"
+
+    def test_the_404_page_uses_only_absolute_links(self) -> None:
+        """It is reached from a path nobody chose, so relative links on it resolve against nonsense.
+
+        This is the property the previous 404 lacked, and lacking it is what turned one dead link
+        into `/es/es/es/`.
+        """
+        page = HTML / "404.html"
+        relative = [
+            href
+            for href in re.findall(r'href="([^"]+)"', page.read_text(encoding="utf-8"))
+            if not re.match(r"\w+:", href) and not href.startswith("/")
+        ]
+        assert not relative, (
+            f"404.html has relative links, which break from any other depth: {relative}"
+        )
+
+    def test_the_404_page_is_not_a_copy_of_the_index(self) -> None:
+        # The shape of the original bug: a friendlier page that silently claims the request worked.
+        assert (HTML / "404.html").read_text(encoding="utf-8") != (HTML / "index.html").read_text(
+            encoding="utf-8"
+        )
