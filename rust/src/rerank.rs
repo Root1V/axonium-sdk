@@ -25,6 +25,19 @@ pub struct RerankRequest {
     /// Omit to get every document back.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top_n: Option<u32>,
+    /// Return each `relevance_score` as the model's raw **logit** instead of a probability
+    /// (`PRM-183`).
+    ///
+    /// A reranker's probabilities saturate near 1.0 -- 0.99 was measured for a document only
+    /// loosely related to the query -- and a saturated probability cannot be calibrated while the
+    /// logit behind it can.
+    ///
+    /// **Not every engine has it**, and that is safe: where it does not the request still succeeds
+    /// and the field comes back named in `X-Prometheus-Ignored-Parameters`; with
+    /// `require_parameters` it is a `400 unknown-parameter` naming the engines that do. Send it
+    /// unconditionally -- being dropped is discoverable rather than silent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub raw_scores: Option<bool>,
 
     /// Makes a retry safe: a repeat with the same key and body returns the stored result without
     /// reaching a model, recording usage, or counting against the spend cap.

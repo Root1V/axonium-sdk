@@ -73,10 +73,12 @@ from axonium.models.chat import (
     ChatCompletion,
     ChatCompletionChunk,
     ChoiceDelta,
+    ChoiceLogprobs,
     CompletionMessage,
     FunctionCall,
     StreamChoice,
     Timings,
+    TokenLogprob,
     ToolCall,
 )
 from axonium.models.common import APIObject, RateLimitSnapshot, ResponseMeta, Usage
@@ -122,6 +124,7 @@ __all__ = [
     "ChatCompletionRequest",
     "ChatCompletionStream",
     "ChoiceDelta",
+    "ChoiceLogprobs",
     "CompletionMessage",
     "ConfigurationError",
     "ContentPart",
@@ -179,6 +182,7 @@ __all__ = [
     "TokenEndpointNotConfiguredError",
     "TokenEndpointUnavailableError",
     "TokenExpiredError",
+    "TokenLogprob",
     "TokenProvider",
     "TokenRevokedError",
     "TokenSet",

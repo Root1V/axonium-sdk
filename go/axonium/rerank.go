@@ -25,6 +25,16 @@ type RerankRequest struct {
 	Documents []string `json:"documents"`
 	// TopN is optional; leave nil to get every document back.
 	TopN *int `json:"top_n,omitempty"`
+	// RawScores returns each RelevanceScore as the model's raw LOGIT instead of a probability
+	// (PRM-183). A reranker's probabilities saturate near 1.0 -- 0.99 was measured for a document
+	// only loosely related to the query -- and a saturated probability cannot be calibrated while
+	// the logit behind it can.
+	//
+	// Not every engine has it, and that is safe: where it does not, the request still succeeds and
+	// the field is named in X-Prometheus-Ignored-Parameters. With RequireParameters it is a
+	// 400 unknown-parameter naming the engines that do. Send it unconditionally; being dropped is
+	// discoverable rather than silent.
+	RawScores *bool `json:"raw_scores,omitempty"`
 
 	// IdempotencyKey makes a retry safe: a repeat with the same key and the same body returns the
 	// stored result without reaching a model, recording usage, or counting against the spend cap.

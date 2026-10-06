@@ -145,6 +145,90 @@ const answer = JSON.parse(completion.content); // a JSON string, not a nested ob
 The grammar is the engine's, and the schema is forwarded verbatim — validating it here would be a
 second copy of the engine's rules, drifting from the first.
 
+### How confident the model was
+
+`logprobs` returns the chosen token's own probability; `top_logprobs` adds the N most likely
+alternatives at each position. The point is an agent deciding when to **escalate to a person**
+instead of acting on a guess.
+
+```python
+completion = client.chat.completions.create(
+    model="qwen3-0.6b",
+    messages=[{"role": "user", "content": "yes or no?"}],
+    logprobs=True,
+    top_logprobs=3,
+)
+for token in completion.choices[0].logprobs.content:
+    print(token.token, token.probability)     # 0.99946, not -0.00054
+```
+
+```go
+yes := true
+three := 3
+completion, err := client.Chat.Create(ctx, axonium.ChatRequest{
+	Model:       "qwen3-0.6b",
+	Messages:    []axonium.Message{axonium.TextMessage("user", "yes or no?")},
+	Logprobs:    &yes,
+	TopLogprobs: &three,
+})
+for _, token := range completion.Choices[0].Logprobs.Content {
+	fmt.Println(token.Token, token.Probability())
+}
+```
+
+```rust
+let completion = client
+    .chat(&ChatRequest {
+        model: "qwen3-0.6b".into(),
+        messages: vec![Message::text("user", "yes or no?")],
+        logprobs: Some(true),
+        top_logprobs: Some(3),
+        ..Default::default()
+    })
+    .await?;
+for token in &completion.choices[0].logprobs.as_ref().unwrap().content {
+    println!("{} {}", token.token, token.probability());
+}
+```
+
+```swift
+var request = ChatRequest(model: "qwen3-0.6b", messages: [.user("yes or no?")])
+request.logprobs = true
+request.topLogprobs = 3
+
+let completion = try await client.chat(request)
+for token in completion.choices[0].logprobs ?? [] {
+    print(token.token ?? "", token.probability ?? 0)
+}
+```
+
+```typescript
+const completion = await client.chat.completions.create({
+  model: "qwen3-0.6b",
+  messages: [{ role: "user", content: "yes or no?" }],
+  logprobs: true,
+  top_logprobs: 3,
+});
+for (const token of completion.logprobs ?? []) {
+  console.log(token.token, token.probability); // 0.99946, not -0.00054
+}
+```
+
+**These are natural logarithms.** `-0.00054` is about 99.95% and `-7.6` is about 0.05%. Read as a
+probability it looks like a number near zero meaning "unlikely", and the mistake is silent — so all
+five expose `probability` rather than making you remember to call `exp`. It is absent rather than
+zero when the backend sent no `logprob`: a token it said nothing about is a different fact from one
+it said was impossible.
+
+**`top_logprobs` requires `logprobs`.** Sending it alone, or beside `logprobs: false`, is a `422`
+the gateway raises before the engine sees it — the rule is llama.cpp's and the gateway enforces it so
+the refusal reaches you in the usual envelope. All five SDKs refuse it at the call site instead,
+because a round trip to be told that buys nothing.
+
+**Absent `logprobs` on the response means the engine does not have the feature**, not that the model
+was uncertain. The response simply carries no key. Send `require_parameters` to be told rather than
+inferring it from an absence.
+
 **The answer arrives as a JSON string in the content, not as a nested object**, and the SDKs do not
 parse it for you. Same reason tool-call `arguments` stays a string: a generation stopped by
 `max_tokens` leaves it truncated, and a response model that raises from the inside is worse than
@@ -298,6 +382,13 @@ const ranked = await client.rerank.create({
 console.log(ranked.ranking); // indices into the documents you sent, best first
 ```
 
+**`raw_scores` asks for the logit instead of the probability.** A reranker's probabilities saturate
+near 1.0 — 0.99 was measured for a document only loosely related to its query — and a saturated
+probability cannot be calibrated while the logit behind it can. Not every engine has it; where it
+does not, the request still succeeds and the field comes back named in
+`X-Prometheus-Ignored-Parameters`, so sending it unconditionally is safe and being dropped is
+discoverable rather than silent.
+
 **Rerank scores the whole document set in one request.** Against a 60 RPM budget, scoring 50
 candidates costs one unit rather than fifty. Each result's `index` points into the array **you**
 sent, never into the results, which is what keeps a reordered result attributable to its input.
@@ -436,6 +527,11 @@ try await client.modelsMine()   // the subset your token is scoped to, cached
 await client.models.list(); // what this token may call
 await client.models.mine(); // the subset your token is scoped to, cached
 ```
+
+**The catalog lists running instances intersected with your scopes**, measured 2026-10-05. A model
+that is registered but stopped disappears exactly like one that does not exist, and like one your
+token cannot call — three different facts behind one absence, and only an operator can tell them
+apart. So an empty list is never evidence that the deployment has no models.
 
 Access is deny-by-default and granted per model, and streaming needs a different scope from
 non-streaming: holding `inference:read` does not grant `inference:stream`. When a `403` arrives and

@@ -68,6 +68,33 @@ export interface ChatCompletion extends Envelope {
   readonly finishReason: string | undefined;
   readonly toolCalls: readonly ToolCall[] | undefined;
   readonly usage: Usage | undefined;
+  /**
+   * Per-token probabilities, present only when the request asked for them **and** the engine has
+   * them. On an engine that does not, the response simply carries no `logprobs` key — send
+   * `requireParameters: true` to be told rather than inferring it from the absence.
+   */
+  readonly logprobs: readonly TokenLogprob[] | undefined;
+}
+
+/**
+ * One generated token and how likely the model thought it was.
+ *
+ * `logprob` is a **natural logarithm**, which is the part worth saying out loud: `-0.00054` is about
+ * 99.95% and `-7.6` is about 0.05%. Read as a probability it looks like a number near zero meaning
+ * "unlikely", and the mistake is silent — so {@link TokenLogprob.probability} is computed here.
+ */
+export interface TokenLogprob {
+  readonly token: string | undefined;
+  readonly logprob: number | undefined;
+  /**
+   * `Math.exp(logprob)`, or `undefined` when the backend sent no `logprob`.
+   *
+   * `undefined` rather than `0`: a token the backend said nothing about is a different fact from
+   * one it said was impossible, and a caller thresholding on confidence must tell them apart.
+   */
+  readonly probability: number | undefined;
+  /** The alternatives at this position, best first. Empty unless `top_logprobs` was asked for. */
+  readonly topLogprobs: readonly TokenLogprob[];
 }
 
 export interface ToolCall {
@@ -275,7 +302,27 @@ export function chatCompletionFrom(value: unknown, meta: ResponseMeta): ChatComp
     finishReason: str(choice, "finish_reason"),
     toolCalls: calls.length > 0 ? calls : undefined,
     usage: usageFrom(raw["usage"]),
+    logprobs: logprobsFrom(choice["logprobs"]),
   };
+}
+
+function tokenLogprobFrom(value: unknown): TokenLogprob {
+  const entry = record(value);
+  const logprob = num(entry, "logprob");
+  return {
+    token: str(entry, "token"),
+    logprob,
+    probability: logprob === undefined ? undefined : Math.exp(logprob),
+    topLogprobs: list(entry["top_logprobs"]).map(tokenLogprobFrom),
+  };
+}
+
+function logprobsFrom(value: unknown): readonly TokenLogprob[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  const entries = list(record(value)["content"]);
+  // An empty `content` is still an answer -- the request asked and the engine replied with nothing
+  // for this generation -- which is a different fact from the key being absent entirely.
+  return entries.map(tokenLogprobFrom);
 }
 
 export function embeddingListFrom(value: unknown, meta: ResponseMeta): EmbeddingList {

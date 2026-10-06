@@ -98,3 +98,62 @@ fn the_secret_never_appears_in_debug_output() {
     );
     assert!(rendered.contains("autonomous"), "{rendered}");
 }
+
+/// The contract case `PRM-187` introduced: `top_logprobs` without `logprobs: Some(true)`.
+///
+/// The rule is the **engine's** -- llama.cpp answers "top_logprobs requires logprobs to be set to
+/// true" -- and the gateway enforces it before forwarding, so the refusal arrives as problem+json.
+/// Checking it here is the difference between learning it at the call site and learning it after a
+/// round trip. No recorded corpus case covers it, so this is the only thing holding the rule here.
+mod logprobs {
+    use axonium::{ChatRequest, Error, Message, TokenLogprob};
+
+    fn request() -> ChatRequest {
+        ChatRequest {
+            model: "m".into(),
+            messages: vec![Message::text("user", "x")],
+            ..Default::default()
+        }
+    }
+
+    // `validate` is private, so the request goes through the public surface that calls it. A test
+    // reaching past that would assert about a function no caller can reach -- the exact shape this
+    // repository keeps finding. The call never leaves the process: validation runs before the
+    // transport does, so an unroutable base URL is never contacted.
+    async fn refused(request: ChatRequest) -> bool {
+        let client = axonium::Client::new(axonium::Config {
+            gateway_base_url: "https://gw.test".into(),
+            client_id: "i".into(),
+            client_secret: "s".into(),
+            ..Default::default()
+        })
+        .expect("client");
+        matches!(client.chat(&request).await, Err(Error::InvalidRequest(_)))
+    }
+
+    #[tokio::test]
+    async fn top_logprobs_alone_is_refused_before_the_wire() {
+        let mut request = request();
+        request.top_logprobs = Some(3);
+        assert!(refused(request).await);
+    }
+
+    #[tokio::test]
+    async fn top_logprobs_with_logprobs_false_is_refused_too() {
+        // An SDK checking only for ABSENCE would send this one: `logprobs` is present, and wrong.
+        let mut request = request();
+        request.logprobs = Some(false);
+        request.top_logprobs = Some(3);
+        assert!(refused(request).await);
+    }
+
+    #[test]
+    fn probability_is_exp_of_the_logprob() {
+        // -0.00054 is ~99.95%, not ~0, and nothing about reading it the other way is loud.
+        let token = TokenLogprob {
+            logprob: -0.00054,
+            ..Default::default()
+        };
+        assert!(token.probability() > 0.999 && token.probability() <= 1.0);
+    }
+}

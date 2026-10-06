@@ -11,6 +11,41 @@ Nothing yet.
 
 ### 0.2.0 — 2026-10-05
 
+Re-vendored at `2026-10-05a · PRM-187/188`, and the two things we asked for arrived in `2026-10-04b`.
+
+**`logprobs` and `top_logprobs` on chat completions (`logprobs` / `top_logprobs`), with the answer at `completion.logprobs`.** How
+confident the model was, so an agent can escalate to a person instead of acting on a guess — which is
+what Apeiron asked the platform for.
+
+**`logprob` is a natural logarithm**, and that is the whole reason `TokenLogprob.probability` exists: `-0.00054` is about
+99.95% and `-7.6` is about 0.05%. Read as a probability it looks like a number near zero meaning
+*unlikely*, and nothing about the mistake is loud. It is **absent rather than zero** when the backend
+sent no `logprob`, because a token it said nothing about is a different fact from one it said was
+impossible, and a caller thresholding on confidence has to tell them apart.
+
+**`top_logprobs` without `logprobs` is refused here**, not after a round trip. The rule is the
+engine's — llama.cpp answers *"top_logprobs requires logprobs to be set to true"* — and the gateway
+enforces it before forwarding so the refusal arrives as problem+json. `logprobs: false` beside it is
+refused too: an SDK checking only for *absence* would have sent that one, since the field is present
+and wrong.
+
+**`raw_scores` on `/v1/rerank` (`raw_scores`).** The field we declined to implement last time because it was
+announced in a message and absent from §3.6 — the platform added it to the contract and said the
+procedure was the right call, so it lands now. The logit instead of the probability: a reranker's
+probabilities saturate near 1.0, and a saturated probability cannot be calibrated while the logit
+behind it can. Safe to send unconditionally, because an engine without it answers normally and names
+the field in `X-Prometheus-Ignored-Parameters`.
+
+**And the scope question we raised came back as the platform's own defect.** Their new paragraph
+listed four scopes and omitted `embeddings` and `rerank`, which have had their own buckets since
+`PRM-129` — the paragraph below it, which they had not touched, was the correct one. They fixed it by
+**removing the list** rather than correcting it, which is what this SDK did in the same release. Two
+wrong copies of one truth, one in each team, and they caught each other; no test on either side could
+have.
+
+No corpus case covers any of this yet — `logprobs` needs a recording and `raw_scores` needs an engine
+that has it — so the local tests are what hold it.
+
 **`meta.attempts` and `meta.waitedMs`, which this SDK has been computing since `0.1.0` and throwing
 away.** The retry loop tracked both, `sendJSON` dropped them, and the package exported an `Attempts`
 type that no public call ever returned — a type a consumer could name and never obtain.
@@ -361,6 +396,41 @@ is a real conflict rather than a tuning question and is written down as one.
 Nothing yet.
 
 ### 1.0.0rc7 — 2026-10-05
+
+Re-vendored at `2026-10-05a · PRM-187/188`, and the two things we asked for arrived in `2026-10-04b`.
+
+**`logprobs` and `top_logprobs` on chat completions (``logprobs`` / ``top_logprobs``), with the answer at ``choices[0].logprobs.content``.** How
+confident the model was, so an agent can escalate to a person instead of acting on a guess — which is
+what Apeiron asked the platform for.
+
+**`logprob` is a natural logarithm**, and that is the whole reason ``TokenLogprob.probability`` exists: `-0.00054` is about
+99.95% and `-7.6` is about 0.05%. Read as a probability it looks like a number near zero meaning
+*unlikely*, and nothing about the mistake is loud. It is **absent rather than zero** when the backend
+sent no `logprob`, because a token it said nothing about is a different fact from one it said was
+impossible, and a caller thresholding on confidence has to tell them apart.
+
+**`top_logprobs` without `logprobs` is refused here**, not after a round trip. The rule is the
+engine's — llama.cpp answers *"top_logprobs requires logprobs to be set to true"* — and the gateway
+enforces it before forwarding so the refusal arrives as problem+json. `logprobs: false` beside it is
+refused too: an SDK checking only for *absence* would have sent that one, since the field is present
+and wrong.
+
+**`raw_scores` on `/v1/rerank` (``RerankRequest.raw_scores``).** The field we declined to implement last time because it was
+announced in a message and absent from §3.6 — the platform added it to the contract and said the
+procedure was the right call, so it lands now. The logit instead of the probability: a reranker's
+probabilities saturate near 1.0, and a saturated probability cannot be calibrated while the logit
+behind it can. Safe to send unconditionally, because an engine without it answers normally and names
+the field in `X-Prometheus-Ignored-Parameters`.
+
+**And the scope question we raised came back as the platform's own defect.** Their new paragraph
+listed four scopes and omitted `embeddings` and `rerank`, which have had their own buckets since
+`PRM-129` — the paragraph below it, which they had not touched, was the correct one. They fixed it by
+**removing the list** rather than correcting it, which is what this SDK did in the same release. Two
+wrong copies of one truth, one in each team, and they caught each other; no test on either side could
+have.
+
+No corpus case covers any of this yet — `logprobs` needs a recording and `raw_scores` needs an engine
+that has it — so the local tests are what hold it.
 
 Re-vendored at `2026-10-04 · PRM-182/183/184`, which brings a new engine, a new error, and a trap.
 
@@ -1255,6 +1325,41 @@ Nothing yet.
 
 ### 0.6.0 — 2026-10-05
 
+Re-vendored at `2026-10-05a · PRM-187/188`, and the two things we asked for arrived in `2026-10-04b`.
+
+**`logprobs` and `top_logprobs` on chat completions (`Logprobs` / `TopLogprobs`), with the answer at `Choice.Logprobs`.** How
+confident the model was, so an agent can escalate to a person instead of acting on a guess — which is
+what Apeiron asked the platform for.
+
+**`logprob` is a natural logarithm**, and that is the whole reason `TokenLogprob.Probability()` exists: `-0.00054` is about
+99.95% and `-7.6` is about 0.05%. Read as a probability it looks like a number near zero meaning
+*unlikely*, and nothing about the mistake is loud. It is **absent rather than zero** when the backend
+sent no `logprob`, because a token it said nothing about is a different fact from one it said was
+impossible, and a caller thresholding on confidence has to tell them apart.
+
+**`top_logprobs` without `logprobs` is refused here**, not after a round trip. The rule is the
+engine's — llama.cpp answers *"top_logprobs requires logprobs to be set to true"* — and the gateway
+enforces it before forwarding so the refusal arrives as problem+json. `logprobs: false` beside it is
+refused too: an SDK checking only for *absence* would have sent that one, since the field is present
+and wrong.
+
+**`raw_scores` on `/v1/rerank` (`RerankRequest.RawScores`).** The field we declined to implement last time because it was
+announced in a message and absent from §3.6 — the platform added it to the contract and said the
+procedure was the right call, so it lands now. The logit instead of the probability: a reranker's
+probabilities saturate near 1.0, and a saturated probability cannot be calibrated while the logit
+behind it can. Safe to send unconditionally, because an engine without it answers normally and names
+the field in `X-Prometheus-Ignored-Parameters`.
+
+**And the scope question we raised came back as the platform's own defect.** Their new paragraph
+listed four scopes and omitted `embeddings` and `rerank`, which have had their own buckets since
+`PRM-129` — the paragraph below it, which they had not touched, was the correct one. They fixed it by
+**removing the list** rather than correcting it, which is what this SDK did in the same release. Two
+wrong copies of one truth, one in each team, and they caught each other; no test on either side could
+have.
+
+No corpus case covers any of this yet — `logprobs` needs a recording and `raw_scores` needs an engine
+that has it — so the local tests are what hold it.
+
 Re-vendored at `2026-10-04 · PRM-182/183/184`, which brings a new engine, a new error, and a trap.
 
 **`503 rerank-dialect-unknown` → `ErrRerankDialectUnknown`.** A reranker running on an engine whose rerank request
@@ -2032,6 +2137,41 @@ No third-party dependencies: standard library only.
 Nothing yet.
 
 ### 0.6.0 — 2026-10-05
+
+Re-vendored at `2026-10-05a · PRM-187/188`, and the two things we asked for arrived in `2026-10-04b`.
+
+**`logprobs` and `top_logprobs` on chat completions (`logprobs` / `top_logprobs`), with the answer at `Choice::logprobs`.** How
+confident the model was, so an agent can escalate to a person instead of acting on a guess — which is
+what Apeiron asked the platform for.
+
+**`logprob` is a natural logarithm**, and that is the whole reason `TokenLogprob::probability` exists: `-0.00054` is about
+99.95% and `-7.6` is about 0.05%. Read as a probability it looks like a number near zero meaning
+*unlikely*, and nothing about the mistake is loud. It is **absent rather than zero** when the backend
+sent no `logprob`, because a token it said nothing about is a different fact from one it said was
+impossible, and a caller thresholding on confidence has to tell them apart.
+
+**`top_logprobs` without `logprobs` is refused here**, not after a round trip. The rule is the
+engine's — llama.cpp answers *"top_logprobs requires logprobs to be set to true"* — and the gateway
+enforces it before forwarding so the refusal arrives as problem+json. `logprobs: false` beside it is
+refused too: an SDK checking only for *absence* would have sent that one, since the field is present
+and wrong.
+
+**`raw_scores` on `/v1/rerank` (`RerankRequest::raw_scores`).** The field we declined to implement last time because it was
+announced in a message and absent from §3.6 — the platform added it to the contract and said the
+procedure was the right call, so it lands now. The logit instead of the probability: a reranker's
+probabilities saturate near 1.0, and a saturated probability cannot be calibrated while the logit
+behind it can. Safe to send unconditionally, because an engine without it answers normally and names
+the field in `X-Prometheus-Ignored-Parameters`.
+
+**And the scope question we raised came back as the platform's own defect.** Their new paragraph
+listed four scopes and omitted `embeddings` and `rerank`, which have had their own buckets since
+`PRM-129` — the paragraph below it, which they had not touched, was the correct one. They fixed it by
+**removing the list** rather than correcting it, which is what this SDK did in the same release. Two
+wrong copies of one truth, one in each team, and they caught each other; no test on either side could
+have.
+
+No corpus case covers any of this yet — `logprobs` needs a recording and `raw_scores` needs an engine
+that has it — so the local tests are what hold it.
 
 Re-vendored at `2026-10-04 · PRM-182/183/184`, which brings a new engine, a new error, and a trap.
 

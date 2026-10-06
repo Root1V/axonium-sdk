@@ -173,6 +173,25 @@ class ChatCompletionRequest(_AllowlistRequest):
     #: hands you what arrived.
     response_format: dict[str, Any] | None = None
     tool_choice: str | dict[str, Any] | None = None
+    #: Return the chosen token's own probability, under ``choices[0].logprobs.content``.
+    #:
+    #: The point is an agent deciding when to escalate to a person instead of acting on a guess,
+    #: which is what Apeiron asked for and why ``PRM-187`` exists.
+    logprobs: bool | None = None
+    #: The ``N`` most likely alternatives at each position, 0 to 20.
+    #:
+    #: **Requires** ``logprobs=True``; sending it alone is a ``422`` the gateway raises before the
+    #: engine sees it. Refused here instead, because the round trip buys nothing.
+    top_logprobs: int | None = Field(default=None, ge=0, le=20)
+
+    @model_validator(mode="after")
+    def _top_logprobs_needs_logprobs(self) -> ChatCompletionRequest:
+        # The rule is the engine's -- llama.cpp answers "top_logprobs requires logprobs to be set
+        # to true" -- and the gateway enforces it before forwarding so the refusal arrives in
+        # problem+json. Checking it here as well costs nothing and fails at the call site.
+        if self.top_logprobs is not None and not self.logprobs:
+            raise ValueError("top_logprobs requires logprobs=True")
+        return self
 
     @field_validator("messages")
     @classmethod
@@ -195,9 +214,9 @@ class EmbeddingsRequest(_AllowlistRequest):
 class RerankRequest(_AllowlistRequest):
     """Body for ``POST /v1/rerank``."""
 
-    #: ``logprobs`` and ``top_logprobs`` are rejected by the gateway on every endpoint, and a
-    #: chat-based reranking workaround used to need them. Named here so the warning says why
-    #: rather than only that they were dropped.
+    #: ``logprobs`` and ``top_logprobs`` are rejected **on this endpoint**; since ``PRM-187`` they
+    #: are supported on chat completions, so the warning has to name the endpoint and not the
+    #: field. A chat-based reranking workaround used to need them here.
     KNOWN_UNSUPPORTED: ClassVar[frozenset[str]] = frozenset(
         {"logprobs", "top_logprobs", "return_documents", "rank_fields"}
     )
@@ -209,6 +228,17 @@ class RerankRequest(_AllowlistRequest):
     documents: list[str]
     #: Omit to get every document back.
     top_n: int | None = None
+    #: Return each ``relevance_score`` as the model's raw **logit** instead of a probability.
+    #:
+    #: A reranker's probabilities saturate near 1.0 -- Centinela measured 0.99 for a document only
+    #: loosely related to the query -- and a saturated probability cannot be calibrated while the
+    #: logit behind it can.
+    #:
+    #: **Not every engine has it**, and that is safe: where it does not, the request still succeeds
+    #: and the field comes back named in ``X-Prometheus-Ignored-Parameters``. With
+    #: ``require_parameters`` it is a ``400 unknown-parameter`` whose detail names the engines that
+    #: do. So send it unconditionally; being dropped is discoverable rather than silent.
+    raw_scores: bool | None = None
 
     @field_validator("documents")
     @classmethod

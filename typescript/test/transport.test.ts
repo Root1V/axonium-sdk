@@ -701,3 +701,88 @@ test("a tokenProvider passed alongside explicit credentials is still refused", (
     /different modes/,
   );
 });
+
+test("top_logprobs without logprobs is refused at the call site", async () => {
+  // The contract case PRM-187 introduced. The rule is the ENGINE's -- llama.cpp answers
+  // "top_logprobs requires logprobs to be set to true" -- and the gateway enforces it before
+  // forwarding, so the refusal would arrive as problem+json. Refusing here is the difference
+  // between learning it at the call site and learning it after a round trip, and no recorded
+  // corpus case covers it, so this is the only thing holding the rule in this SDK.
+  const stub = new Stub().token().on(CHAT, { body: JSON.stringify({ ok: 1 }) });
+  const client = new Axonium({
+    gatewayBaseURL: "https://gw.test",
+    clientId: "i",
+    clientSecret: "s",
+    fetch: stub.fetch,
+  });
+  const messages = [{ role: "user" as const, content: "x" }];
+
+  await assert.rejects(
+    client.chat.completions.create({ model: "m", messages, top_logprobs: 3 }),
+    /top_logprobs requires logprobs/,
+  );
+  // `logprobs: false` is present and wrong -- an SDK checking only for ABSENCE would send it.
+  await assert.rejects(
+    client.chat.completions.create({ model: "m", messages, logprobs: false, top_logprobs: 3 }),
+    /top_logprobs requires logprobs/,
+  );
+  assert.equal(stub.countFor(CHAT), 0, "a refused request still reached the gateway");
+
+  // The asymmetry is the point: logprobs on its own is a complete request.
+  await client.chat.completions.create({ model: "m", messages, logprobs: true });
+  assert.equal(stub.countFor(CHAT), 1);
+});
+
+test("probability is exp of the logprob, and absent rather than zero", async () => {
+  // -0.00054 is ~99.95%, not ~0. Read as a probability it looks like a number near zero meaning
+  // "unlikely", and nothing about the mistake is loud.
+  const body = JSON.stringify({
+    choices: [
+      {
+        message: { role: "assistant", content: "yes" },
+        logprobs: {
+          content: [
+            { token: "yes", logprob: -0.00054, top_logprobs: [{ token: "no", logprob: -7.6 }] },
+            { token: "!" },
+          ],
+        },
+      },
+    ],
+  });
+  const stub = new Stub().token().on(CHAT, { body });
+  const client = new Axonium({
+    gatewayBaseURL: "https://gw.test",
+    clientId: "i",
+    clientSecret: "s",
+    fetch: stub.fetch,
+  });
+
+  const completion = await client.chat.completions.create({
+    model: "m",
+    messages: [{ role: "user", content: "x" }],
+    logprobs: true,
+  });
+  const tokens = completion.logprobs ?? [];
+  assert.equal(tokens.length, 2);
+  assert.ok(tokens[0]!.probability! > 0.999, "read the natural log as a probability");
+  assert.ok(tokens[0]!.topLogprobs[0]!.probability! < 0.001);
+  // A token the backend said nothing about is not a token it said was impossible.
+  assert.equal(tokens[1]!.probability, undefined);
+});
+
+test("a response with no logprobs key says nothing rather than saying empty", async () => {
+  // An engine without the feature simply omits it. `undefined` is that absence; `[]` would claim
+  // the engine answered with no tokens, which is a different statement.
+  const stub = new Stub().token().on(CHAT, { body: JSON.stringify({ choices: [{}] }) });
+  const client = new Axonium({
+    gatewayBaseURL: "https://gw.test",
+    clientId: "i",
+    clientSecret: "s",
+    fetch: stub.fetch,
+  });
+  const completion = await client.chat.completions.create({
+    model: "m",
+    messages: [{ role: "user", content: "x" }],
+  });
+  assert.equal(completion.logprobs, undefined);
+});

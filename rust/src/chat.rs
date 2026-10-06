@@ -146,6 +146,15 @@ pub struct ChatRequest {
     /// parse it yourself. This SDK deliberately does not, for the same reason tool-call
     /// `arguments` stays a string: a generation stopped by `max_tokens` leaves it truncated.
     pub response_format: Option<Value>,
+    /// Ask for the chosen token's own probability, under [`Choice::logprobs`] (`PRM-187`). The
+    /// point is an agent deciding when to escalate to a person rather than act on a guess.
+    pub logprobs: Option<bool>,
+    /// The `N` most likely alternatives at each position, 0 to 20.
+    ///
+    /// **Requires `logprobs: Some(true)`.** Sending it alone is a `422` the gateway raises before
+    /// the engine sees it; this SDK refuses it at the call site, because the round trip buys
+    /// nothing.
+    pub top_logprobs: Option<u32>,
     pub extra: serde_json::Map<String, Value>,
     /// Pins the request to one instance, by label (`#2`) or full id. Sent as a header, never in
     /// `model`: a grant covers a model, billing attributes to a model, and the catalog lists
@@ -199,6 +208,15 @@ impl ChatRequest {
         if self.max_tokens == Some(0) {
             problems.push("max_tokens must be greater than zero".to_string());
         }
+        // The rule is the engine's -- llama.cpp answers "top_logprobs requires logprobs to be set
+        // to true" -- and the gateway enforces it before forwarding, so the refusal arrives as
+        // problem+json. Refused here as well: the call site is a better place to learn it.
+        if self.top_logprobs.is_some() && self.logprobs != Some(true) {
+            problems.push("top_logprobs requires logprobs: Some(true)".to_string());
+        }
+        if self.top_logprobs.is_some_and(|n| n > 20) {
+            problems.push("top_logprobs must be within [0, 20]".to_string());
+        }
         if problems.is_empty() {
             Ok(())
         } else {
@@ -229,6 +247,12 @@ impl ChatRequest {
         }
         if let Some(v) = &self.tool_choice {
             map.insert("tool_choice".into(), v.clone());
+        }
+        if let Some(v) = self.logprobs {
+            map.insert("logprobs".into(), json!(v));
+        }
+        if let Some(v) = self.top_logprobs {
+            map.insert("top_logprobs".into(), json!(v));
         }
         if let Some(v) = &self.response_format {
             map.insert("response_format".into(), v.clone());
@@ -280,6 +304,41 @@ pub struct Choice {
     pub delta: Option<Message>,
     #[serde(default)]
     pub finish_reason: Option<String>,
+    /// Present only when the request asked for it, and only on an engine that has it. On one that
+    /// does not, the response simply carries no `logprobs` key -- `require_parameters` is how to
+    /// be told, rather than inferring it from the absence.
+    #[serde(default)]
+    pub logprobs: Option<ChoiceLogprobs>,
+}
+
+/// The per-token probabilities for one choice, in OpenAI's shape.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+pub struct ChoiceLogprobs {
+    #[serde(default)]
+    pub content: Vec<TokenLogprob>,
+}
+
+/// One generated token and how likely the model thought it was.
+///
+/// `logprob` is a **natural logarithm**, which is the part worth saying out loud: `-0.00054` is
+/// about 99.95% and `-7.6` is about 0.05%. Read as a probability it looks like a number near zero
+/// meaning "unlikely", and the mistake is silent -- so [`TokenLogprob::probability`] exists.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
+pub struct TokenLogprob {
+    #[serde(default)]
+    pub token: String,
+    #[serde(default)]
+    pub logprob: f64,
+    /// The alternatives at this position, best first. Empty unless asked for.
+    #[serde(default)]
+    pub top_logprobs: Vec<TokenLogprob>,
+}
+
+impl TokenLogprob {
+    /// `exp(logprob)`.
+    pub fn probability(&self) -> f64 {
+        self.logprob.exp()
+    }
 }
 
 /// A non-streaming chat completion.

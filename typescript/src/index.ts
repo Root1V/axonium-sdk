@@ -25,6 +25,7 @@ export type { Chunk, StreamedToolCall } from "./sse.ts";
 export { decodedArguments, usageFrom } from "./resources.ts";
 export type {
   ChatCompletion,
+  TokenLogprob,
   Embedding,
   EmbeddingList,
   Envelope,

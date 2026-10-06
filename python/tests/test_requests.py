@@ -8,6 +8,7 @@ from axonium.models.requests import (
     ChatCompletionRequest,
     EmbeddingsRequest,
     ImageGenerationRequest,
+    RerankRequest,
 )
 
 MESSAGES = [{"role": "user", "content": "Hello"}]
@@ -250,7 +251,7 @@ class TestTheUnsupportedListCannotGoStale:
 
     @pytest.mark.parametrize(
         "request_type",
-        [ChatCompletionRequest, EmbeddingsRequest, ImageGenerationRequest],
+        [ChatCompletionRequest, EmbeddingsRequest, ImageGenerationRequest, RerankRequest],
         ids=lambda cls: cls.__name__,
     )
     def test_no_declared_field_is_also_listed_as_unsupported(self, request_type: type) -> None:
@@ -262,3 +263,59 @@ class TestTheUnsupportedListCannotGoStale:
             f"{request_type.__name__} declares {overlap} and also lists them as unsupported; "
             f"the list entry is dead and says the opposite of what the field does"
         )
+
+
+class TestLogprobs:
+    """``top_logprobs`` without ``logprobs`` is the contract case ``PRM-187`` introduced.
+
+    The rule is the *engine's* -- llama.cpp answers "top_logprobs requires logprobs to be set to
+    true" -- and the gateway enforces it before forwarding so the refusal arrives as problem+json.
+    Refusing here as well is not duplication of the gateway's job: it is the difference between
+    learning it at the call site and learning it after a round trip, and there is no recorded corpus
+    case for it, so this is the only thing holding the rule in this SDK.
+    """
+
+    def test_top_logprobs_alone_is_refused_before_the_wire(self) -> None:
+        with pytest.raises(ValidationError, match="top_logprobs requires logprobs"):
+            ChatCompletionRequest(
+                model="m", messages=[{"role": "user", "content": "x"}], top_logprobs=3
+            )
+
+    def test_top_logprobs_with_logprobs_false_is_refused_too(self) -> None:
+        # The gateway refuses this one as well, and an SDK that only checked for *absence* would
+        # send it: `logprobs=False` is present, and wrong.
+        with pytest.raises(ValidationError, match="top_logprobs requires logprobs"):
+            ChatCompletionRequest(
+                model="m",
+                messages=[{"role": "user", "content": "x"}],
+                logprobs=False,
+                top_logprobs=3,
+            )
+
+    def test_logprobs_alone_is_fine(self) -> None:
+        # The asymmetry is the point: `logprobs` without `top_logprobs` is a complete request.
+        body = ChatCompletionRequest(
+            model="m", messages=[{"role": "user", "content": "x"}], logprobs=True
+        ).model_dump(exclude_none=True)
+        assert body["logprobs"] is True
+        assert "top_logprobs" not in body
+
+    def test_both_reach_the_wire(self) -> None:
+        body = ChatCompletionRequest(
+            model="m",
+            messages=[{"role": "user", "content": "x"}],
+            logprobs=True,
+            top_logprobs=3,
+        ).model_dump(exclude_none=True)
+        assert body["logprobs"] is True
+        assert body["top_logprobs"] == 3
+
+
+class TestRawScores:
+    def test_raw_scores_reaches_the_wire(self) -> None:
+        # Declared rather than passed as an extra, for the reason PRM-183 gives: an undeclared field
+        # is announced as ignored on EVERY engine, including the one that honours it.
+        body = RerankRequest(model="m", query="q", documents=["d"], raw_scores=True).model_dump(
+            exclude_none=True
+        )
+        assert body["raw_scores"] is True

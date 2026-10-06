@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 )
@@ -61,6 +62,15 @@ type ChatRequest struct {
 	// it yourself. This SDK deliberately does not, for the same reason tool-call Arguments stays a
 	// string: a generation stopped by MaxTokens leaves it truncated.
 	ResponseFormat any `json:"response_format,omitempty"`
+
+	// Logprobs asks for the chosen token's own probability, under Choice.Logprobs (PRM-187). The
+	// point is an agent deciding when to escalate to a person rather than act on a guess.
+	Logprobs *bool `json:"logprobs,omitempty"`
+	// TopLogprobs adds the N most likely alternatives at each position, 0 to 20.
+	//
+	// REQUIRES Logprobs set to true. Sending it alone is a 422 the gateway raises before the
+	// engine sees it; validate() refuses it here, because the round trip buys nothing.
+	TopLogprobs *int `json:"top_logprobs,omitempty"`
 
 	Extra map[string]any `json:"-"`
 
@@ -121,6 +131,15 @@ func (r *ChatRequest) validate() error {
 	}
 	if r.MaxTokens != nil && *r.MaxTokens <= 0 {
 		problems = append(problems, "max_tokens must be greater than zero")
+	}
+	// The rule is the engine's -- llama.cpp answers "top_logprobs requires logprobs to be set to
+	// true" -- and the gateway enforces it before forwarding so the refusal arrives as problem+json.
+	// Refused here as well: the call site is a better place to learn it than a round trip is.
+	if r.TopLogprobs != nil && (r.Logprobs == nil || !*r.Logprobs) {
+		problems = append(problems, "top_logprobs requires logprobs to be true")
+	}
+	if r.TopLogprobs != nil && (*r.TopLogprobs < 0 || *r.TopLogprobs > 20) {
+		problems = append(problems, "top_logprobs must be within [0, 20]")
 	}
 
 	if len(problems) > 0 {
@@ -226,7 +245,31 @@ type Choice struct {
 	Message      *Message `json:"message,omitempty"`
 	Delta        *Message `json:"delta,omitempty"`
 	FinishReason string   `json:"finish_reason,omitempty"`
+	// Logprobs is present only when the request asked for it, and only on an engine that has it.
+	// On one that does not, the response simply carries no logprobs key -- RequireParameters is
+	// how to be told, rather than inferring it from the absence.
+	Logprobs *ChoiceLogprobs `json:"logprobs,omitempty"`
 }
+
+// ChoiceLogprobs holds the per-token probabilities for one choice, in OpenAI's shape.
+type ChoiceLogprobs struct {
+	Content []TokenLogprob `json:"content,omitempty"`
+}
+
+// TokenLogprob is one generated token and how likely the model thought it was.
+//
+// Logprob is a NATURAL LOGARITHM, which is the part worth saying out loud: -0.00054 is about
+// 99.95% and -7.6 is about 0.05%. Read as a probability it looks like a number near zero meaning
+// "unlikely", and the mistake is silent, so Probability exists.
+type TokenLogprob struct {
+	Token   string  `json:"token,omitempty"`
+	Logprob float64 `json:"logprob"`
+	// TopLogprobs are the alternatives at this position, best first. Empty unless asked for.
+	TopLogprobs []TokenLogprob `json:"top_logprobs,omitempty"`
+}
+
+// Probability is exp(Logprob).
+func (t TokenLogprob) Probability() float64 { return math.Exp(t.Logprob) }
 
 // ChatCompletion is a non-streaming chat completion response.
 type ChatCompletion struct {

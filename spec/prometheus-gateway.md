@@ -1,6 +1,6 @@
 # Prometheus Gateway — SDK Integration Guide
 
-**Revision**: 2026-10-04 · `PRM-182/183/184`
+**Revision**: 2026-10-05a · `PRM-187/188`
 <!-- Consumers vendor this file and diff it. The date and commit above are what to quote
      when asking whether a copy is current; they change whenever this document does. -->
 
@@ -478,7 +478,7 @@ instead of always waiting for a `403` from the actual inference call.
 Fields: `model`, `messages` required; `stream` (default `false`); `max_tokens` (>0 if set);
 `temperature` (0.0–2.0); `top_p` (0.0 < p ≤ 1.0); `stop` (string or list); `tools` /
 `tool_choice` / `response_format` (forwarded as-is, no gateway-side validation of their
-schemas).
+schemas); `logprobs` / `top_logprobs` (see below).
 
 **`response_format` — structured outputs (PRM-126).** Now supported, and constrained by the
 engine rather than by prompting:
@@ -504,6 +504,41 @@ engine rather than by prompting:
 
 `{"type": "json_object"}` and `{"type": "text"}` work too. The content comes back as a JSON
 **string** in `choices[0].message.content` — parse it; it is not a nested object.
+
+**`logprobs` — how confident the model was (PRM-187).** Ask for the per-token probability
+behind the answer, so an agent can decide when to escalate to a human instead of acting on a
+guess:
+
+```json
+{
+  "model": "qwen3-0.6b",
+  "messages": [{ "role": "user", "content": "yes or no?" }],
+  "logprobs": true,
+  "top_logprobs": 3
+}
+```
+
+`logprobs: true` returns the chosen token's own probability. `top_logprobs: N` (0–20) adds the
+N most likely alternatives at each position. The result arrives in OpenAI's shape, under
+`choices[0].logprobs.content[]` — one entry per generated token:
+
+```json
+{ "token": "yes", "logprob": -0.00054,
+  "top_logprobs": [ { "token": "yes", "logprob": -0.00054 },
+                    { "token": "no",  "logprob": -7.6 } ] }
+```
+
+These are **natural-log** probabilities, so `-0.00054` is ~99.95% and `-7.6` is ~0.05%. Use
+`exp(logprob)` for a probability.
+
+**`top_logprobs` requires `logprobs: true`.** Sending it alone — or alongside
+`logprobs: false` — is a `422 validation-error`, and the gateway refuses it before the engine
+sees it. The rule is the engine's; it is enforced here so the refusal reaches you in the same
+problem+json envelope as everything else (§7) rather than in llama.cpp's own error shape.
+
+Supported on `llama_cpp`, which is where it was measured. On an engine without it the engine's
+own answer stands — the gateway does not emulate it. Send `require_parameters: true` if you
+need to be told rather than quietly given a response with no `logprobs` key.
 
 **Anything else is accepted, ignored, and named back to you (PRM-127).** This endpoint takes an
 OpenAI-compatible *subset*. A field outside it — `n`, `presence_penalty`, `frequency_penalty`,
@@ -692,6 +727,17 @@ Content-Type: application/json
 
 - `query`, `documents` — required. `documents` must be non-empty (`400 validation-error`).
 - `top_n` — optional; omit to get every document back.
+- `raw_scores` — optional boolean, **PRM-183**. `relevance_score` becomes the model's raw logit
+  instead of a probability. A reranker's probabilities saturate near 1.0 — Centinela measured
+  0.99 for a document only loosely related to the query — and a saturated probability cannot be
+  calibrated while the logit behind it can.
+
+  **Not every engine has it.** Where the engine serving the model does not, the request still
+  succeeds and the field is named in `X-Prometheus-Ignored-Parameters`; with
+  `require_parameters: true` it is a `400 unknown-parameter` whose `detail` names the engines
+  that do. So it is safe to send unconditionally and discoverable when it is dropped — the same
+  contract PRM-127 defines for every other parameter, for a second reason: not "this gateway does
+  not act on it" but "the engine behind it does not have it".
 
 **Response** (`200`) — real values from a live deployment:
 
@@ -833,10 +879,17 @@ designing for:
   The *limit value*, however, is platform configuration per endpoint — not per client — so a
   429 means your own credential exhausted its own bucket, and raising it is an operator action.
 
-Each **scope** in `X-RateLimit-Scope` is its own bucket with its own limit: today `default`,
-`chat_completions`, `admin` and `predict`. A 429 on one does not imply the others are
-exhausted, which is exactly what that header exists to tell you — back off the scope it names,
-not the whole API.
+Each **scope** in `X-RateLimit-Scope` is its own bucket with its own limit. A 429 on one does
+not imply the others are exhausted, which is exactly what that header exists to tell you — back
+off the scope it names, not the whole API.
+
+**Read the set from the header rather than from a list here.** The previous revision of this
+paragraph enumerated it and got it wrong: it said `default`, `chat_completions`, `admin` and
+`predict`, **omitting `embeddings` and `rerank`**, which have had their own buckets since
+PRM-129 — the paragraph further down says so, and that is the one that was right. Axonium caught
+the contradiction, and a caller who had indexed their quota accounting against the short list
+would have been missing two buckets. The header names the bucket that answered; that is the
+value to key on.
 
 **`X-Trace-ID` adoption rule, confirmed precisely (two deployment modes exist)**:
 - In deployments with a real tracing backend configured ("OTEL mode"), a client-supplied
@@ -1140,6 +1193,18 @@ If your SDK already has a fallback path for a non-conforming error body (good de
 practice regardless), it doesn't need to change — but you can now rely on `type`/`request_id`
 being present for 422s the same as any other gateway error, against a gateway that includes
 this fix.
+
+**PRM-188 — and that contract now actually holds for every 422.** RM-65's handler was only
+ever exercised by field-constraint failures (`Field required`, a number out of range). A
+failure raised by a *validator* carries the exception object itself in `ctx.error`, which
+does not serialise — so the handler threw while building its own response and the request
+left as a **500 with no envelope at all**. Two requests reached it: a `role` outside
+`{system, user, assistant, tool}`, and an `image_url.url` that is not a `data:` URI (§3.3's
+SSRF rule), which meant the gateway answered its own security refusal with a 500.
+
+Both are now ordinary 422s in the envelope above. If you probed either of these and wrote a
+fallback for a 500, you can drop it. `errors[].ctx.error` renders as `{}`; the validator's
+message is in `errors[].msg` and in `detail`, which is where to read it.
 
 **Modality check on `/v1/chat/completions` was one-directional, fixed (RM-66)**: `/v1/embeddings`
 and `/v1/images/generations` always rejected a model of the wrong modality outright. Chat

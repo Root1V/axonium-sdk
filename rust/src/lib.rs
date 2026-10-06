@@ -47,7 +47,10 @@ mod usage;
 
 pub use auth::{decode_claims, TokenClaims, TokenProvider};
 pub use catalog::{Model, ModelList};
-pub use chat::{ChatCompletion, ChatRequest, Choice, FunctionCall, Message, ToolCall};
+pub use chat::{
+    ChatCompletion, ChatRequest, Choice, ChoiceLogprobs, FunctionCall, Message, TokenLogprob,
+    ToolCall,
+};
 pub use client::Client;
 pub use config::{Config, Timeouts, DEFAULT_GATEWAY_BASE_URL};
 pub use error::{ApiError, Error, ErrorKind, Result};

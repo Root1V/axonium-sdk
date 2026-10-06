@@ -232,6 +232,33 @@ auth-service, arrives as problem+json, and maps into the table above as
 | `Transport`, `TokenManager`                     | The layers under the client, exported because they are useful alone                                                        |
 | `events(body)`, `dataOf(event)`                 | The SSE primitives                                                                                                         |
 
+## Per-token probabilities
+
+`logprobs: true` returns the chosen token's own probability; `top_logprobs: N` (0–20) adds the N most
+likely alternatives at each position. **`top_logprobs` requires `logprobs: true`** — sending it alone
+is a `422`, refused here at the call site rather than after a round trip.
+
+```typescript
+const completion = await client.chat.completions.create({
+  model: "qwen3-0.6b",
+  messages: [{ role: "user", content: "yes or no?" }],
+  logprobs: true,
+  top_logprobs: 3,
+});
+
+for (const token of completion.logprobs ?? []) {
+  console.log(token.token, token.probability); // 0.9995, not -0.00054
+}
+```
+
+`logprob` is a **natural logarithm**: `-0.00054` is ~99.95% and `-7.6` is ~0.05%. Read as a
+probability it looks like a number near zero meaning "unlikely", and the mistake is silent, so
+`probability` is computed for you. It is `undefined` when the backend sent no `logprob` — a token it
+said nothing about is a different fact from one it said was impossible.
+
+`completion.logprobs` is `undefined` when the engine does not have the feature, because the response
+simply carries no key. Send `requireParameters: true` to be told rather than inferring it.
+
 ## `meta` on every response
 
 | field                                    |                                                                                                                                        |

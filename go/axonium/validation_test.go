@@ -270,3 +270,45 @@ func TestExtraFieldsReachTheWire(t *testing.T) {
 		t.Errorf("merging Extra must not disturb the modeled fields: %v", body)
 	}
 }
+
+// TestTopLogprobsRequiresLogprobs holds the contract case PRM-187 introduced.
+//
+// The rule is the ENGINE's -- llama.cpp answers "top_logprobs requires logprobs to be set to true"
+// -- and the gateway enforces it before forwarding so the refusal arrives as problem+json. Checking
+// it here is not duplicating the gateway's job: it is the difference between learning it at the call
+// site and learning it after a round trip. No recorded corpus case covers it, so this is the only
+// thing holding the rule in this SDK.
+func TestTopLogprobsRequiresLogprobs(t *testing.T) {
+	three := 3
+	twentyOne := 21
+	yes, no := true, false
+
+	for name, req := range map[string]ChatRequest{
+		"alone":        {Model: "m", Messages: []Message{TextMessage("user", "x")}, TopLogprobs: &three},
+		"with false":   {Model: "m", Messages: []Message{TextMessage("user", "x")}, Logprobs: &no, TopLogprobs: &three},
+		"out of range": {Model: "m", Messages: []Message{TextMessage("user", "x")}, Logprobs: &yes, TopLogprobs: &twentyOne},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := req.validate(); err == nil {
+				t.Fatal("accepted a request the gateway answers 422 to")
+			}
+		})
+	}
+
+	// The asymmetry is the point: logprobs on its own is a complete request.
+	ok := ChatRequest{Model: "m", Messages: []Message{TextMessage("user", "x")}, Logprobs: &yes}
+	if err := ok.validate(); err != nil {
+		t.Fatalf("logprobs alone was refused: %v", err)
+	}
+}
+
+// TestProbabilityIsExpOfTheLogprob guards the one number a caller is most likely to misread.
+//
+// -0.00054 is ~99.95%, not ~0. Read as a probability it looks like a number near zero meaning
+// "unlikely", and nothing about the mistake is loud.
+func TestProbabilityIsExpOfTheLogprob(t *testing.T) {
+	got := TokenLogprob{Token: "yes", Logprob: -0.00054}.Probability()
+	if got < 0.999 || got > 1.0 {
+		t.Fatalf("Probability() = %v, which is not exp(-0.00054)", got)
+	}
+}

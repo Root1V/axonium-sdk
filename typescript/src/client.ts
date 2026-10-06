@@ -47,6 +47,22 @@ export function imageFromBytes(bytes: Uint8Array, mediaType: string): ContentPar
 }
 
 /** Refuses a part the gateway will refuse, before the round trip. */
+/**
+ * `top_logprobs` without `logprobs: true` is a `422`, raised by the gateway before the engine sees
+ * it. The rule is the engine's — llama.cpp answers *"top_logprobs requires logprobs to be set to
+ * true"* — and refusing it here costs nothing while failing at the call site instead of a round trip
+ * later.
+ */
+function checkLogprobs(request: ChatRequest): void {
+  if (request.top_logprobs === undefined) return;
+  if (request.logprobs !== true) {
+    throw new InvalidRequestError("top_logprobs requires logprobs: true.");
+  }
+  if (request.top_logprobs < 0 || request.top_logprobs > 20) {
+    throw new InvalidRequestError("top_logprobs must be within [0, 20].");
+  }
+}
+
 function checkParts(messages: readonly Message[]): void {
   for (const message of messages) {
     if (!Array.isArray(message.content)) continue;
@@ -134,6 +150,19 @@ export interface ChatRequest {
   tools?: Tool[];
   tool_choice?: ToolChoice;
   response_format?: ResponseFormat;
+  /**
+   * Ask for the chosen token's own probability, returned as {@link ChatCompletion.logprobs}.
+   *
+   * The point is an agent deciding when to escalate to a person rather than act on a guess.
+   */
+  logprobs?: boolean;
+  /**
+   * The `N` most likely alternatives at each position, 0 to 20.
+   *
+   * **Requires `logprobs: true`.** Sending it alone is a `422` the gateway raises before the engine
+   * sees it; this SDK refuses it at the call site, because the round trip buys nothing.
+   */
+  top_logprobs?: number;
   /** The gateway silently drops a field it does not support; `requireParameters` makes it say so. */
   [key: string]: unknown;
 }
@@ -157,6 +186,18 @@ export interface RerankRequest {
   query: string;
   documents: string[];
   top_n?: number;
+  /**
+   * Return each `relevanceScore` as the model's raw **logit** instead of a probability.
+   *
+   * A reranker's probabilities saturate near 1.0 — 0.99 was measured for a document only loosely
+   * related to the query — and a saturated probability cannot be calibrated while the logit behind
+   * it can.
+   *
+   * **Not every engine has it**, and that is safe: where it does not the request still succeeds and
+   * the field comes back in `meta.ignoredParameters`. Send it unconditionally; being dropped is
+   * discoverable rather than silent.
+   */
+  raw_scores?: boolean;
   [key: string]: unknown;
 }
 
@@ -225,6 +266,7 @@ export class Axonium {
     completions: {
       create: async (request: ChatRequest, options: CallOptions = {}): Promise<ChatCompletion> => {
         checkParts(request.messages);
+        checkLogprobs(request);
         const { value, meta } = await this.transport.sendJSON("POST", "/v1/chat/completions", {
           ...options,
           body: request,
@@ -242,6 +284,7 @@ export class Axonium {
        */
       stream: async (request: ChatRequest, options: CallOptions = {}): Promise<ChatStream> => {
         checkParts(request.messages);
+        checkLogprobs(request);
         const { response, meta } = await this.transport.send("POST", "/v1/chat/completions", {
           ...options,
           body: { ...request, stream: true },

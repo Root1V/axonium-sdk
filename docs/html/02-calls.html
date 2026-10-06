@@ -255,6 +255,70 @@ being quietly given less than you asked for is worse than failing.</p>
 <span class="kd">const</span><span class="w"> </span><span class="nx">answer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">JSON</span><span class="p">.</span><span class="nx">parse</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">content</span><span class="p">);</span><span class="w"> </span><span class="c1">// a JSON string, not a nested object</span></code></pre></div>
 </div><p>The grammar is the engine's, and the schema is forwarded verbatim — validating it here would be a
 second copy of the engine's rules, drifting from the first.</p>
+<h3>How confident the model was</h3>
+<p><code>logprobs</code> returns the chosen token's own probability; <code>top_logprobs</code> adds the N most likely
+alternatives at each position. The point is an agent deciding when to <strong>escalate to a person</strong>
+instead of acting on a guess.</p>
+<div class="tabs"><div class="code" data-language="python" data-label="Python"><pre><code class="language-python"><span class="n">completion</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">chat</span><span class="o">.</span><span class="n">completions</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
+    <span class="n">messages</span><span class="o">=</span><span class="p">[{</span><span class="s2">"role"</span><span class="p">:</span> <span class="s2">"user"</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="s2">"yes or no?"</span><span class="p">}],</span>
+    <span class="n">logprobs</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">top_logprobs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">completion</span><span class="o">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">logprobs</span><span class="o">.</span><span class="n">content</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">token</span><span class="o">.</span><span class="n">token</span><span class="p">,</span> <span class="n">token</span><span class="o">.</span><span class="n">probability</span><span class="p">)</span>     <span class="c1"># 0.99946, not -0.00054</span></code></pre></div>
+<div class="code" data-language="go" data-label="Go"><pre><code class="language-go"><span class="nx">yes</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="kc">true</span>
+<span class="nx">three</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="mi">3</span>
+<span class="nx">completion</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">Chat</span><span class="p">.</span><span class="nx">Create</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">axonium</span><span class="p">.</span><span class="nx">ChatRequest</span><span class="p">{</span>
+<span class="w">	</span><span class="nx">Model</span><span class="p">:</span><span class="w">       </span><span class="s">"qwen3-0.6b"</span><span class="p">,</span>
+<span class="w">	</span><span class="nx">Messages</span><span class="p">:</span><span class="w">    </span><span class="p">[]</span><span class="nx">axonium</span><span class="p">.</span><span class="nx">Message</span><span class="p">{</span><span class="nx">axonium</span><span class="p">.</span><span class="nx">TextMessage</span><span class="p">(</span><span class="s">"user"</span><span class="p">,</span><span class="w"> </span><span class="s">"yes or no?"</span><span class="p">)},</span>
+<span class="w">	</span><span class="nx">Logprobs</span><span class="p">:</span><span class="w">    </span><span class="o">&amp;</span><span class="nx">yes</span><span class="p">,</span>
+<span class="w">	</span><span class="nx">TopLogprobs</span><span class="p">:</span><span class="w"> </span><span class="o">&amp;</span><span class="nx">three</span><span class="p">,</span>
+<span class="p">})</span>
+<span class="k">for</span><span class="w"> </span><span class="nx">_</span><span class="p">,</span><span class="w"> </span><span class="nx">token</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">completion</span><span class="p">.</span><span class="nx">Choices</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">Logprobs</span><span class="p">.</span><span class="nx">Content</span><span class="w"> </span><span class="p">{</span>
+<span class="w">	</span><span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">token</span><span class="p">.</span><span class="nx">Token</span><span class="p">,</span><span class="w"> </span><span class="nx">token</span><span class="p">.</span><span class="nx">Probability</span><span class="p">())</span>
+<span class="p">}</span></code></pre></div>
+<div class="code" data-language="rust" data-label="Rust"><pre><code class="language-rust"><span class="kd">let</span><span class="w"> </span><span class="n">completion</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">client</span>
+<span class="w">    </span><span class="p">.</span><span class="n">chat</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ChatRequest</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">model</span><span class="p">:</span><span class="w"> </span><span class="s">"qwen3-0.6b"</span><span class="p">.</span><span class="n">into</span><span class="p">(),</span>
+<span class="w">        </span><span class="n">messages</span><span class="p">:</span><span class="w"> </span><span class="nc">vec</span><span class="o">!</span><span class="p">[</span><span class="n">Message</span><span class="p">::</span><span class="n">text</span><span class="p">(</span><span class="s">"user"</span><span class="p">,</span><span class="w"> </span><span class="s">"yes or no?"</span><span class="p">)],</span>
+<span class="w">        </span><span class="n">logprobs</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="kc">true</span><span class="p">),</span>
+<span class="w">        </span><span class="n">top_logprobs</span><span class="p">:</span><span class="w"> </span><span class="nb">Some</span><span class="p">(</span><span class="mi">3</span><span class="p">),</span>
+<span class="w">        </span><span class="o">..</span><span class="nb">Default</span><span class="p">::</span><span class="n">default</span><span class="p">()</span>
+<span class="w">    </span><span class="p">})</span>
+<span class="w">    </span><span class="p">.</span><span class="k">await</span><span class="o">?</span><span class="p">;</span>
+<span class="k">for</span><span class="w"> </span><span class="n">token</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="o">&amp;</span><span class="n">completion</span><span class="p">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">logprobs</span><span class="p">.</span><span class="n">as_ref</span><span class="p">().</span><span class="n">unwrap</span><span class="p">().</span><span class="n">content</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="fm">println!</span><span class="p">(</span><span class="s">"{} {}"</span><span class="p">,</span><span class="w"> </span><span class="n">token</span><span class="p">.</span><span class="n">token</span><span class="p">,</span><span class="w"> </span><span class="n">token</span><span class="p">.</span><span class="n">probability</span><span class="p">());</span>
+<span class="p">}</span></code></pre></div>
+<div class="code" data-language="swift" data-label="Swift"><pre><code class="language-swift"><span class="kd">var</span><span class="w"> </span><span class="nv">request</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">ChatRequest</span><span class="p">(</span><span class="n">model</span><span class="p">:</span><span class="w"> </span><span class="s">"qwen3-0.6b"</span><span class="p">,</span><span class="w"> </span><span class="n">messages</span><span class="p">:</span><span class="w"> </span><span class="p">[.</span><span class="n">user</span><span class="p">(</span><span class="s">"yes or no?"</span><span class="p">)])</span>
+<span class="n">request</span><span class="p">.</span><span class="n">logprobs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">request</span><span class="p">.</span><span class="n">topLogprobs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">3</span>
+
+<span class="kd">let</span><span class="w"> </span><span class="nv">completion</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="k">try</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">chat</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+<span class="k">for</span><span class="w"> </span><span class="n">token</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">completion</span><span class="p">.</span><span class="n">choices</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">logprobs</span><span class="w"> </span><span class="p">??</span><span class="w"> </span><span class="p">[]</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="bp">print</span><span class="p">(</span><span class="n">token</span><span class="p">.</span><span class="n">token</span><span class="w"> </span><span class="p">??</span><span class="w"> </span><span class="s">""</span><span class="p">,</span><span class="w"> </span><span class="n">token</span><span class="p">.</span><span class="n">probability</span><span class="w"> </span><span class="p">??</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+<span class="p">}</span></code></pre></div>
+<div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="kd">const</span><span class="w"> </span><span class="nx">completion</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">chat</span><span class="p">.</span><span class="nx">completions</span><span class="p">.</span><span class="nx">create</span><span class="p">({</span>
+<span class="w">  </span><span class="nx">model</span><span class="o">:</span><span class="w"> </span><span class="s2">"qwen3-0.6b"</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">messages</span><span class="o">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nx">role</span><span class="o">:</span><span class="w"> </span><span class="s2">"user"</span><span class="p">,</span><span class="w"> </span><span class="nx">content</span><span class="o">:</span><span class="w"> </span><span class="s2">"yes or no?"</span><span class="w"> </span><span class="p">}],</span>
+<span class="w">  </span><span class="nx">logprobs</span><span class="o">:</span><span class="w"> </span><span class="kt">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">top_logprobs</span><span class="o">:</span><span class="w"> </span><span class="kt">3</span><span class="p">,</span>
+<span class="p">});</span>
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kd">const</span><span class="w"> </span><span class="nx">token</span><span class="w"> </span><span class="k">of</span><span class="w"> </span><span class="nx">completion</span><span class="p">.</span><span class="nx">logprobs</span><span class="w"> </span><span class="o">??</span><span class="w"> </span><span class="p">[])</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">token</span><span class="p">.</span><span class="nx">token</span><span class="p">,</span><span class="w"> </span><span class="nx">token</span><span class="p">.</span><span class="nx">probability</span><span class="p">);</span><span class="w"> </span><span class="c1">// 0.99946, not -0.00054</span>
+<span class="p">}</span></code></pre></div>
+</div><p><strong>These are natural logarithms.</strong> <code>-0.00054</code> is about 99.95% and <code>-7.6</code> is about 0.05%. Read as a
+probability it looks like a number near zero meaning &quot;unlikely&quot;, and the mistake is silent — so all
+five expose <code>probability</code> rather than making you remember to call <code>exp</code>. It is absent rather than
+zero when the backend sent no <code>logprob</code>: a token it said nothing about is a different fact from one
+it said was impossible.</p>
+<p><strong><code>top_logprobs</code> requires <code>logprobs</code>.</strong> Sending it alone, or beside <code>logprobs: false</code>, is a <code>422</code>
+the gateway raises before the engine sees it — the rule is llama.cpp's and the gateway enforces it so
+the refusal reaches you in the usual envelope. All five SDKs refuse it at the call site instead,
+because a round trip to be told that buys nothing.</p>
+<p><strong>Absent <code>logprobs</code> on the response means the engine does not have the feature</strong>, not that the model
+was uncertain. The response simply carries no key. Send <code>require_parameters</code> to be told rather than
+inferring it from an absence.</p>
 <p><strong>The answer arrives as a JSON string in the content, not as a nested object</strong>, and the SDKs do not
 parse it for you. Same reason tool-call <code>arguments</code> stays a string: a generation stopped by
 <code>max_tokens</code> leaves it truncated, and a response model that raises from the inside is worse than
@@ -373,7 +437,13 @@ Python it is leaving the <code>with</code> block.</p>
 <span class="w">  </span><span class="nx">documents</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"Rates schedule"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Opening hours"</span><span class="p">,</span><span class="w"> </span><span class="s2">"Card benefits"</span><span class="p">],</span>
 <span class="p">});</span>
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">ranked</span><span class="p">.</span><span class="nx">ranking</span><span class="p">);</span><span class="w"> </span><span class="c1">// indices into the documents you sent, best first</span></code></pre></div>
-</div><p><strong>Rerank scores the whole document set in one request.</strong> Against a 60 RPM budget, scoring 50
+</div><p><strong><code>raw_scores</code> asks for the logit instead of the probability.</strong> A reranker's probabilities saturate
+near 1.0 — 0.99 was measured for a document only loosely related to its query — and a saturated
+probability cannot be calibrated while the logit behind it can. Not every engine has it; where it
+does not, the request still succeeds and the field comes back named in
+<code>X-Prometheus-Ignored-Parameters</code>, so sending it unconditionally is safe and being dropped is
+discoverable rather than silent.</p>
+<p><strong>Rerank scores the whole document set in one request.</strong> Against a 60 RPM budget, scoring 50
 candidates costs one unit rather than fifty. Each result's <code>index</code> points into the array <strong>you</strong>
 sent, never into the results, which is what keeps a reordered result attributable to its input.</p>
 <h2>Predict — the tasks OpenAI has no shape for</h2>
@@ -495,7 +565,11 @@ paths, and the one that billed correctly would be whichever you did not use.</p>
 <span class="k">try</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="n">client</span><span class="p">.</span><span class="n">modelsMine</span><span class="p">()</span><span class="w">   </span><span class="c1">// the subset your token is scoped to, cached</span></code></pre></div>
 <div class="code" data-language="typescript" data-label="TypeScript"><pre><code class="language-typescript"><span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">models</span><span class="p">.</span><span class="nx">list</span><span class="p">();</span><span class="w"> </span><span class="c1">// what this token may call</span>
 <span class="k">await</span><span class="w"> </span><span class="nx">client</span><span class="p">.</span><span class="nx">models</span><span class="p">.</span><span class="nx">mine</span><span class="p">();</span><span class="w"> </span><span class="c1">// the subset your token is scoped to, cached</span></code></pre></div>
-</div><p>Access is deny-by-default and granted per model, and streaming needs a different scope from
+</div><p><strong>The catalog lists running instances intersected with your scopes</strong>, measured 2026-10-05. A model
+that is registered but stopped disappears exactly like one that does not exist, and like one your
+token cannot call — three different facts behind one absence, and only an operator can tell them
+apart. So an empty list is never evidence that the deployment has no models.</p>
+<p>Access is deny-by-default and granted per model, and streaming needs a different scope from
 non-streaming: holding <code>inference:read</code> does not grant <code>inference:stream</code>. When a <code>403</code> arrives and
 <code>models.mine()</code> has been read, the SDK says which of the two you are missing rather than only that
 access was refused.</p>

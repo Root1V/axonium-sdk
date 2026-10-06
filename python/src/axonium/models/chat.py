@@ -8,6 +8,7 @@ that a differently-shaped backend cannot make a valid response fail to parse.
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 from axonium.errors import ToolCallArgumentsError
@@ -115,11 +116,45 @@ class CompletionMessage(_Passthrough):
     tool_calls: list[ToolCall] | None = None
 
 
+class TokenLogprob(_Passthrough):
+    """One generated token and how likely the model thought it was.
+
+    ``logprob`` is a **natural logarithm**, which is the part worth saying out loud: ``-0.00054``
+    is about 99.95% and ``-7.6`` is about 0.05%. Read as a probability it looks like a number near
+    zero meaning "unlikely", and the mistake is silent, so :attr:`probability` exists.
+    """
+
+    token: str | None = None
+    logprob: float | None = None
+    #: The ``top_logprobs`` alternatives at this position, best first. Empty unless asked for.
+    top_logprobs: list[TokenLogprob] = []  # noqa: RUF012 - pydantic copies defaults per instance
+
+    @property
+    def probability(self) -> float | None:
+        """``exp(logprob)``, or ``None`` when the backend sent no ``logprob``.
+
+        ``None`` rather than ``0.0``: a token the backend said nothing about is a different fact
+        from one it said was impossible, and a caller thresholding on confidence must be able to
+        tell them apart.
+        """
+        return None if self.logprob is None else math.exp(self.logprob)
+
+
+class ChoiceLogprobs(_Passthrough):
+    """The per-token probabilities for one choice, in OpenAI's shape."""
+
+    content: list[TokenLogprob] = []  # noqa: RUF012 - pydantic copies defaults per instance
+
+
 class ChatChoice(_Passthrough):
     index: int | None = None
     message: CompletionMessage | None = None
     #: ``"stop"``, ``"length"``, ``"tool_calls"``, or whatever else the backend reports.
     finish_reason: str | None = None
+    #: Present only when the request asked for it, and only on an engine that has it -- on one that
+    #: does not, the response simply has no ``logprobs`` key and ``require_parameters`` is how you
+    #: find out rather than guessing from the absence.
+    logprobs: ChoiceLogprobs | None = None
 
 
 class ChatCompletion(APIObject):
