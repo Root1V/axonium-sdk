@@ -171,9 +171,19 @@ una decisión de la plataforma y no una conveniencia del SDK: antes hubo dos dir
 segunda desapareció. Por eso hay un host que configurar y no seis, y por eso un despliegue nuevo se
 describe con una sola URL.</p>
 <h2>El cliente</h2>
-<p>Uno por proceso. El pool de conexiones y el token cacheado viven en él, así que construir uno por
-petición tira los dos — y vuelve a pedir un token que ya tenías.</p>
+<p>El pool de conexiones y el token cacheado viven en él, así que construir uno por petición tira los
+dos — y vuelve a pedir un token que ya tenías.</p>
 <p>Los cinco clientes son seguros para uso concurrente.</p>
+<p><strong>Un cliente async pertenece al bucle de eventos en el que se construyó, así que «uno por proceso»
+solo vale para un proceso con un solo bucle.</strong> Esta página lo decía sin ese matiz, y un servicio con
+una API y un pool de workers suele tener más de uno. Medido en Python 3.13, reusando un
+<code>AsyncAxonium</code> entre dos llamadas a <code>asyncio.run()</code>:</p>
+<div class="code" data-language="" data-label=""><pre><code class="language-">loop 1: ok
+loop 2: RuntimeError: Event loop is closed</code></pre></div>
+<p>El pool retiene los recursos del primer bucle, y el error sale de dentro de asyncio, así que no
+nombra la causa. Construye el cliente dentro del bucle que lo va a usar — un <code>lifespan</code> de FastAPI,
+el arranque de un worker —, consérvalo mientras ese bucle viva y ciérralo al apagar
+(<code>await client.aclose()</code>, o <code>async with</code>). El cliente sync no tiene esa restricción.</p>
 <h2>Tokens</h2>
 <p>OAuth2 <code>client_credentials</code>, contra el propio gateway. El SDK lo gestiona entero y conviene saber
 cómo, porque las tres decisiones de abajo son las que evitan un <code>401</code> a mitad de una petición:</p>

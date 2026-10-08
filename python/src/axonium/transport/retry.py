@@ -5,11 +5,19 @@ it returns anything to a client, and runs its own per-backend circuit breaker. R
 symmetrically on top of that would multiply load on a struggling backend, so this layer is
 deliberately narrow.
 
-**There is no idempotency-key mechanism in this API.** A retried chat, embeddings or image request
-is a genuinely new generation: billable again, and not a replay of the first. So the default policy
-retries only where the platform tells us *no generation happened* — a rate limit, or a circuit
-breaker that fast-failed without ever calling the backend. Everything that might have reached a
-model is left to the caller to decide about.
+**This API has an idempotency mechanism, and the default policy is written for callers who do not
+use one.** Without a key, a retried chat, embeddings or image request is a genuinely new
+generation: billable again, and not a replay of the first. So the default retries only where the
+platform tells us *no generation happened* -- a rate limit, or a circuit breaker that fast-failed
+without ever calling the backend. An ``Idempotency-Key`` changes that for timeouts, and only for
+timeouts, because it is the only thing that makes the repeat free.
+
+This paragraph used to deny that this API has any idempotency-key mechanism at all -- in bold,
+in **the file that explains why a timeout is not retried**, while ``client.py`` three modules away
+read the key and retried on it, the error catalog carried four idempotency error types, and all
+five SDKs sent the header. Veritium read the published README and asked whether to pass a key at
+all, which is how a false sentence gets found: by a consumer acting on it. Go's copy was wrong the
+same way, Rust's was right, and nothing could tell them apart.
 """
 
 from __future__ import annotations

@@ -10,7 +10,6 @@ import (
 	"math"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -218,7 +217,7 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 		policy = *c.config.Retry
 	}
 
-	ctx, span := c.startSpan(ctx, spanName(path), model)
+	ctx, span := c.startSpan(ctx, method, path, model)
 	defer span.End()
 
 	var waited time.Duration
@@ -412,21 +411,4 @@ func statusOf(resp *http.Response, err error) int {
 		return apiErr.Status
 	}
 	return 0
-}
-
-// spanName names the operation rather than the URL, so spans group by what was done.
-func spanName(path string) string {
-	switch {
-	case strings.HasSuffix(path, "/chat/completions"):
-		return "chat.completions"
-	case strings.HasSuffix(path, "/embeddings"):
-		return "embeddings"
-	case strings.HasSuffix(path, "/generations"):
-		return "images.generations"
-	case strings.HasSuffix(path, "/mine"):
-		return "models.mine"
-	case strings.HasSuffix(path, "/models"):
-		return "models.list"
-	}
-	return "request"
 }

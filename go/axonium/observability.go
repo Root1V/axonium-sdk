@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -62,15 +64,88 @@ func (noopSpan) SetAttributes(map[string]any) {}
 func (noopSpan) RecordError(error)            {}
 func (noopSpan) End()                         {}
 
+// providerName is gen_ai.provider.name, which replaced the deprecated gen_ai.system.
+//
+// The convention's enumeration names model providers -- openai, anthropic, groq and so on -- and
+// this platform is not one of them, so this is a CUSTOM value, which the convention permits when no
+// well-known one applies. It deliberately does not name the inference engine: Argus maps this
+// attribute to llama.cpp / vllm / ollama, which is right for the gateway's own spans because the
+// gateway knows which backend served the request, and impossible from a client because no response
+// header carries it. server.address goes on the span instead, which is what the convention names as
+// the way to identify the actual system behind an OpenAI-compatible endpoint.
+const providerName = "prometheus-gateway"
+
+// operationName maps a route to gen_ai.operation.name, or "" where no GenAI operation happened.
+//
+// The shared table is spec/otel-genai.json and TestOperationNamesMatchTheSpec asserts this against
+// it. Three SDKs emit spans; a table copied by hand into three languages is how AXO-139 produced
+// five divergent rate-limit scope lists that nothing could catch.
+func operationName(path string) string {
+	switch {
+	case strings.HasSuffix(path, "/chat/completions"):
+		return "chat"
+	case strings.HasSuffix(path, "/embeddings"):
+		return "embeddings"
+	// Not "retrieval": that well-known value is RAG retrieval and carries gen_ai.data_source.id to
+	// say which corpus was read. A reranker reads no corpus; it scores documents the caller holds.
+	case strings.HasSuffix(path, "/rerank"):
+		return "rerank"
+	// The enumeration has no image value, and generate_content means multimodal generation in
+	// Gemini-shaped APIs.
+	case strings.HasSuffix(path, "/generations"):
+		return "image_generation"
+	case strings.HasSuffix(path, "/predict"):
+		return "predict"
+	}
+	// /v1/models and /v1/models/mine reach no model, so a gen_ai.* span for them would carry a null
+	// model and an operation name the convention does not have. Until this returned "", they got
+	// gen_ai.system and a null model, which put a scope lookup in GenAI aggregations as an
+	// inference call that somehow used no tokens.
+	return ""
+}
+
 // startSpan begins a span for one operation, or returns a no-op when tracing is off.
-func (c *Client) startSpan(ctx context.Context, name, model string) (context.Context, Span) {
+//
+// The span is named {operation} {model} -- "chat qwen3-0.6b" -- which is the convention's rule, and
+// the one Argus asked for explicitly when Prometheus offered to depart from it to keep cardinality
+// down: follow the standard, the cardinality is theirs to solve. Grouping by model then needs no
+// special query.
+func (c *Client) startSpan(ctx context.Context, method, path, model string) (context.Context, Span) {
 	if c.config.Tracer == nil {
 		return ctx, noopSpan{}
 	}
-	return c.config.Tracer.StartSpan(ctx, name, map[string]any{
-		"gen_ai.system":        "prometheus-gateway",
-		"gen_ai.request.model": model,
-	})
+
+	attrs := map[string]any{
+		"http.request.method": method,
+		"url.path":            path,
+		"server.address":      hostOf(c.config.GatewayBaseURL),
+	}
+
+	operation := operationName(path)
+	if operation == "" {
+		return c.config.Tracer.StartSpan(ctx, "axonium "+method+" "+path, attrs)
+	}
+
+	attrs["gen_ai.provider.name"] = providerName
+	attrs["gen_ai.operation.name"] = operation
+	attrs["gen_ai.request.model"] = model
+
+	name := operation
+	if model != "" {
+		name = operation + " " + model
+	}
+	return c.config.Tracer.StartSpan(ctx, name, attrs)
+}
+
+// hostOf is server.address: the host of the gateway, without scheme or port path noise. A base URL
+// that will not parse yields "" rather than an error, because a malformed span attribute must never
+// be the reason a request does not happen.
+func hostOf(base string) string {
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return ""
+	}
+	return parsed.Hostname()
 }
 
 // recordResponse attaches the gateway's correlation IDs to a span, which is the whole point of the

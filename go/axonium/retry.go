@@ -13,11 +13,18 @@ import (
 // symmetrically on top of that would multiply load on a struggling backend, so this layer is
 // deliberately narrow.
 //
-// There is no idempotency-key mechanism in this API. A retried chat, embeddings or image request
-// is a genuinely new generation: billable again, and not a replay of the first. So the default
-// policy retries only where the platform tells us no generation happened -- a rate limit, or a
-// circuit breaker that fast-failed without ever calling the backend. Everything that might have
-// reached a model is left to the caller to decide about.
+// This API HAS an idempotency mechanism, and the default policy is written for callers who do not
+// use one. Without a key, a retried chat, embeddings or image request is a genuinely new
+// generation: billable again, and not a replay of the first. So the default retries only where the
+// platform tells us no generation happened -- a rate limit, or a circuit breaker that fast-failed
+// without ever calling the backend. An Idempotency-Key changes that for timeouts, and only for
+// timeouts, because it is the only thing that makes the repeat free: transport.go:247 does exactly
+// that, and has since the key was added.
+//
+// This comment used to deny that this API has any idempotency-key mechanism at all, in the
+// file that explains why a timeout is not retried, while the line above retried on the key.
+// Veritium read the published README and asked whether to pass a key at all, which is how a false
+// sentence gets found: by a consumer acting on it.
 
 // noGenerationOccurred are the errors where the platform fast-failed without reaching a model, so
 // retrying cannot duplicate a generation or double-bill.

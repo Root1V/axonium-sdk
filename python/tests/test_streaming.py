@@ -22,12 +22,18 @@ CHAT_URL = "https://gateway.test.invalid/v1/chat/completions"
 
 
 @pytest.fixture(autouse=True)
-def _token() -> None:
-    respx.post(AUTH_URL).mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "t", "token_type": "bearer", "expires_in": 300}
+def _token() -> Any:
+    # Scoped to its own router and torn down with the test. Without the `with`, this route landed
+    # on respx's GLOBAL router and was never removed, so every test file that happened to run
+    # after this one inherited a mocked token endpoint -- and a file's own `pytest` run told a
+    # different story from the suite's.
+    with respx.mock:
+        respx.post(AUTH_URL).mock(
+            return_value=httpx.Response(
+                200, json={"access_token": "t", "token_type": "bearer", "expires_in": 300}
+            )
         )
-    )
+        yield
 
 
 @pytest.fixture

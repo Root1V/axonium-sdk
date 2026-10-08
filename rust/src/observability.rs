@@ -34,13 +34,42 @@ pub(crate) struct Operation {
 
 impl Operation {
     #[cfg(feature = "tracing")]
-    pub(crate) fn start(name: &'static str, model: &str) -> Self {
+    pub(crate) fn start(path: &str, model: &str, host: &str) -> Self {
+        // `tracing` span names are static at macro time, so the convention's
+        // `{gen_ai.operation.name} {gen_ai.request.model}` goes in `otel.name`, which is what
+        // tracing-opentelemetry reads as the exported span name.
+        let Some(operation) = operation_name(path) else {
+            // A catalog listing reaches no model. Until this branch existed it got
+            // `gen_ai.system` and an empty model, which put a scope lookup in GenAI aggregations
+            // as an inference call that somehow used no tokens.
+            return Self {
+                span: tracing::info_span!(
+                    "axonium",
+                    otel.name = %format!("axonium {path}"),
+                    url.path = path,
+                    server.address = host,
+                    prometheus.request_id = tracing::field::Empty,
+                    prometheus.trace_id = tracing::field::Empty,
+                    prometheus.instance_id = tracing::field::Empty,
+                ),
+            };
+        };
+
+        let name = if model.is_empty() {
+            operation.to_string()
+        } else {
+            format!("{operation} {model}")
+        };
+
         Self {
             span: tracing::info_span!(
                 "axonium",
-                otel.name = name,
-                gen_ai.system = "prometheus-gateway",
+                otel.name = %name,
+                gen_ai.provider.name = PROVIDER_NAME,
+                gen_ai.operation.name = operation,
                 gen_ai.request.model = model,
+                url.path = path,
+                server.address = host,
                 prometheus.request_id = tracing::field::Empty,
                 prometheus.trace_id = tracing::field::Empty,
                 prometheus.instance_id = tracing::field::Empty,
@@ -49,7 +78,7 @@ impl Operation {
     }
 
     #[cfg(not(feature = "tracing"))]
-    pub(crate) fn start(_name: &'static str, _model: &str) -> Self {
+    pub(crate) fn start(_path: &str, _model: &str, _host: &str) -> Self {
         Self {}
     }
 
@@ -182,18 +211,117 @@ pub(crate) struct AttemptRecord<'a> {
 }
 
 /// Names the operation rather than the URL, so spans group by what was done.
-pub(crate) fn operation_name(path: &str) -> &'static str {
+/// `gen_ai.provider.name`, which replaced the deprecated `gen_ai.system`.
+///
+/// The convention's enumeration names model providers — `openai`, `anthropic`, `groq` and so on —
+/// and this platform is not one of them, so this is a **custom value**, which the convention
+/// permits when no well-known one applies. It deliberately does not name the inference engine:
+/// Argus maps this attribute to `llama.cpp` / `vllm` / `ollama`, which is right for the gateway's
+/// own spans because the gateway knows which backend served the request, and impossible from a
+/// client because no response header carries it. `server.address` goes on the span instead, which
+/// is what the convention names as the way to identify the actual system behind an
+/// OpenAI-compatible endpoint.
+///
+/// Gated with the feature that uses it. Without `tracing` this module emits nothing, so the
+/// constant is dead code -- which `clippy -D warnings` rejects and a `--all-features` run hides.
+/// That trap is documented at the top of `scripts/verify.sh` and it caught this on the first run.
+#[cfg(feature = "tracing")]
+pub(crate) const PROVIDER_NAME: &str = "prometheus-gateway";
+
+/// A route's `gen_ai.operation.name`, or `None` where no GenAI operation happened.
+///
+/// The shared table is `spec/otel-genai.json` and `tests/observability.rs` asserts this against it.
+/// Three SDKs emit spans; a table copied by hand into three languages is how `AXO-139` produced
+/// five divergent rate-limit scope lists that nothing could catch.
+///
+/// Gated for the same reason as `PROVIDER_NAME`: it feeds span attributes and nothing else.
+#[cfg(feature = "tracing")]
+pub(crate) fn operation_name(path: &str) -> Option<&'static str> {
     if path.ends_with("/chat/completions") {
-        "chat.completions"
+        Some("chat")
     } else if path.ends_with("/embeddings") {
-        "embeddings"
+        Some("embeddings")
+    // Not `retrieval`: that well-known value is RAG retrieval and carries `gen_ai.data_source.id`
+    // to say which corpus was read. A reranker reads no corpus; it scores documents the caller
+    // already holds.
+    } else if path.ends_with("/rerank") {
+        Some("rerank")
+    // The enumeration has no image value, and `generate_content` means multimodal generation in
+    // Gemini-shaped APIs.
     } else if path.ends_with("/generations") {
-        "images.generations"
-    } else if path.ends_with("/mine") {
-        "models.mine"
-    } else if path.ends_with("/models") {
-        "models.list"
+        Some("image_generation")
+    } else if path.ends_with("/predict") {
+        Some("predict")
     } else {
-        "request"
+        None
+    }
+}
+
+// The map only exists under `tracing`, so its test does too. `scripts/verify.sh` runs
+// `cargo test` AND `cargo test --all-features`, so the guard still runs on every verification.
+#[cfg(all(test, feature = "tracing"))]
+mod tests {
+    use super::{operation_name, PROVIDER_NAME};
+
+    /// The shared table is `spec/otel-genai.json`, and this asserts the map above against it.
+    /// Python and Go have the mirror of this test.
+    ///
+    /// `AXO-139` is why this is a test and not a comment asking for care: five SDKs kept five
+    /// hand-copied lists of rate-limit scopes, they diverged, the published TypeScript documented
+    /// a value the header never sends, and **nothing could catch it** because the list was prose.
+    ///
+    /// A unit test rather than one in `tests/`, because `operation_name` is `pub(crate)` and
+    /// widening it so a test could see it would be the test changing the surface it checks.
+    #[test]
+    fn operation_names_match_the_shared_table() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("spec")
+            .join("otel-genai.json");
+
+        // The corpus lives in the monorepo, one level above this crate, so it is present from a
+        // checkout and absent from the published package. Skipping there is honest; failing would
+        // make `cargo test` on a published crate red for a file it was never shipped.
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            return;
+        };
+        let table: serde_json::Value = serde_json::from_str(&raw).expect("the table parses");
+
+        assert_eq!(
+            table["provider_name"].as_str(),
+            Some(PROVIDER_NAME),
+            "gen_ai.provider.name disagrees with the shared table"
+        );
+
+        let operations = table["operations"]
+            .as_array()
+            .expect("operations is a list");
+        assert!(
+            !operations.is_empty(),
+            "the table lists no operations, so this test would pass by comparing nothing"
+        );
+        for entry in operations {
+            let route = entry["path"].as_str().expect("path");
+            assert_eq!(
+                operation_name(route),
+                entry["operation"].as_str(),
+                "{route}: gen_ai.operation.name disagrees with the shared table"
+            );
+        }
+
+        // The excluded routes are the half a count would miss: a map answering every path would
+        // satisfy the loop above and still put a catalog listing in GenAI aggregations as an
+        // inference call that used no tokens.
+        for entry in table["no_genai_attributes"]
+            .as_array()
+            .expect("no_genai_attributes is a list")
+        {
+            let route = entry["path"].as_str().expect("path");
+            assert_eq!(
+                operation_name(route),
+                None,
+                "{route} carries no GenAI operation"
+            );
+        }
     }
 }

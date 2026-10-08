@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import pickle
 import traceback
+from typing import Any
 
 import httpx
 import pytest
@@ -36,12 +37,16 @@ def secret_config() -> dict[str, str]:
 
 
 @pytest.fixture
-def token_route() -> object:
-    return respx.post(AUTH_URL).mock(
-        return_value=httpx.Response(
-            200, json={"access_token": TOKEN, "token_type": "bearer", "expires_in": 300}
+def token_route() -> Any:
+    # Scoped to its own router and torn down with the test. Without the `with`, this route landed
+    # on respx's GLOBAL router and was never removed, so every test file that happened to run
+    # after this one inherited a mocked token endpoint.
+    with respx.mock:
+        yield respx.post(AUTH_URL).mock(
+            return_value=httpx.Response(
+                200, json={"access_token": TOKEN, "token_type": "bearer", "expires_in": 300}
+            )
         )
-    )
 
 
 class TestSecretsInRepr:

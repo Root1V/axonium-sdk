@@ -10,6 +10,7 @@ IndexError, or JSONDecodeError at the call site, and it never loops forever.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import httpx
 import pytest
@@ -26,12 +27,17 @@ MESSAGES = [{"role": "user", "content": "hi"}]
 
 
 @pytest.fixture(autouse=True)
-def _token() -> None:
-    respx.post(AUTH_URL).mock(
-        return_value=httpx.Response(
-            200, json={"access_token": "t", "token_type": "bearer", "expires_in": 300}
+def _token() -> Any:
+    # Scoped to its own router and torn down with the test. Without the `with`, this route landed
+    # on respx's GLOBAL router and was never removed, so every test file that happened to run
+    # after this one inherited a mocked token endpoint.
+    with respx.mock:
+        respx.post(AUTH_URL).mock(
+            return_value=httpx.Response(
+                200, json={"access_token": "t", "token_type": "bearer", "expires_in": 300}
+            )
         )
-    )
+        yield
 
 
 @pytest.fixture

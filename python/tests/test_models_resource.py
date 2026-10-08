@@ -38,12 +38,21 @@ CATALOG_BODY = {
 
 @pytest.fixture(autouse=True)
 def _token() -> Any:
-    respx.post(AUTH_URL).mock(
-        return_value=httpx.Response(
-            200,
-            json={"access_token": "t", "token_type": "bearer", "expires_in": 300, "scope": ""},
+    # Registered inside a router of its own and torn down with the test.
+    #
+    # Without the `with`, this route landed on respx's GLOBAL router and was never removed, so
+    # every test file that happened to run after this one inherited a mocked token endpoint. One
+    # test in `test_observability.py` was green on exactly that: its own premise -- that the
+    # catalog is fetched without a token -- stopped being true at `PRM-167`, and the leak hid it.
+    # The file passed alone only after this was scoped; before, it passed only in a full run.
+    with respx.mock:
+        respx.post(AUTH_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={"access_token": "t", "token_type": "bearer", "expires_in": 300, "scope": ""},
+            )
         )
-    )
+        yield
 
 
 class Caller:

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
 
 import httpx
 import pytest
@@ -212,11 +216,24 @@ class TestScopeDiagnosis:
         assert caught.value.hint is None
 
     @respx.mock
-    def test_says_nothing_when_no_token_has_been_obtained(
+    def test_says_nothing_when_the_token_reports_no_scopes(
         self, config_kwargs: dict[str, str]
     ) -> None:
-        # The public catalog is fetched without a token, so a 403 there — a proxy in front of it,
-        # say — leaves nothing to diagnose against.
+        """A token response with an empty ``scope`` leaves nothing to compare a 403 against.
+
+        **This test used to describe a route that no longer exists.** It said *"the public catalog
+        is fetched without a token"* and called ``models.list()`` to reach a 403 with no scopes
+        cached. ``PRM-167`` closed that route — the catalog requires a token and is an alias of
+        ``mine()`` — so the premise died, and this test went on passing for eighteen days because
+        another file's fixture registered the token endpoint on respx's **global** router and never
+        removed it. The leak is closed in eight fixtures now; this was the only test standing on
+        it, and it was standing on it while asserting something unreachable.
+
+        What remains true is narrower and is the real guard: the diagnosis is built from the scopes
+        the token response reports, so a token that reports none produces no hint. Guessing from an
+        empty set is how a hint names a scope the operator never withheld.
+        """
+        respx.post(AUTH_URL).mock(return_value=token(scope=""))
         respx.get(CATALOG_URL).mock(return_value=forbidden())
 
         with Axonium(**config_kwargs) as client, pytest.raises(ForbiddenError) as caught:
@@ -409,3 +426,158 @@ class TestARetryWaitIsExplained:
         durations = [r.duration_ms for r in caplog.records if hasattr(r, "duration_ms")]
         assert durations, "no attempt was timed"
         assert max(durations) < 1000, f"a 2s wait leaked into request latency: {durations}"
+
+
+class TestTheGenAiSemanticConventions:
+    """``VRT-AXO-002``: the attributes a span carries, against the shared table.
+
+    Veritium asked for this and Argus's ``argus-obs-semconv`` suite is the external verifier, which
+    is the useful part: these assertions check that we emit what the table says, and somebody
+    else's suite checks that the table is the convention.
+    """
+
+    def test_the_map_matches_the_shared_table(self, spec_dir: Path) -> None:
+        """Three SDKs emit spans, and the table they emit is one file or it is three.
+
+        ``AXO-139`` is why this test exists rather than a comment asking for care: five SDKs kept
+        five hand-copied lists of rate-limit scopes, they diverged, the published TypeScript
+        documented a value the header never sends, and **nothing could catch it** because the list
+        was prose. Go and Rust have the mirror of this test.
+        """
+        table = json.loads((spec_dir / "otel-genai.json").read_text(encoding="utf-8"))
+
+        from axonium.observability import otel
+
+        assert table["provider_name"] == otel.PROVIDER_NAME
+
+        expected = {entry["path"]: entry["operation"] for entry in table["operations"]}
+        measured = {path: otel.operation_name(path) for path in expected}
+        assert measured == expected
+
+        # The excluded routes are the half a count would miss: a map that answered every path would
+        # satisfy "every operation in the table resolves" and still put a catalog listing in GenAI
+        # aggregations as an inference call that used no tokens.
+        for entry in table["no_genai_attributes"]:
+            assert otel.operation_name(entry["path"]) is None, entry["path"]
+
+    def test_no_well_known_value_is_passed_over_for_a_custom_one(self, spec_dir: Path) -> None:
+        """The convention: a well-known value MUST be used where one applies.
+
+        So a custom value is a claim that none applies, and this pins the claim rather than
+        trusting it. ``rerank`` and ``image_generation`` are custom on purpose -- ``retrieval`` is
+        RAG retrieval and carries a data source, and the enumeration has no image value -- and the
+        day the convention gains one, this list is where the decision is recorded.
+        """
+        well_known = {
+            "chat",
+            "create_agent",
+            "embeddings",
+            "execute_tool",
+            "generate_content",
+            "invoke_agent",
+            "invoke_workflow",
+            "retrieval",
+            "text_completion",
+        }
+        table = json.loads((spec_dir / "otel-genai.json").read_text(encoding="utf-8"))
+
+        for entry in table["operations"]:
+            claimed = entry["well_known"]
+            actual = entry["operation"] in well_known
+            assert claimed == actual, (
+                f"{entry['path']} declares well_known={claimed} for {entry['operation']!r}, "
+                f"which the convention's enumeration {'does' if actual else 'does not'} contain"
+            )
+
+    @respx.mock
+    def test_a_chat_span_is_named_operation_then_model(self, config_kwargs: dict[str, str]) -> None:
+        """``chat qwen3-0.6b``, which is the convention's rule.
+
+        Argus was offered a lower-cardinality departure from it and refused: *follow the standard,
+        the cardinality is our problem*. So the name is asserted, not left to whatever the route
+        happened to produce.
+        """
+        respx.post(AUTH_URL).mock(return_value=token())
+        respx.post(CHAT_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": "c-1",
+                    "object": "chat.completion",
+                    "created": 0,
+                    "model": "qwen3-0.6b",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "hi"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                },
+            )
+        )
+
+        recorded: list[tuple[str, dict[str, object]]] = []
+
+        from axonium.observability import otel
+
+        @contextmanager
+        def capture(name: str, attributes: dict[str, object]) -> Iterator[None]:
+            recorded.append((name, attributes))
+            yield None
+
+        with (
+            mock.patch.object(otel, "_record", capture),
+            Axonium(otel_enabled=True, **config_kwargs) as client,
+        ):
+            client.chat.completions.create(
+                model="qwen3-0.6b", messages=[{"role": "user", "content": "hi"}]
+            )
+
+        assert recorded, "no span was opened"
+        name, attributes = recorded[-1]
+        assert name == "chat qwen3-0.6b"
+        assert attributes["gen_ai.provider.name"] == "prometheus-gateway"
+        assert attributes["gen_ai.operation.name"] == "chat"
+        assert attributes["gen_ai.request.model"] == "qwen3-0.6b"
+        assert attributes["server.address"] == "gateway.test.invalid"
+        # Deprecated in favour of `gen_ai.provider.name`. Asserted ABSENT rather than merely
+        # un-asserted: an emitter sending both would satisfy every line above while still sending
+        # the attribute Veritium asked us to stop sending.
+        assert "gen_ai.system" not in attributes
+
+    @respx.mock
+    def test_a_catalog_span_carries_no_genai_attributes(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        """Reading the token's scopes is not an inference operation.
+
+        It used to carry ``gen_ai.system`` and a null model, so a scope lookup appeared in GenAI
+        aggregations as a call that somehow used no tokens.
+        """
+        respx.post(AUTH_URL).mock(return_value=token())
+        respx.get(MINE_URL).mock(
+            return_value=httpx.Response(200, json={"object": "list", "data": []})
+        )
+
+        recorded: list[tuple[str, dict[str, object]]] = []
+
+        from axonium.observability import otel
+
+        @contextmanager
+        def capture(name: str, attributes: dict[str, object]) -> Iterator[None]:
+            recorded.append((name, attributes))
+            yield None
+
+        with (
+            mock.patch.object(otel, "_record", capture),
+            Axonium(otel_enabled=True, **config_kwargs) as client,
+        ):
+            client.models.mine()
+
+        assert recorded, "no span was opened"
+        name, attributes = recorded[-1]
+        assert not [key for key in attributes if key.startswith("gen_ai.")], attributes
+        assert "models/mine" in name
+        # Still useful without the GenAI half: this is what correlates the call with the platform.
+        assert attributes["server.address"] == "gateway.test.invalid"

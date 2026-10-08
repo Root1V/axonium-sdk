@@ -576,3 +576,153 @@ class TestEveryLinkResolves:
         assert (HTML / "404.html").read_text(encoding="utf-8") != (HTML / "index.html").read_text(
             encoding="utf-8"
         )
+
+
+class TestNoPublishedPageDeniesACapabilityTheSdkHas:
+    """A front page that denies a feature is worse than one that omits it.
+
+    Measured 2026-10-07: a sentence denying that this API has any idempotency mechanism at all was
+    on the published `pypi` and
+    `pkg.go.dev` front pages, in `python/src/axonium/transport/retry.py` and `go/axonium/retry.go`
+    — **the two files whose job is to explain why a timeout is not retried** — and in a Go test's
+    header comment. All five SDKs sent `Idempotency-Key`, the error catalog carried four
+    idempotency error types, and both of those retry modules sat a few hundred lines from code
+    that read the key and retried on it. Rust's copy of the paragraph was correct, and nothing
+    could tell the three apart, because the claim was prose.
+
+    It was found the way a false sentence in a README gets found: a consumer read it and asked
+    whether to pass a key at all (Veritium, `VRT-AXO-001` question 4). That is six places and
+    eighteen days of a published page telling people not to use a feature that works.
+
+    So this asserts the **positive** claim rather than banning the old sentence. A forbidden-phrase
+    check would have been defeated by the correction itself, which quotes what it is correcting;
+    and more importantly, a page can deny a capability in words no blocklist anticipated. What
+    cannot be faked is saying the true thing.
+    """
+
+    #: Surface → the capability its retry section must not leave a reader guessing about.
+    SURFACES = (
+        "python/README.md",
+        "go/README.md",
+        "rust/README.md",
+        "python/src/axonium/transport/retry.py",
+        "go/axonium/retry.go",
+        "rust/src/retry.rs",
+    )
+
+    @pytest.mark.parametrize("surface", SURFACES, ids=lambda s: s)
+    def test_the_retry_prose_states_what_a_key_does(self, surface: str) -> None:
+        text = (REPO / surface).read_text(encoding="utf-8").lower()
+
+        # TWO checks, because the first one I wrote was the weaker-than-its-name kind this whole
+        # class is about. It asserted that "idempotency" and "timeout" appear near each other --
+        # which the FALSE paragraph also satisfied, since it denied the mechanism and ruled out
+        # retrying a timeout in consecutive sentences. Restoring the old prose left it green.
+        # Measured, which is the only reason I know.
+        for denial in self.DENIALS:
+            assert denial not in text, (
+                f"{surface} says {denial!r}, and the SDK has had an idempotency key since before "
+                f"that sentence was written. This is the exact regression this class exists for"
+            )
+
+        # Scoped to the neighbourhood of an `idempotency` mention, not the whole file. Searching
+        # the file was the second version of this test and it was ALSO weaker than its name: Go's
+        # README says "is retried" about rate limits several paragraphs away, so deleting the
+        # sentence about keys entirely left it green. Measured by deleting it.
+        windows = [
+            text[max(0, i - self.WINDOW) : i + self.WINDOW]
+            for i in range(len(text))
+            if text.startswith("idempotency", i)
+        ]
+        assert windows, f"{surface} explains the retry policy without mentioning idempotency at all"
+        assert any(
+            "timeout" in window and any(claim in window for claim in self.CLAIMS)
+            for window in windows
+        ), (
+            f"{surface} mentions idempotency but never near a statement that a key makes a "
+            f"timed-out request retryable -- the one branch a key changes and the whole reason to "
+            f"pass one. One of {self.CLAIMS} has to sit within {self.WINDOW} characters of it"
+        )
+
+    #: Phrases that assert the absence of what the SDK implements. Lowercased before matching.
+    #:
+    #: A blocklist is the weaker half of this test on purpose: it catches the regression that
+    #: actually happened and nothing more. `CLAIMS` is the half that catches a page which simply
+    #: stops mentioning the feature. Neither alone is enough -- the first version of this test was
+    #: the first half done badly, and it passed against the text it was written to forbid.
+    DENIALS = (
+        "no idempotency mechanism",
+        "no idempotency-key mechanism",
+        "idempotency is not supported",
+        "does not support idempotency",
+    )
+
+    #: How far from an `idempotency` mention the positive claim may sit. A paragraph's reach: wide
+    #: enough that the claim and the word need not share a sentence, narrow enough that prose about
+    #: something else entirely cannot satisfy it.
+    WINDOW = 500
+
+    #: A page is correct when it says the positive thing. Any one of these does it.
+    CLAIMS = (
+        "becomes retryable",
+        "is retried",
+        "retried under",
+        "changes that for timeouts",
+        "makes the repeat free",
+    )
+
+    def test_every_sdk_that_sends_the_header_has_a_test_that_it_retries_on_it(self) -> None:
+        """The prose is now checked; this checks the behaviour it describes exists to be described.
+
+        Without this the test above could be satisfied by six pages correctly describing a feature
+        that had been removed.
+        """
+        covered = {
+            "python": REPO / "python" / "tests" / "test_idempotency.py",
+            "go": REPO / "go" / "axonium" / "idempotency_test.go",
+            # Written 2026-10-07. Rust had the behaviour and no test of it, which this check found
+            # on its first run -- the branch is three tokens long and the SDK whose README
+            # described the feature correctly was the one not exercising it.
+            "rust": REPO / "rust" / "tests" / "idempotency.rs",
+        }
+
+        missing = [name for name, path in covered.items() if not path.exists()]
+        assert not missing, f"missing an idempotency test suite for: {missing}"
+
+        for name, path in covered.items():
+            text = path.read_text(encoding="utf-8").lower()
+            assert "timeout" in text, (
+                f"{name}'s idempotency suite never mentions a timeout, so the one branch a key "
+                f"changes is the one branch it does not cover"
+            )
+
+
+class TestTheClientLifetimeAdviceIsQualified:
+    """ "A client per process" was advice that breaks the shape it was written for.
+
+    It is right for a CLI and for a sync client. An async client holds a connection pool bound to
+    the event loop it was built in, so a process with an API and a worker pool — more than one
+    loop — cannot share one. Measured on Python 3.13, reusing one `AsyncAxonium` across two
+    `asyncio.run()` calls: `RuntimeError: Event loop is closed`, raised from inside asyncio, so the
+    message does not name the cause.
+
+    Found by a consumer asking whether a long-lived service was a supported shape at all
+    (Veritium, `VRT-AXO-001` question 1). The page said yes and gave a rule that would have failed
+    on their second worker.
+    """
+
+    @pytest.mark.parametrize("page", ["01-concepts.md", "es/01-concepts.md"], ids=lambda p: p)
+    def test_the_page_says_an_async_client_belongs_to_its_loop(self, page: str) -> None:
+        text = (DOCS / page).read_text(encoding="utf-8")
+
+        assert "event loop" in text or "bucle de eventos" in text, (
+            f"docs/{page} advises on client lifetime without mentioning the event loop, so a "
+            f"reader building a service with a worker pool gets a rule that breaks on their "
+            f"second loop and an error from inside asyncio that does not say why"
+        )
+        # The unqualified form is what was wrong. Caught as a phrase because the advice is a
+        # phrase, and because "per process" with the qualification nearby is exactly right.
+        for unqualified in ("a client per process, not per request", "Uno por proceso."):
+            assert unqualified not in text, (
+                f"docs/{page} gives the unqualified rule again: {unqualified!r}"
+            )
