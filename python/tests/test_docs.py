@@ -759,18 +759,23 @@ class TestNoSurfaceRecommendsTheRemedyThatCostsMoney:
         "docs/es/03-failure.md",
     )
 
-    #: The cost, in each language the surfaces are written in.
+    #: The cost, per language, and **keyed by surface rather than pooled**.
     #:
-    #: Specific phrases, not the stem. A bare `factura` was the first version and it matched
+    #: Pooling them is how this test gave a false green within the hour it was written: with the
+    #: Spanish phrases accepted everywhere, `docs/03-failure.md` passed an English-page assertion
+    #: *by having been overwritten with the Spanish page*. `AXO-163` has the full story. An
+    #: English surface must say it in English.
+    #:
+    #: Specific phrases, not the stem. A bare `factura` was the first attempt and it matched
     #: unrelated prose about a DIFFERENT error ("ya está facturada", about a timeout) sitting
     #: inside the same window, so the Spanish page survived a mutation that stripped the claim.
-    #: Measured, which is the only reason the list is this narrow.
-    COST = (
-        "second billable",
-        "segunda generación facturable",
-        "double-bill",
-        "facturaría doble",
-    )
+    #: Both narrowings are measured; neither was foreseen.
+    COST_EN = ("second billable", "double-bill")
+    COST_ES = ("segunda generación facturable", "facturaría doble")
+
+    @classmethod
+    def _cost_for(cls, surface: str) -> tuple[str, ...]:
+        return cls.COST_ES if "/es/" in surface else cls.COST_EN
 
     @pytest.mark.parametrize("surface", SURFACES, ids=lambda s: s)
     def test_the_qualification_sits_with_the_error(self, surface: str) -> None:
@@ -788,8 +793,55 @@ class TestNoSurfaceRecommendsTheRemedyThatCostsMoney:
         # made the first version of AXO-156's guard pass against the text it was written to
         # forbid: these files discuss billing in several places.
         windows = [text[max(0, i - 2200) : i + 2200] for i in positions]
-        assert any(any(cost in w for cost in self.COST) for w in windows), (
+        expected = self._cost_for(surface)
+        assert any(any(cost in w for cost in expected) for w in windows), (
             f"{surface} documents idempotency-key-reuse without saying what a fresh key costs "
             f"when the body did not change. That is the remedy the contract gives, and it is the "
             f"one that buys a duplicate generation"
+        )
+
+
+class TestAnEnglishPageIsNotTheSpanishOne:
+    """Nothing checked that an English page was in English, and one was not.
+
+    On 2026-10-08 `docs/03-failure.md` was overwritten with the contents of `docs/es/03-failure.md`
+    and shipped: committed, merged, pushed and served from the published site. The cause was a
+    backup loop in a mutation test that keyed its copies by `basename`, and the two files share one
+    — so restoring put the Spanish text at the English path.
+
+    **Three tests should have caught it and each had a reason not to:**
+
+    - The code-block identity test passed because the blocks *are* identical. That is the design.
+    - The stale-translation check **did fire**. It reported that the English source had moved, which
+      was exactly true and exactly the bug. I recomputed the digest to silence it instead of asking
+      why it had changed — the detector worked and the person reading it did not.
+    - The guard written that same hour passed because it looks for the cost of a fresh key in any
+      of four phrases, two of them Spanish so the Spanish page could satisfy it. The English page
+      satisfied an English-page assertion **by being Spanish**.
+
+    So the check here is the cheapest possible and it is the one that was missing: an English page
+    carries no translation marker, and is not byte-identical to its translation.
+    """
+
+    @pytest.mark.parametrize("page", [p.name for p in sorted(DOCS.glob("*.md"))], ids=lambda p: p)
+    def test_an_english_page_carries_no_translation_marker(self, page: str) -> None:
+        text = (DOCS / page).read_text(encoding="utf-8")
+        assert not text.startswith("<!-- translated-from:"), (
+            f"docs/{page} begins with a translated-from marker, so it is a translation sitting at "
+            f"an English path. That marker is how `docs/es/` records its source; an English page "
+            f"has no source"
+        )
+
+    @pytest.mark.parametrize(
+        "page",
+        [p.name for p in sorted(DOCS.glob("*.md")) if (DOCS / "es" / p.name).exists()],
+        ids=lambda p: p,
+    )
+    def test_an_english_page_is_not_its_own_translation(self, page: str) -> None:
+        english = (DOCS / page).read_bytes()
+        spanish = (DOCS / "es" / page).read_bytes()
+        assert english != spanish, (
+            f"docs/{page} and docs/es/{page} are byte-identical, so one of them overwrote the "
+            f"other. The pages share every code block by construction, which is why a test "
+            f"comparing only those cannot see this"
         )
