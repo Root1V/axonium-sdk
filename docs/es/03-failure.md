@@ -1,4 +1,4 @@
-<!-- translated-from: 03-failure.md sha256:298c445d87 -->
+<!-- translated-from: 03-failure.md sha256:56964b62da -->
 # Fallos, reintentos e idempotencia
 
 > **¿Cuándo es seguro volver a intentarlo?**
