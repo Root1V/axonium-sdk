@@ -9,6 +9,17 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 Nothing yet.
 
+### 0.2.4 — 2026-10-08
+
+**`IdempotencyKeyReuseError` had no documentation; it now has the part that costs money.** The
+gateway fingerprints its own parsed request model **including defaults**, not the bytes you sent, so
+`PRM-235` adding two optional fields invalidated every key stored before that deploy and a
+byte-identical resend got the 409 — measured by Veritium on 2026-10-08. So a fresh key, when the
+body did not change, buys a second billable generation for work the first request may already have
+finished. Both causes are documented, and the remedy is conditional.
+
+No API changes.
+
 ### 0.2.3 — 2026-10-06
 
 Re-vendored at `2026-10-06b · PRM-195/196/197`, and it answers the question `A-40` asked.
@@ -482,6 +493,46 @@ is a real conflict rather than a tuning question and is written down as one.
 ### Unreleased
 
 Nothing yet.
+
+### 1.0.0rc10 — 2026-10-08
+
+**`gen_ai.system` is gone; it was deprecated.** Spans now carry `gen_ai.provider.name` and
+`gen_ai.operation.name`, and are named `{operation} {model}` — `chat qwen3-0.6b` — which is the
+convention's rule. `server.address` goes on too, because that is what the convention names as
+identifying the actual system behind an OpenAI-compatible endpoint, and `gen_ai.provider.name`
+cannot: no response header carries the engine, measured over all eleven we read, so a client that
+named one would be guessing. Requested by Veritium as `VRT-AXO-002` with Argus's
+`argus-obs-semconv` suite as the external verifier.
+
+**Breaking for anyone keying on the old attribute or the old span name.** Spans were
+`axonium POST /v1/chat/completions`; they are now `chat <model>`. And **`/v1/models` and
+`/v1/models/mine` no longer carry `gen_ai.*` at all** — they used to carry `gen_ai.system` and a
+null model, so a scope lookup appeared in GenAI aggregations as an inference call that somehow used
+no tokens.
+
+**Two corrections to documentation that was telling you the wrong thing.**
+
+`IdempotencyKeyReuseError` said the key *"was already used for a different request"* and to *"use a
+fresh key per logical request"*, copied from the contract. Veritium measured on 2026-10-08 that the
+gateway fingerprints its own parsed request model **including defaults**, not what you sent, so
+`PRM-235` adding two optional fields invalidated every key stored before that deploy and a
+byte-identical resend got the 409. **A fresh key there buys a second billable generation** for work
+the first request may already have finished. Both causes and the cost are now documented, and the
+remedy is conditional. No SDK retries this or recovers from it with a new key, deliberately: in the
+genuine-misuse case that would double-bill in silence.
+
+And the retry policy's own module said, in bold, that *this API has no idempotency-key mechanism* —
+in the file whose job is to explain why a timeout is not retried, three modules from the code that
+reads the key and retries on it. It was on the PyPI front page for eighteen days. An
+`idempotency_key` makes a timed-out request retryable; that is the one branch it changes, and the
+README now says so.
+
+**`docs/01-concepts.md`: an async client belongs to the event loop it was built in.** The page said
+"a client per process", which is right for a CLI and wrong for a service with an API and a worker
+pool. Reusing one across two `asyncio.run()` calls raises `RuntimeError: Event loop is closed`, from
+inside asyncio, naming nothing.
+
+No API changes.
 
 ### 1.0.0rc9 — 2026-10-06
 
@@ -1470,6 +1521,32 @@ which spoke to a platform generation that no longer exists.
 
 Nothing yet.
 
+### 0.6.3 — 2026-10-08
+
+**`gen_ai.system` is gone; it was deprecated.** Spans now carry `gen_ai.provider.name` and
+`gen_ai.operation.name`, plus `http.request.method`, `url.path` and `server.address`, and are named
+`{operation} {model}` — `chat qwen3-0.6b` — which is the convention's rule. `server.address` is
+there because `gen_ai.provider.name` cannot name the engine from a client: no response header
+carries it, measured over all eleven we read.
+
+**Breaking for anyone keying on the old attribute or the old span name**, which was
+`chat.completions`. And `/v1/models` and `/v1/models/mine` no longer carry `gen_ai.*` at all — they
+used to carry `gen_ai.system` and an empty model, so a scope lookup appeared in GenAI aggregations
+as an inference call that used no tokens.
+
+**`ErrIdempotencyKeyReuse` documented the remedy that costs money.** It said the key *"was already
+used for a different request"* and to *"use a fresh key"*. Veritium measured on 2026-10-08 that the
+gateway fingerprints its own parsed request model including defaults, not what you sent, so
+`PRM-235` adding two optional fields invalidated every key stored before that deploy — and a fresh
+key, when the body did not change, buys a second billable generation for work the first request may
+already have finished. Both causes and the cost are now documented.
+
+**And the README said this API has no idempotency mechanism.** It was on the pkg.go.dev front page
+for eighteen days, while `transport.go` retried a timed-out request under a key. Corrected, with
+what a key actually changes.
+
+No API changes.
+
 ### 0.6.2 — 2026-10-06
 
 Re-vendored at `2026-10-06b · PRM-195/196/197`, and it answers the question `A-40` asked.
@@ -2335,6 +2412,29 @@ No third-party dependencies: standard library only.
 ### Unreleased
 
 Nothing yet.
+
+### 0.6.3 — 2026-10-08
+
+**`gen_ai.system` is gone; it was deprecated.** Spans now carry `gen_ai.provider.name` and
+`gen_ai.operation.name`, plus `url.path` and `server.address`, and `otel.name` is
+`{operation} {model}` — `chat qwen3-0.6b` — which is the convention's rule. `server.address` is
+there because `gen_ai.provider.name` cannot name the engine from a client: no response header
+carries it.
+
+**Breaking for anyone keying on the old attribute or the old span name.** And `/v1/models` and
+`/v1/models/mine` no longer carry `gen_ai.*` at all.
+
+**`ErrorKind::IdempotencyKeyReuse` now documents both causes and the cost.** The gateway
+fingerprints its own parsed request model including defaults, not what you sent, so an additive
+change to that model invalidates every key stored before it — measured by Veritium on 2026-10-08
+after `PRM-235`. A fresh key, when the body did not change, buys a second billable generation.
+
+**`tests/idempotency.rs` is new, and it exists because the behaviour did not have a test.** A
+timeout is retried only under an idempotency key — three tokens of condition in `client.rs`, in the
+SDK whose README described the feature correctly, and nothing exercised it. Two tests, the pair
+differing only by the key, with the negative control measured.
+
+No API changes.
 
 ### 0.6.2 — 2026-10-06
 
