@@ -31,7 +31,7 @@ equivalent.
 
 | Language | Install | Version |
 |---|---|---|
-| Python | `pip install axonium` | [`1.0.0rc6`](https://pypi.org/project/axonium/) on PyPI — `1.0.0rc9` is tagged and rehearsed |
+| Python | `pip install axonium` | [`1.0.0rc9`](https://pypi.org/project/axonium/) on PyPI |
 | Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.2` | `v0.6.2` |
 | Rust | `axonium = "0.6"` | [`0.6.2`](https://crates.io/crates/axonium) on crates.io |
 | Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.2")` | [`0.3.2`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
@@ -39,10 +39,13 @@ equivalent.
 
 All five are published and implement the same surface.
 
-> `python/v1.0.0rc8` is tagged but not on PyPI: its release gate requires the version to have been
-> rehearsed on TestPyPI first, and TestPyPI has been answering `503` — including for `1.0.0rc6`,
-> which *was* rehearsed. The gate reported that it **could not tell** rather than that the rehearsal
-> was missing, which is the distinction it was written for. It publishes when TestPyPI answers. Python was built first as the reference
+Every version above was read back from its own registry on 2026-10-08, not from a release log:
+`pypi`, `crates.io`, `npm` and the Go module proxy each confirm the number next to it. The row that
+made this worth doing said PyPI had `1.0.0rc6` with `1.0.0rc9` *"tagged and rehearsed"* — `rc9` had
+been on PyPI for two days. `python/v1.0.0rc8` is tagged and will never publish: its gate requires a
+TestPyPI rehearsal and TestPyPI was answering `503` at the time, so `rc9` superseded it.
+
+Python was built first as the reference
 implementation; every behaviour they share is pinned by the contract corpus in
 [`spec/`](https://github.com/Root1V/axonium-sdk/tree/main/spec) — one manifest, one set of recorded
 wire bytes, four runners here that share no code and a fifth in Swift's repository, which vendors
