@@ -168,9 +168,9 @@
     {
       "status": 409,
       "suffix": "idempotency-key-reuse",
-      "meaning": "The same key was already used for a different request. The fingerprint covers path and body, so a different endpoint counts as a different request.",
+      "meaning": "The gateway's fingerprint for this key does not match the one it stored. Usually that means the same key was sent with a different request -- the fingerprint covers the path as well as the payload, so a different endpoint counts. But it can also happen with a byte-identical request, because the fingerprint is taken over the GATEWAY's parsed request model including its defaults, not over what the client sent.",
       "retryable": false,
-      "$comment": "Never retried: the caller must use a fresh key per logical request. Retrying cannot help. Documented in the platform's answers of 2026-09-12; NOT yet verified against a deployment, which was down when this landed."
+      "$comment": "The previous version of this entry said only 'the caller must use a fresh key per logical request', and carried an honest admission that it had never been verified against a deployment. It has now, by Veritium on 2026-10-08, and the documentation was wrong in the direction that costs money. PRM-235 added two optional fields (`user`, `safety_identifier`, both defaulting to None) to the gateway's chat request model. The fingerprint is computed over `body.model_dump()`, so from that deploy every key stored before it stopped matching -- and a client resending the IDENTICAL request got this error. The guide's own remedy, 'resend the original request unchanged', is exactly what fails. SO THE REMEDY IS NOT UNCONDITIONAL: a fresh key when the body genuinely did not change buys a SECOND BILLABLE GENERATION for work the first request may already have completed, which is the precise harm the key exists to prevent. Still never retried by any SDK -- retrying the same key cannot help -- and deliberately never auto-recovered with a new key, because in the genuine-misuse case that would double-bill silently. Veritium asked the platform to fingerprint what the client sent (VRT-PRM-004); until that lands, any additive change to a gateway request model invalidates every key in flight."
     },
     {
       "status": 409,

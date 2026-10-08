@@ -413,10 +413,26 @@ class InvalidIdempotencyKeyError(BadRequestError):
 
 
 class IdempotencyKeyReuseError(APIError):
-    """The key was already used for a different request.
+    """The gateway's fingerprint for this key does not match the one it stored.
 
-    The fingerprint covers the path as well as the body, so the same key on another endpoint
-    counts as a different request. Never retryable: use a fresh key per logical request.
+    Usually that means the key was sent with a different request — the fingerprint covers the path
+    as well as the payload, so the same key on another endpoint counts.
+
+    **But it also happens with a byte-identical request, and the remedy differs.** The fingerprint
+    is taken over the *gateway's* parsed request model including its defaults, not over what the
+    client sent, so an additive change to that model invalidates every key stored before it.
+    Measured by Veritium on 2026-10-08: ``PRM-235`` added two optional fields defaulting to
+    ``None``, and from that deploy a client resending the identical request got this error. The
+    contract's own remedy — *"resend the original request unchanged"* — is exactly what fails.
+
+    So **do not mint a fresh key reflexively**. Check first whether the body genuinely changed. If
+    it did not, a new key buys a **second billable generation** for work the first request may
+    already have finished, which is the precise harm a key exists to prevent; wait out the window
+    instead. If it did, a fresh key is correct and this error was doing its job.
+
+    Never retryable, and deliberately never auto-recovered with a new key: in the
+    genuine-misuse case that would double-bill in silence. ``VRT-PRM-004`` asks the platform to
+    fingerprint what the client sent.
     """
 
     type_suffix = "idempotency-key-reuse"

@@ -1,4 +1,4 @@
-<!-- translated-from: 03-failure.md sha256:7e6d75e168 -->
+<!-- translated-from: 03-failure.md sha256:298c445d87 -->
 # Fallos, reintentos e idempotencia
 
 > **¿Cuándo es seguro volver a intentarlo?**
@@ -196,7 +196,7 @@ que el SDK lo espera por ti y devuelve el resultado almacenado cuando la origina
 |---|---|---|
 | la primera **terminó** | el resultado almacenado | lo devuelve — ningún modelo alcanzado, ningún uso registrado, nada contra el tope de gasto |
 | la primera **sigue corriendo** | `409 idempotency-in-progress` | lo reintenta, hasta que la original acaba |
-| misma clave, **cuerpo distinto** | `409 idempotency-key-reuse` | lanza; la huella cubre ruta y cuerpo |
+| misma clave, una huella que **no coincide** | `409 idempotency-key-reuse` | lanza; ver abajo — un cuerpo distinto es la causa habitual, no la única |
 
 Así que con clave un reintento no es una apuesta: o recoge el resultado o lo espera. Dos bordes que
 conviene conocer:
@@ -204,6 +204,24 @@ conviene conocer:
 Las claves están limitadas a 255 caracteres y el SDK lo comprueba antes de enviar — el gateway
 reporta una clave demasiado larga como un *conflicto*, lo que apunta la investigación en la dirección
 equivocada.
+
+**Un `409 idempotency-key-reuse` no siempre significa que reusaste la clave.** La huella se toma
+sobre el modelo de petición **del gateway, con sus defaults**, no sobre los bytes que mandaste, así
+que un cambio aditivo a ese modelo invalida todas las claves guardadas antes. Veritium lo midió el
+2026-10-08: `PRM-235` agregó dos campos opcionales con default nulo, y desde ese despliegue un
+cliente que reenviaba una petición byte a byte idéntica recibía este error. El remedio que dice el
+propio contrato —*reenvía la petición original sin cambios*— es exactamente lo que falla.
+
+Así que **no acuñes una clave nueva por reflejo.** Comprueba si el cuerpo cambió de verdad:
+
+- **Cambió** — una clave nueva es lo correcto, y el error estaba haciendo su trabajo.
+- **No cambió** — una clave nueva compra una **segunda generación facturable** por un trabajo que
+  la primera petición puede haber terminado ya, que es justo el daño que una clave existe para
+  evitar. Espera a que pase la ventana.
+
+Ningún SDK reintenta este error, y ninguno se recupera de él acuñando una clave nueva, a propósito:
+en el caso de mal uso real eso facturaría doble en silencio. Se ha pedido a la plataforma que tome
+la huella sobre lo que envía el cliente (`VRT-PRM-004`).
 
 `409 idempotency-response-not-retained` significa que la original tuvo éxito pero su respuesta pasó
 del tope de retención de **1 MiB**, así que nunca se guardó. Se generó y se facturó; simplemente no

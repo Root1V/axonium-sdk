@@ -1,84 +1,86 @@
-# Failure, retries and idempotency
+<!-- translated-from: 03-failure.md sha256:56964b62da -->
+# Fallos, reintentos e idempotencia
 
-> **When is it safe to try again?**
+> **¿Cuándo es seguro volver a intentarlo?**
 
-This is the page worth reading. Everything else here is convenience; this is the part that is
-expensive to get right and costs real money to get wrong.
+Esta es la página que merece leerse. Todo lo demás aquí es comodidad; esta es la parte cara de
+acertar y que cuesta dinero de verdad equivocar.
 
-## The rule
+## La regla
 
-**A retry is attempted only where the platform states that no generation occurred.**
+**Solo se reintenta donde la plataforma afirma que no hubo generación.**
 
-That is a short sentence hiding the whole problem. An inference request that fails after the model
-started producing tokens has already been billed. Retrying it does not resume anything — it queues
-a second generation and you pay twice. So the SDKs do not retry on "it failed"; they retry on a
-specific list of failures the gateway documents as having fast-failed before reaching a model:
+Es una frase corta que esconde el problema entero. Una petición de inferencia que falla después de
+que el modelo empezara a producir tokens ya está facturada. Reintentarla no reanuda nada — encola una
+segunda generación y pagas dos veces. Así que los SDK no reintentan ante «falló»; reintentan ante una
+lista concreta de fallos que el gateway documenta como fallo rápido antes de llegar a un modelo:
 
-| Retried | Why it is safe |
+| Se reintenta | Por qué es seguro |
 |---|---|
-| `429 rate-limit-exceeded-requests` | Refused at the door |
-| `503 backend-unavailable` | The circuit breaker was open; nothing was dispatched |
-| `503 rate-limiting-unavailable` | The limiter's store was down; refused fail-closed |
-| `503 usage-store-unavailable` | Refused before dispatch |
+| `429 rate-limit-exceeded-requests` | Rechazado en la puerta |
+| `503 backend-unavailable` | El cortacircuitos estaba abierto; no se despachó nada |
+| `503 rate-limiting-unavailable` | El almacén del limitador estaba caído; rechazo fail-closed |
+| `503 usage-store-unavailable` | Rechazado antes de despachar |
 
-Everything else raises. A `502 upstream-error` is **not** retried by default: it means the
-gateway's own attempts already failed, so a client retry is a fourth attempt at something that
-failed three times. You can opt in (`retry_upstream_errors`), and even then it is capped at one
-extra attempt regardless of `max_attempts`.
+Todo lo demás lanza. Un `502 upstream-error` **no** se reintenta por defecto: significa que los
+intentos del propio gateway ya fallaron, así que un reintento del cliente es un cuarto intento de
+algo que falló tres veces. Puedes activarlo (`retry_upstream_errors`), y aun así queda limitado a un
+intento extra sin importar `max_attempts`.
 
-**A client-side timeout is never retried by default either**, and that one surprises people. The
-backend is probably still generating. The error message says so rather than leaving you to work it
-out.
+**Un timeout de cliente tampoco se reintenta nunca por defecto**, y ese sorprende. El backend
+probablemente sigue generando. El mensaje de error lo dice en vez de dejarte deducirlo.
 
-### A stream fails in two ways, and only one is retried
+### Un stream falla de dos maneras, y solo una se reintenta
 
-The rule above decides this too, but a stream makes the two halves look alike when they are not.
+La regla de arriba decide esto también, pero un stream hace que las dos mitades parezcan iguales
+cuando no lo son.
 
-**Rejected before the stream begins → retried.** The gateway opens the connection to the engine and
-reads its status *before* the `200`/`text/event-stream` headers exist, so a refusal comes back as an
-ordinary error response — the same status and body the non-streaming form of the endpoint returns.
-Nothing was generated and nothing was billed, so reopening is a first generation rather than a
-second, and it goes through the table above unchanged, `Retry-After` included. It is also the only
-retry there is: **the gateway performs no internal retries on a streamed request**, so a `503
-backend-unavailable` reaches you after one attempt rather than three. The backoff does not change;
-the time you waited before seeing it does.
+**Rechazado antes de que el stream empiece → se reintenta.** El gateway abre la conexión al motor y
+lee su status *antes* de que existan las cabeceras `200`/`text/event-stream`, así que un rechazo
+vuelve como una respuesta de error normal — el mismo status y cuerpo que devuelve la forma
+no-streaming del endpoint. No se generó nada y no se facturó nada, así que reabrir es una primera
+generación y no una segunda, y pasa por la tabla de arriba sin cambios, `Retry-After` incluido. Es
+además el único reintento que hay: **el gateway no hace reintentos internos en una petición
+streamed**, así que un `503 backend-unavailable` te llega tras un intento en vez de tres. El backoff
+no cambia; lo que cambia es el tiempo que esperaste antes de verlo.
 
-**Failed after the stream began → never retried.** Once one chunk exists the headers are committed,
-so the failure arrives in band instead, as a chunk carrying `error`. Part of the answer was delivered
-and part was billed, so a repeat is a fresh generation rather than a resumption. The SDK raises with
-the partial text attached and lets you decide, because only you know what the partial output was used
-for.
+**Falló después de que el stream empezara → nunca se reintenta.** En cuanto existe un chunk las
+cabeceras están comprometidas, así que el fallo llega en banda, como un chunk que lleva `error`.
+Parte de la respuesta se entregó y parte se facturó, así que repetir es una generación nueva y no una
+reanudación. El SDK lanza con el texto parcial adjunto y te deja decidir, porque solo tú sabes para
+qué se usó esa salida parcial.
 
-An `Idempotency-Key` does not change either half. On a stream it replays one the gateway *finished*
-and whose delivery your connection dropped — never one the model itself broke.
+Una `Idempotency-Key` no cambia ninguna de las dos mitades. En un stream repite uno que el gateway
+*terminó* y cuya entrega se cortó por tu conexión — nunca uno que el propio modelo rompió.
 
-> Until 2026-09-27 the first half could not be expressed at all: a stream rejected before it began
-> arrived as a `200` whose body was nothing but `data: [DONE]`, indistinguishable from a legitimately
-> empty answer. There was no visible rejection to retry. The platform now returns the engine's real
-> status.
+> Hasta el 27/09/2026 la primera mitad no se podía expresar en absoluto: un stream rechazado antes de
+> empezar llegaba como un `200` cuyo cuerpo era solo `data: [DONE]`, indistinguible de una respuesta
+> legítimamente vacía. No había rechazo visible que reintentar. La plataforma ya devuelve el status
+> real del motor.
 
-## Waiting
+## Esperar
 
-When the gateway sends `Retry-After`, the SDK uses it. It is server-supplied and authoritative: for
-an open circuit breaker it is the real expected recovery time, which no local heuristic improves
-on.
+Cuando el gateway manda `Retry-After`, el SDK lo usa. Lo da el servidor y es autoritativo: para un
+cortacircuitos abierto es el tiempo real esperado de recuperación, que ninguna heurística local
+mejora.
 
-With one exception. **A wait longer than `max_backoff` is handed back rather than slept through**,
-because blocking a caller for minutes inside one call is worse than telling them. The error carries
-`retry_after`, so you can schedule the work yourself.
+Con una excepción. **Una espera más larga que `max_backoff` se devuelve en vez de dormirse**, porque
+bloquear a un llamante durante minutos dentro de una llamada es peor que decírselo. El error lleva
+`retry_after`, así que puedes planificar el trabajo tú.
 
-Without a `Retry-After`, exponential backoff with jitter — jitter so that callers recovering from
-one outage do not resynchronise into a second one.
+Sin `Retry-After`, backoff exponencial con jitter — jitter para que los llamantes que se recuperan de
+una caída no se resincronicen provocando una segunda.
 
-### A wait is not a hang
+### Una espera no es un cuelgue
 
-`Retry-After` on a `429` is seconds until the window resets, so it runs 0–60. An SDK that respects
-it looks, from outside, like one slow call among fast ones. That has now been filed as a hang three
-times by three different teams.
+El `Retry-After` de un `429` son segundos hasta que se reinicia la ventana, así que va de 0 a 60. Un
+SDK que lo respeta parece, desde fuera, una llamada lenta entre llamadas rápidas. Eso ya se ha
+reportado como cuelgue tres veces, por tres equipos distintos.
 
-So the wait is reported twice. Once in the log, at `INFO` when it is long enough for a person to
-notice — sub-second backoff stays at `DEBUG`, because the noise worry is frequent small retries,
-not the rare long one. And once as **data on the response**:
+Así que la espera se reporta dos veces. Una en el log, a nivel `INFO` cuando es larga como para que
+una persona lo note — el backoff de menos de un segundo se queda en `DEBUG`, porque la preocupación
+por ruido son los reintentos pequeños y frecuentes, no el raro largo. Y otra como **dato en la
+respuesta**:
 
 ```python
 completion = client.chat.completions.create(model="qwen3-0.6b", messages=[...])
@@ -115,16 +117,17 @@ completion.meta.waitedMs; // 36000
 completion.meta.attempts; // 2
 ```
 
-Use the second. A log line is invisible unless the application configured a handler for it — the
-SDKs install a `NullHandler` and do not touch your logging — and a latency dashboard cannot read
-one anyway.
+Usa el segundo. Una línea de log es invisible salvo que la aplicación haya configurado un handler
+—los SDK instalan un `NullHandler` y no tocan tu logging— y un panel de latencia no sabe leerla de
+todas formas.
 
-> **Known limit, in four of the five.** A call that waited and then failed *anyway* reports none of
-> this in Python, Go, Rust or Swift: the exception carries no response metadata. That is the call
-> whose duration most needs explaining, and it is on the roadmap rather than done.
+> **Límite conocido, en cuatro de los cinco.** Una llamada que esperó y después falló *igualmente* no
+> reporta nada de esto en Python, Go, Rust ni Swift: la excepción no lleva metadatos de respuesta. Esa
+> es la llamada cuya duración más necesita explicación, y está en el roadmap en vez de hecha.
 >
-> **TypeScript answers it**, because its errors already carry `meta` — so the counters are stamped
-> on before the error leaves, and `error.meta.waitedMs` says how long a failed call spent asleep:
+> **TypeScript sí lo contesta**, porque sus errores ya llevan `meta` — así que los contadores se
+> estampan antes de que el error salga, y `error.meta.waitedMs` dice cuánto durmió una llamada que
+> falló:
 >
 > ```typescript
 > catch (error) {
@@ -134,10 +137,10 @@ one anyway.
 > }
 > ```
 
-## Idempotency
+## Idempotencia
 
-An `Idempotency-Key` changes what is safe, and it is the only thing that makes a timed-out request
-retryable:
+Una `Idempotency-Key` cambia lo que es seguro, y es lo único que hace reintentable una petición que
+dio timeout:
 
 ```python
 completion = client.chat.completions.create(
@@ -179,33 +182,52 @@ const completion = await client.chat.completions.create(
 );
 ```
 
-With a key, a repeat returns the **stored** result: no model is reached, no usage is recorded,
-nothing counts against the spend cap. So the retry costs a round trip instead of a generation, and
-the timeout objection disappears. Without a key the old rule stands, because nothing about the
-danger has changed.
+Con clave, una repetición devuelve el resultado **almacenado**: no se alcanza ningún modelo, no se
+registra uso, nada cuenta contra el tope de gasto. Así que el reintento cuesta un viaje de ida y
+vuelta en vez de una generación, y la objeción del timeout desaparece. Sin clave sigue en pie la
+regla antigua, porque nada del peligro ha cambiado.
 
-**And the case that makes a key worth sending on every long call**: a retry while the first request
-is *still running* is not a failure and not a second generation. The gateway answers
-`409 idempotency-in-progress`, which is the **only `409` in the catalog marked retryable**, so the
-SDK waits it out on your behalf and returns the stored result when the original finishes.
+**Y el caso que hace que merezca la pena mandar clave en toda llamada larga**: un reintento mientras
+la primera petición *sigue corriendo* no es un fallo ni una segunda generación. El gateway contesta
+`409 idempotency-in-progress`, que es el **único `409` del catálogo marcado como reintentable**, así
+que el SDK lo espera por ti y devuelve el resultado almacenado cuando la original termina.
 
-| on retry | the gateway answers | what the SDK does |
+| al reintentar | el gateway contesta | qué hace el SDK |
 |---|---|---|
-| the first one **finished** | the stored result | returns it — no model reached, no usage recorded, nothing against the spend cap |
-| the first one **is still running** | `409 idempotency-in-progress` | retries it, until the original finishes |
-| same key, **different body** | `409 idempotency-key-reuse` | raises; the fingerprint covers path and body |
+| la primera **terminó** | el resultado almacenado | lo devuelve — ningún modelo alcanzado, ningún uso registrado, nada contra el tope de gasto |
+| la primera **sigue corriendo** | `409 idempotency-in-progress` | lo reintenta, hasta que la original acaba |
+| misma clave, una huella que **no coincide** | `409 idempotency-key-reuse` | lanza; ver abajo — un cuerpo distinto es la causa habitual, no la única |
 
-So with a key a retry is not a gamble: it either collects the result or waits for it. Two edges worth
-knowing:
+Así que con clave un reintento no es una apuesta: o recoge el resultado o lo espera. Dos bordes que
+conviene conocer:
 
-Keys are capped at 255 characters and the SDK checks that before sending — the gateway reports an
-over-length key as a *conflict*, which points the investigation in the wrong direction.
+Las claves están limitadas a 255 caracteres y el SDK lo comprueba antes de enviar — el gateway
+reporta una clave demasiado larga como un *conflicto*, lo que apunta la investigación en la dirección
+equivocada.
 
-`409 idempotency-response-not-retained` means the original succeeded but its response exceeded the
-**1 MiB** retention cap, so it was never stored. It was generated and billed; there is simply nothing
-to replay. Long generations reach this.
+**Un `409 idempotency-key-reuse` no siempre significa que reusaste la clave.** La huella se toma
+sobre el modelo de petición **del gateway, con sus defaults**, no sobre los bytes que mandaste, así
+que un cambio aditivo a ese modelo invalida todas las claves guardadas antes. Veritium lo midió el
+2026-10-08: `PRM-235` agregó dos campos opcionales con default nulo, y desde ese despliegue un
+cliente que reenviaba una petición byte a byte idéntica recibía este error. El remedio que dice el
+propio contrato —*reenvía la petición original sin cambios*— es exactamente lo que falla.
 
-### Telling a replay apart from a generation
+Así que **no acuñes una clave nueva por reflejo.** Comprueba si el cuerpo cambió de verdad:
+
+- **Cambió** — una clave nueva es lo correcto, y el error estaba haciendo su trabajo.
+- **No cambió** — una clave nueva compra una **segunda generación facturable** por un trabajo que
+  la primera petición puede haber terminado ya, que es justo el daño que una clave existe para
+  evitar. Espera a que pase la ventana.
+
+Ningún SDK reintenta este error, y ninguno se recupera de él acuñando una clave nueva, a propósito:
+en el caso de mal uso real eso facturaría doble en silencio. Se ha pedido a la plataforma que tome
+la huella sobre lo que envía el cliente (`VRT-PRM-004`).
+
+`409 idempotency-response-not-retained` significa que la original tuvo éxito pero su respuesta pasó
+del tope de retención de **1 MiB**, así que nunca se guardó. Se generó y se facturó; simplemente no
+hay nada que repetir. Las generaciones largas llegan a esto.
+
+### Distinguir una repetición de una generación
 
 ```python
 if completion.meta.idempotent_replay:
@@ -237,46 +259,46 @@ if (completion.meta.idempotentReplay) {
 }
 ```
 
-A replay carries its **own** `request_id`, and that id has no usage row — looking it up returns
-`404`, correctly, because replaying reached no model and was not billed.
-`idempotent_replay_of` is the id of the generation that *was* billed, and the only route from the
-response you received to the charge it corresponds to.
+Una repetición lleva su **propio** `request_id`, y ese id no tiene fila de uso — buscarlo devuelve
+`404`, correctamente, porque repetir no alcanzó ningún modelo y no se facturó.
+`idempotent_replay_of` es el id de la generación que **sí** se facturó, y la única ruta desde la
+respuesta que recibiste hasta el cargo que le corresponde.
 
-If you reconcile usage from response ids, you need this field. Without it an audit starting from a
-replay's id finds nothing **and cannot tell why**.
+Si concilias uso a partir de ids de respuesta, necesitas este campo. Sin él, una auditoría que
+empieza en el id de una repetición no encuentra nada **y no puede decir por qué**.
 
-### A key is not known to be released by a failure
+### No se sabe si un fallo libera la clave
 
-Everything above describes what a key can **replay**. It deliberately says nothing about what
-happens to the key when the first request *fails*, because we do not know, and the difference
-matters to anyone whose key is derived rather than random.
+Todo lo de arriba describe lo que una clave puede **repetir**. Deliberadamente no dice nada sobre qué
+le pasa a la clave cuando la primera petición *falla*, porque no lo sabemos, y la diferencia importa
+a quien derive sus claves en vez de generarlas al azar.
 
-A consumer running deterministic keys — `(run_id, step_id, body-fingerprint)`, so that resuming
-reproduces instead of paying twice — reported that a step which failed once kept returning the
-stored error for the whole 24-hour window, in milliseconds, so their retries never reached a model
-again. We could not reproduce it against our deployment with the failures we can produce
-(`400 unknown-instance`): the key was still usable afterwards, and a second call with a different
-body succeeded rather than being refused. Their case was a `5xx`, which we cannot force.
+Un consumidor con claves deterministas — `(run_id, step_id, huella-del-cuerpo)`, para que reanudar
+reproduzca en vez de pagar dos veces — reportó que un paso que falló una vez siguió devolviendo el
+error almacenado durante toda la ventana de 24 horas, en milisegundos, así que sus reintentos no
+volvieron a alcanzar un modelo. No pudimos reproducirlo contra nuestro despliegue con los fallos que
+sabemos provocar (`400 unknown-instance`): la clave seguía usable después, y una segunda llamada con
+otro cuerpo tuvo éxito en vez de ser rechazada. Su caso era un `5xx`, que no podemos forzar.
 
-So the honest statement is: **whether a failed request holds its key is undefined here**, it is
-decided by the gateway and not by this SDK, and it is being asked. Until it is answered, treat a
-derived key whose request failed as possibly unusable for the rest of the window, and note that a
-stored error arrives without `Idempotent-Replay`, so it is indistinguishable from a fresh one.
+Así que la afirmación honesta es: **si una petición fallida retiene su clave es indefinido aquí**, lo
+decide el gateway y no este SDK, y está preguntado. Hasta que se conteste, trata una clave derivada
+cuya petición falló como posiblemente inusable el resto de la ventana, y ten en cuenta que un error
+almacenado llega sin `Idempotent-Replay`, así que es indistinguible de uno nuevo.
 
-## Cooldowns
+## Enfriamientos
 
-The gateway runs its own circuit breaker per backend, so the SDKs do not add a second one — it
-would open on signals the server already counted, with worse information.
+El gateway corre su propio cortacircuitos por backend, así que los SDK no añaden un segundo — se
+abriría con señales que el servidor ya contó, y con peor información.
 
-What is left uncovered is what the gateway cannot report: the gateway itself being unreachable. For
-that there is a small cooldown registry keyed by `(host, model)`. When a `503` arrives with a
-`Retry-After`, further calls to that model fail locally until it expires, rather than spending a
-request to be told the same thing. The error says so explicitly, so a fast local failure is not
-mistaken for a real gateway answer.
+Lo que queda sin cubrir es lo que el gateway no puede reportar: que el propio gateway sea
+inalcanzable. Para eso hay un pequeño registro de enfriamiento indexado por `(host, modelo)`. Cuando
+llega un `503` con `Retry-After`, las llamadas siguientes a ese modelo fallan en local hasta que
+expira, en vez de gastar una petición para que te digan lo mismo. El error lo dice explícitamente,
+para que un fallo local rápido no se confunda con una respuesta real del gateway.
 
-The cooldown is scoped to the model, not the host: one unavailable backend does not stop the rest.
+El enfriamiento es por modelo, no por host: un backend caído no detiene el resto.
 
-## Catching things
+## Capturar cosas
 
 ```python
 from axonium import RateLimitError, SpendCapExceededError, APIError
@@ -333,10 +355,8 @@ try {
 }
 ```
 
-Every error carries `request_id`, and `trace_id` too on a current deployment. The rate-limit
-envelope used to omit `trace_id`; since guide `2026-09-19b` that envelope is a strict superset of
-the standard one, so both ids are there. The SDKs still model `trace_id` as optional, because a
-deployment predating that fix omits it. Those two ids are what
-a platform team needs; an error report without them is a description of a feeling.
-
-Next: [Configuration and transport](04-configuration.md).
+Cada error lleva `request_id`, y también `trace_id` en un despliegue actual. El sobre de rate-limit
+llegó a omitir `trace_id`; desde la guía `2026-09-19b` ese sobre es un superconjunto estricto del
+estándar, así que los dos ids están. Los SDK siguen modelando `trace_id` como opcional, porque un
+despliegue anterior a ese arreglo lo omite. Esos dos ids son lo que necesita un equipo de plataforma;
+un reporte de error sin ellos es la descripción de una sensación.

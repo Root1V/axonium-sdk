@@ -103,8 +103,22 @@ var (
 	// rather than a conflict, because it never conflicted with anything. The SDK checks the length
 	// before sending, so this usually surfaces as ErrInvalidRequest instead.
 	ErrInvalidIdempotencyKey = errors.New("axonium: invalid-idempotency-key")
-	// ErrIdempotencyKeyReuse means the key was already used for a different request. The
-	// fingerprint covers path as well as body, so another endpoint counts. Use a fresh key.
+	// ErrIdempotencyKeyReuse means the gateway's fingerprint for this key does not match the one
+	// it stored. Usually the key was sent with a different request -- the fingerprint covers path
+	// as well as payload, so another endpoint counts.
+	//
+	// But it also happens with a byte-identical request, and then the remedy differs. The
+	// fingerprint is taken over the GATEWAY's parsed request model including its defaults, not
+	// over what the client sent, so an additive change to that model invalidates every key stored
+	// before it. Measured by Veritium on 2026-10-08: PRM-235 added two optional fields defaulting
+	// to nil, and from that deploy a client resending the identical request got this error. The
+	// contract's own remedy -- "resend the original request unchanged" -- is exactly what fails.
+	//
+	// So do NOT mint a fresh key reflexively. If the body genuinely did not change, a new key buys
+	// a SECOND BILLABLE GENERATION for work the first request may already have finished, which is
+	// the precise harm a key exists to prevent; wait out the window instead. Never retried, and
+	// deliberately never auto-recovered with a new key: in the genuine-misuse case that would
+	// double-bill in silence.
 	ErrIdempotencyKeyReuse = errors.New("axonium: idempotency-key-reuse")
 	// ErrIdempotencyInProgress means the first request with this key is still running. The only
 	// one worth retrying, and the only one carrying Retry-After.

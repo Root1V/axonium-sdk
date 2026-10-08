@@ -335,9 +335,9 @@ que el SDK lo espera por ti y devuelve el resultado almacenado cuando la origina
 <td>lo reintenta, hasta que la original acaba</td>
 </tr>
 <tr>
-<td>misma clave, <strong>cuerpo distinto</strong></td>
+<td>misma clave, una huella que <strong>no coincide</strong></td>
 <td><code>409 idempotency-key-reuse</code></td>
-<td>lanza; la huella cubre ruta y cuerpo</td>
+<td>lanza; ver abajo — un cuerpo distinto es la causa habitual, no la única</td>
 </tr>
 </tbody>
 </table></div>
@@ -346,6 +346,22 @@ conviene conocer:</p>
 <p>Las claves están limitadas a 255 caracteres y el SDK lo comprueba antes de enviar — el gateway
 reporta una clave demasiado larga como un <em>conflicto</em>, lo que apunta la investigación en la dirección
 equivocada.</p>
+<p><strong>Un <code>409 idempotency-key-reuse</code> no siempre significa que reusaste la clave.</strong> La huella se toma
+sobre el modelo de petición <strong>del gateway, con sus defaults</strong>, no sobre los bytes que mandaste, así
+que un cambio aditivo a ese modelo invalida todas las claves guardadas antes. Veritium lo midió el
+2026-10-08: <code>PRM-235</code> agregó dos campos opcionales con default nulo, y desde ese despliegue un
+cliente que reenviaba una petición byte a byte idéntica recibía este error. El remedio que dice el
+propio contrato —<em>reenvía la petición original sin cambios</em>— es exactamente lo que falla.</p>
+<p>Así que <strong>no acuñes una clave nueva por reflejo.</strong> Comprueba si el cuerpo cambió de verdad:</p>
+<ul>
+<li><strong>Cambió</strong> — una clave nueva es lo correcto, y el error estaba haciendo su trabajo.</li>
+<li><strong>No cambió</strong> — una clave nueva compra una <strong>segunda generación facturable</strong> por un trabajo que
+la primera petición puede haber terminado ya, que es justo el daño que una clave existe para
+evitar. Espera a que pase la ventana.</li>
+</ul>
+<p>Ningún SDK reintenta este error, y ninguno se recupera de él acuñando una clave nueva, a propósito:
+en el caso de mal uso real eso facturaría doble en silencio. Se ha pedido a la plataforma que tome
+la huella sobre lo que envía el cliente (<code>VRT-PRM-004</code>).</p>
 <p><code>409 idempotency-response-not-retained</code> significa que la original tuvo éxito pero su respuesta pasó
 del tope de retención de <strong>1 MiB</strong>, así que nunca se guardó. Se generó y se facturó; simplemente no
 hay nada que repetir. Las generaciones largas llegan a esto.</p>
