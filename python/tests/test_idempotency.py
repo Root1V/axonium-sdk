@@ -153,7 +153,9 @@ class TestTimeoutRetryIsConditionalOnTheKey:
 class TestConflictAndStreaming:
     @respx.mock
     def test_key_reuse_is_typed_and_not_retried(self, config_kwargs: dict[str, str]) -> None:
-        # Reuse can never be fixed by repeating: the caller needs a fresh key per logical request.
+        # Reuse can never be fixed by repeating. What the caller needs is NOT always a fresh key:
+        # see IdempotencyKeyReuseError. When the body did not change, a fresh key buys a second
+        # billable generation, and since PRM-235 a byte-identical request can land here.
         # It is one of four types that replaced a single idempotency-conflict, precisely because
         # they need opposite handling and only one of them is worth retrying.
         route = respx.post(CHAT).mock(

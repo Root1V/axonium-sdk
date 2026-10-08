@@ -664,7 +664,7 @@ One class per row of the gateway's catalog. `OAuthError` does not inherit from `
 | `ContextExceededError` | The request exceeds the model's context window. |
 | `ForbiddenError` | The token lacks a scope the request requires. |
 | `IdempotencyInProgressError` | The first request with this key is still running. |
-| `IdempotencyKeyReuseError` | The key was already used for a different request. |
+| `IdempotencyKeyReuseError` | The gateway's fingerprint for this key does not match the one it stored. |
 | `IdempotencyResponseNotRetainedError` | The original succeeded, but its response was too large to store. |
 | `InconsistentModelGroupError` | The replicas serving one model disagree about their modality. |
 | `InvalidClientError` | Bad ``client_id`` or ``client_secret``. |

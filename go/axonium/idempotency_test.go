@@ -134,7 +134,9 @@ func TestIdempotencyKeyReuseIsTypedAndNotRetried(t *testing.T) {
 	if !errors.Is(err, ErrIdempotencyKeyReuse) {
 		t.Fatalf("expected a typed reuse, got %v", err)
 	}
-	// Reuse can never be fixed by repeating: the caller needs a fresh key per logical request.
+	// Reuse can never be fixed by repeating. What the caller needs is NOT always a fresh key:
+	// see ErrIdempotencyKeyReuse. When the body did not change, a fresh key buys a second
+	// billable generation, and since PRM-235 a byte-identical request can land here.
 	if n := atomic.LoadInt64(&attempts); n != 1 {
 		t.Errorf("a conflict must not be retried, saw %d attempts", n)
 	}

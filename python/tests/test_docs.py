@@ -726,3 +726,70 @@ class TestTheClientLifetimeAdviceIsQualified:
             assert unqualified not in text, (
                 f"docs/{page} gives the unqualified rule again: {unqualified!r}"
             )
+
+
+class TestNoSurfaceRecommendsTheRemedyThatCostsMoney:
+    """`409 idempotency-key-reuse` does not always mean the caller reused the key.
+
+    The fingerprint is taken over the **gateway's** parsed request model including its defaults,
+    not over the bytes the client sent, so an additive change to that model invalidates every key
+    stored before it. Veritium measured it on 2026-10-08: `PRM-235` added two optional fields
+    defaulting to null, and from that deploy a client resending a byte-identical request got this
+    error. The contract's own remedy — *"resend the original request unchanged"* — is exactly what
+    fails, and all five SDKs had copied the contract faithfully.
+
+    That made our documented remedy the expensive one: *"use a fresh key per logical request"*. In
+    this case the body did not change, so a fresh key buys a **second billable generation** for
+    work the first request may already have finished — the precise harm a key exists to prevent.
+
+    The guard is the positive form, which is what yesterday's `AXO-156` taught: a blocklist on
+    *"fresh key"* would be wrong, because a fresh key **is** the right answer when the body really
+    changed. What must be present is the qualification.
+    """
+
+    #: Every surface that documents this error for a reader. Swift's is in its own repository and
+    #: cannot be checked from here; its own suite has the mirror of this test.
+    SURFACES = (
+        "spec/errors.json",
+        "python/src/axonium/errors.py",
+        "go/axonium/errors.go",
+        "rust/src/error.rs",
+        "typescript/src/errors.ts",
+        "docs/03-failure.md",
+        "docs/es/03-failure.md",
+    )
+
+    #: The cost, in each language the surfaces are written in.
+    #:
+    #: Specific phrases, not the stem. A bare `factura` was the first version and it matched
+    #: unrelated prose about a DIFFERENT error ("ya está facturada", about a timeout) sitting
+    #: inside the same window, so the Spanish page survived a mutation that stripped the claim.
+    #: Measured, which is the only reason the list is this narrow.
+    COST = (
+        "second billable",
+        "segunda generación facturable",
+        "double-bill",
+        "facturaría doble",
+    )
+
+    @pytest.mark.parametrize("surface", SURFACES, ids=lambda s: s)
+    def test_the_qualification_sits_with_the_error(self, surface: str) -> None:
+        text = (REPO / surface).read_text(encoding="utf-8")
+
+        # Both spellings, because the documentation does not always sit next to the wire name.
+        # In `rust/src/error.rs` the hyphenated string appears only in the suffix mapping, ninety
+        # lines from the enum variant that carries the doc comment -- which is how the first run
+        # of this test reported Rust as undocumented when it was not.
+        markers = ("idempotency-key-reuse", "IdempotencyKeyReuse", "idempotencyKeyReuse")
+        positions = [i for i in range(len(text)) if any(text.startswith(m, i) for m in markers)]
+        assert positions, f"{surface} no longer documents idempotency-key-reuse"
+
+        # Scoped to the error's own neighbourhood. Searching the whole file is the mistake that
+        # made the first version of AXO-156's guard pass against the text it was written to
+        # forbid: these files discuss billing in several places.
+        windows = [text[max(0, i - 2200) : i + 2200] for i in positions]
+        assert any(any(cost in w for cost in self.COST) for w in windows), (
+            f"{surface} documents idempotency-key-reuse without saying what a fresh key costs "
+            f"when the body did not change. That is the remedy the contract gives, and it is the "
+            f"one that buys a duplicate generation"
+        )
