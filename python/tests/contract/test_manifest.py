@@ -124,18 +124,23 @@ def async_contract_client(config_kwargs: dict[str, str]) -> AsyncAxonium:
 
 
 @pytest.fixture(autouse=True)
-def _token() -> None:
-    respx.post(AUTH_URL).mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "access_token": "t",
-                "token_type": "bearer",
-                "expires_in": 300,
-                "scope": "inference:read inference:stream",
-            },
+def _token() -> Any:
+    # Scoped to its own router and torn down with the test. Without the `with`, this route landed
+    # on respx's GLOBAL router and was never removed, so every test file that happened to run
+    # after this one inherited a mocked token endpoint.
+    with respx.mock:
+        respx.post(AUTH_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "access_token": "t",
+                    "token_type": "bearer",
+                    "expires_in": 300,
+                    "scope": "inference:read inference:stream",
+                },
+            )
         )
-    )
+        yield
 
 
 def route_for(case: dict[str, Any]) -> Any:

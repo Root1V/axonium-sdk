@@ -8,11 +8,26 @@ Six things. You create one of them; the rest you read.
 
 The one object you construct. It holds the HTTP connection pool, the token manager, and the
 per-resource namespaces. It is safe to share across threads, goroutines or tasks, and it is meant
-to be long-lived — a client per process, not per request, because a fresh client throws away the
-cached token and opens a new pool.
+to be long-lived — not per request, because a fresh client throws away the cached token and opens
+a new pool.
 
 Python and Rust have an async client and a sync one with identical surfaces; Go has one client and
 `context.Context`.
+
+**An async client belongs to the event loop it was built in, so "one per process" is only right
+for a process with one loop.** This page used to say per process without that qualification, and a
+service with an API and a worker pool usually has more than one loop. Measured on Python 3.13,
+reusing one `AsyncAxonium` across two `asyncio.run()` calls:
+
+```
+loop 1: ok
+loop 2: RuntimeError: Event loop is closed
+```
+
+The pool keeps the first loop's resources, and the error comes from inside asyncio, so it does not
+name the cause. Build the client inside the loop that will use it — a FastAPI `lifespan`, a worker's
+startup — keep it for that loop's lifetime, and close it at shutdown (`await client.aclose()`, or
+`async with`). The sync client has no such constraint.
 
 **What it does not do:** it does not retry streams, it does not read `.env` files, and it does not
 configure your logging.

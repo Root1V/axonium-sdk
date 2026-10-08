@@ -113,6 +113,10 @@ async fn records_metadata_and_never_content() {
         "status=200",
         "attempt=1",
         "duration_ms",
+        // VRT-AXO-002: gen_ai.system is deprecated in favour of gen_ai.provider.name, and
+        // gen_ai.operation.name with it is what forms the span name the convention asks for.
+        "gen_ai.provider.name",
+        "gen_ai.operation.name",
         "gen_ai.request.model",
     ] {
         assert!(
@@ -128,6 +132,9 @@ async fn records_metadata_and_never_content() {
         "id-should-not-appear",
         "the answer",
         "Bearer",
+        // Asserted absent, not merely un-asserted: an emitter sending both would satisfy every
+        // line above while still sending the attribute Veritium asked us to stop sending.
+        "gen_ai.system",
     ] {
         assert!(
             !emitted.contains(forbidden),

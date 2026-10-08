@@ -1,0 +1,83 @@
+{
+  "$comment": [
+    "The OpenTelemetry GenAI attributes the SDKs put on a span, in one file because three of them",
+    "emit spans and a table copied by hand into three languages drifts. AXO-139 is the precedent:",
+    "five SDKs kept five different lists of rate-limit scopes and they had diverged, undetectably,",
+    "because the list was prose in a doc comment. Each SDK asserts its own map against this file.",
+    "",
+    "Requested by Veritium as VRT-AXO-002, CC Argus, whose argus-obs-semconv suite is the external",
+    "verifier. The attribute these replace, gen_ai.system, is deprecated in favour of",
+    "gen_ai.provider.name.",
+    "",
+    "Status: the GenAI conventions are still Development, so this file records the version it was",
+    "written against. A convention that moves is a reason to re-measure, not to stop following it."
+  ],
+  "semconv_status": "development",
+
+  "provider_name": "prometheus-gateway",
+  "provider_name_note": [
+    "gen_ai.provider.name has an enumeration (openai, anthropic, aws.bedrock, gcp.gemini, groq,",
+    "mistral_ai, cohere, deepseek, perplexity, x_ai, ibm.watsonx.ai, azure.ai.*, gcp.*) and none of",
+    "them is this platform. The convention says a well-known value MUST be used where one applies",
+    "and a custom value MAY be used otherwise, so this is a custom value and not a gap.",
+    "",
+    "It deliberately does NOT name the engine. Argus's table maps this attribute to llama.cpp /",
+    "vllm / ollama, which is right for the gateway's own spans -- the gateway knows which backend",
+    "served the request. A client does not: no response header carries the engine (measured over",
+    "the whole of ResponseMeta: X-Request-ID, X-Trace-ID, X-Prometheus-Instance,",
+    "X-Prometheus-Instance-Id, X-Idempotent-Replay-Of and the six X-RateLimit-* headers). Emitting",
+    "a guessed engine would be worse than emitting a true custom value.",
+    "",
+    "server.address goes on the span for exactly this reason: the convention names it as what",
+    "identifies the actual system behind an OpenAI-compatible endpoint."
+  ],
+
+  "operations": [
+    {
+      "path": "/v1/chat/completions",
+      "operation": "chat",
+      "well_known": true
+    },
+    {
+      "path": "/v1/embeddings",
+      "operation": "embeddings",
+      "well_known": true
+    },
+    {
+      "path": "/v1/rerank",
+      "operation": "rerank",
+      "well_known": false,
+      "note": "NOT `retrieval`. That well-known value is RAG retrieval and carries gen_ai.data_source.id to say which corpus was read; a reranker reads no corpus, it scores documents the caller already has. Claiming it would put this traffic in aggregations about retrieval stores."
+    },
+    {
+      "path": "/v1/images/generations",
+      "operation": "image_generation",
+      "well_known": false,
+      "note": "The enumeration has no image value. `generate_content` is multimodal content generation in Gemini-shaped APIs, which this is not."
+    },
+    {
+      "path": "/v1/predict",
+      "operation": "predict",
+      "well_known": false,
+      "note": "The tei.predict.v1 dialect. No well-known value describes a classifier head."
+    }
+  ],
+
+  "no_genai_attributes": [
+    {
+      "path": "/v1/models",
+      "why": "A catalog listing is not an inference operation. It reaches no model, so gen_ai.request.model would be null and gen_ai.operation.name would be a value the convention does not have. These spans carry HTTP attributes only -- which is a change: they used to carry gen_ai.system and a null model, and so appeared in GenAI aggregations as calls that used no tokens."
+    },
+    {
+      "path": "/v1/models/mine",
+      "why": "Same: it reads the token's scopes."
+    }
+  ],
+
+  "span_name": "{gen_ai.operation.name} {gen_ai.request.model}",
+  "span_name_note": [
+    "The convention's rule, and Argus confirmed it against their own axis when Prometheus offered to",
+    "depart from it for their convenience: `chat qwen3-0.6b`. A span with no model in it -- the",
+    "catalog endpoints -- is named for its route instead, since there is nothing to interpolate."
+  ]
+}

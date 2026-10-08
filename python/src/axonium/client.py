@@ -38,7 +38,7 @@ from axonium.models.common import (
     ResponseMeta,
 )
 from axonium.observability.logging import request_fields
-from axonium.observability.otel import record_response, span
+from axonium.observability.otel import PROVIDER_NAME, operation_name, record_response, span
 from axonium.observability.scopes import explain_forbidden
 from axonium.preflight import check_model
 from axonium.providers import AsyncTokenProvider, ProvidedTokenAuth, TokenProvider
@@ -367,16 +367,40 @@ class _BaseAxonium:
         return StreamOpen(opener=opener, after_failure=after_failure, succeeded=succeeded)
 
     def _observe(self, method: str, path: str, model: str | None) -> Any:
-        return span(
-            f"axonium {method} {path}",
-            enabled=self._config.otel_enabled,
-            **{
-                "gen_ai.system": "prometheus-gateway",
-                "gen_ai.request.model": model,
-                "http.request.method": method,
-                "url.path": path,
-            },
-        )
+        """A span for one call, named and attributed per the GenAI semantic conventions.
+
+        The shared table is ``spec/otel-genai.json``; requested by Veritium as ``VRT-AXO-002``,
+        with Argus's ``argus-obs-semconv`` suite as the external verifier.
+
+        Two things changed when this stopped emitting the deprecated ``gen_ai.system``:
+
+        **The span name is now ``{operation} {model}``** -- ``chat qwen3-0.6b`` -- rather than
+        ``axonium POST /v1/chat/completions``. That is the convention's rule, and Argus asked for
+        it explicitly when Prometheus offered to depart from it to keep their cardinality down:
+        *"follow the standard, the cardinality is our problem."* It means grouping by model needs no
+        special query.
+
+        **The catalog routes no longer carry ``gen_ai.*`` at all.** They used to get
+        ``gen_ai.system`` and a null model, which made a scope lookup appear in GenAI aggregations
+        as an inference call that used no tokens.
+        """
+        operation = operation_name(path)
+        attributes: dict[str, Any] = {
+            "http.request.method": method,
+            "url.path": path,
+            # Named by the convention as what identifies the actual system behind an
+            # OpenAI-compatible endpoint, which is the question `gen_ai.provider.name` cannot
+            # answer from a client: no response header tells us the engine.
+            "server.address": httpx.URL(self._config.gateway_base_url).host,
+        }
+        if operation is None:
+            return span(f"axonium {method} {path}", enabled=self._config.otel_enabled, **attributes)
+
+        attributes["gen_ai.provider.name"] = PROVIDER_NAME
+        attributes["gen_ai.operation.name"] = operation
+        attributes["gen_ai.request.model"] = model
+        name = f"{operation} {model}" if model else operation
+        return span(name, enabled=self._config.otel_enabled, **attributes)
 
     def _succeeded(
         self,

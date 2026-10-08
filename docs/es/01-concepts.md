@@ -1,4 +1,4 @@
-<!-- translated-from: 01-concepts.md sha256:3b52309030 -->
+<!-- translated-from: 01-concepts.md sha256:f7c063b31d -->
 # Conceptos
 
 > **¿Qué son todas estas piezas y para qué sirve cada una?**
@@ -16,10 +16,25 @@ describe con una sola URL.
 
 ## El cliente
 
-Uno por proceso. El pool de conexiones y el token cacheado viven en él, así que construir uno por
-petición tira los dos — y vuelve a pedir un token que ya tenías.
+El pool de conexiones y el token cacheado viven en él, así que construir uno por petición tira los
+dos — y vuelve a pedir un token que ya tenías.
 
 Los cinco clientes son seguros para uso concurrente.
+
+**Un cliente async pertenece al bucle de eventos en el que se construyó, así que «uno por proceso»
+solo vale para un proceso con un solo bucle.** Esta página lo decía sin ese matiz, y un servicio con
+una API y un pool de workers suele tener más de uno. Medido en Python 3.13, reusando un
+`AsyncAxonium` entre dos llamadas a `asyncio.run()`:
+
+```
+loop 1: ok
+loop 2: RuntimeError: Event loop is closed
+```
+
+El pool retiene los recursos del primer bucle, y el error sale de dentro de asyncio, así que no
+nombra la causa. Construye el cliente dentro del bucle que lo va a usar — un `lifespan` de FastAPI,
+el arranque de un worker —, consérvalo mientras ese bucle viva y ciérralo al apagar
+(`await client.aclose()`, o `async with`). El cliente sync no tiene esa restricción.
 
 ## Tokens
 

@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -148,16 +150,21 @@ func TestSpansCarryTheCorrelationIDs(t *testing.T) {
 		t.Fatalf("expected one span, got %d", len(tracer.spans))
 	}
 	span := tracer.spans[0]
-	if span.name != "chat.completions" {
-		t.Errorf("a span should name the operation, not the URL; got %q", span.name)
+	// `{gen_ai.operation.name} {gen_ai.request.model}` -- the convention's rule, and the one Argus
+	// asked for explicitly rather than a lower-cardinality departure from it.
+	if span.name != "chat llama3-8b-q4" {
+		t.Errorf("a span is named {operation} {model}; got %q", span.name)
 	}
 	if !span.ended {
 		t.Error("the span was never ended")
 	}
 	// This is the whole point of the span: matching a caller's trace to the platform's.
 	for key, want := range map[string]any{
-		"gen_ai.system":          "prometheus-gateway",
+		"gen_ai.provider.name":   "prometheus-gateway",
+		"gen_ai.operation.name":  "chat",
 		"gen_ai.request.model":   "llama3-8b-q4",
+		"http.request.method":    "POST",
+		"url.path":               "/v1/chat/completions",
 		"prometheus.request_id":  "req-42",
 		"prometheus.trace_id":    "trace-42",
 		"prometheus.instance_id": "qwen3-0-6b-iq4-nl-local-1",
@@ -165,6 +172,12 @@ func TestSpansCarryTheCorrelationIDs(t *testing.T) {
 		if span.attrs[key] != want {
 			t.Errorf("%s: got %v, want %v", key, span.attrs[key], want)
 		}
+	}
+	// Deprecated in favour of gen_ai.provider.name. Asserted absent, not just un-asserted: an
+	// emitter that sent both would pass every check above while still populating the attribute
+	// Veritium asked us to stop sending.
+	if _, found := span.attrs["gen_ai.system"]; found {
+		t.Error("gen_ai.system is deprecated and must not be emitted alongside its replacement")
 	}
 	if len(span.errs) != 0 {
 		t.Errorf("a successful call recorded errors: %v", span.errs)
@@ -206,7 +219,7 @@ func TestAFailedCallIsRecordedOnTheSpanAndLogged(t *testing.T) {
 func TestNoTracerMeansNoSpans(t *testing.T) {
 	// The no-op keeps the call sites free of branching, so tracing off costs nothing.
 	client := testClient(t, observedServer(t, false).URL)
-	ctx, span := client.startSpan(context.Background(), "chat.completions", "m")
+	ctx, span := client.startSpan(context.Background(), "POST", "/v1/chat/completions", "m")
 	if ctx == nil || span == nil {
 		t.Fatal("a no-op span must still be usable")
 	}
@@ -307,5 +320,54 @@ func TestAShortBackoffStaysAtDebug(t *testing.T) {
 
 	if strings.Contains(buf.String(), "waiting before a retry") {
 		t.Errorf("a 10ms backoff should not reach INFO:\n%s", buf.String())
+	}
+}
+
+// The shared table is spec/otel-genai.json, and this asserts the map in observability.go against
+// it. Python and Rust have the mirror of this test.
+//
+// AXO-139 is why this is a test and not a comment asking for care: five SDKs kept five hand-copied
+// lists of rate-limit scopes, they diverged, the published TypeScript documented a value the header
+// never sends, and nothing could catch it because the list was prose in a doc comment.
+func TestOperationNamesMatchTheSharedTable(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(specDir(t), "otel-genai.json"))
+	if err != nil {
+		t.Fatalf("reading the shared table: %v", err)
+	}
+
+	var table struct {
+		ProviderName string `json:"provider_name"`
+		Operations   []struct {
+			Path      string `json:"path"`
+			Operation string `json:"operation"`
+		} `json:"operations"`
+		NoGenAI []struct {
+			Path string `json:"path"`
+		} `json:"no_genai_attributes"`
+	}
+	if err := json.Unmarshal(raw, &table); err != nil {
+		t.Fatalf("parsing the shared table: %v", err)
+	}
+	if len(table.Operations) == 0 {
+		t.Fatal("the table lists no operations, so this test would pass by comparing nothing")
+	}
+
+	if providerName != table.ProviderName {
+		t.Errorf("gen_ai.provider.name: emitting %q, table says %q", providerName, table.ProviderName)
+	}
+
+	for _, entry := range table.Operations {
+		if got := operationName(entry.Path); got != entry.Operation {
+			t.Errorf("%s: gen_ai.operation.name is %q, table says %q", entry.Path, got, entry.Operation)
+		}
+	}
+
+	// The excluded routes are the half a count would miss: a map answering every path would satisfy
+	// the loop above and still put a catalog listing in GenAI aggregations as an inference call
+	// that used no tokens.
+	for _, entry := range table.NoGenAI {
+		if got := operationName(entry.Path); got != "" {
+			t.Errorf("%s carries no GenAI operation, but the map returns %q", entry.Path, got)
+		}
 	}
 }

@@ -11,9 +11,10 @@ import (
 	"time"
 )
 
-// This API has no idempotency mechanism, so a retried generation is a new billable one rather than
-// a replay. The policy therefore retries only where the platform said no generation happened.
-// These tests are about what is NOT retried as much as what is.
+// Without an idempotency key a retried generation is a new billable one rather than a replay, so
+// the policy retries only where the platform said no generation happened. These tests are about
+// what is NOT retried as much as what is. A key changes the timeout branch and only that branch;
+// TestTimeoutIsRetriedUnderAnIdempotencyKey covers it.
 
 // fastRetry keeps the policy's decisions intact but shrinks the waits, so a test measures which
 // errors are retried rather than how long the SDK is willing to sleep. MaxBackoff is small on

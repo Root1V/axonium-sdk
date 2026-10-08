@@ -1,6 +1,6 @@
-# axonium (Python)
+# axonium (Rust)
 
-Python SDK for the Prometheus inference platform.
+Rust SDK for the Prometheus inference platform.
 
 📖 **Documentation: https://root1v.github.io/axonium-sdk/** — concepts, every call, failure and retries, configuration, composed operations and testing, with every example in Python, Go, Rust, Swift and TypeScript.
 También [en español](https://root1v.github.io/axonium-sdk/es/).
@@ -10,53 +10,58 @@ and image models across managed instances, behind one authenticated API with per
 control, rate limits, spend caps and usage accounting. This SDK talks to one of its components, the
 **gateway**, which serves inference and issues tokens at a single address.
 
-> **Status: `1.0.0rc5`, published to PyPI.** The client is feature-complete against the current
-> gateway contract. A release candidate rather than `1.0.0` on purpose: the stability commitment
-> starts at `1.0.0`, and the surface is still growing.
+> **Status: 0.4.0, published to crates.io.** Chat, streaming with cancellation, embeddings,
+> images, both credential modes, idempotency keys, instance pinning and the full error taxonomy are
+> implemented, and all 25 shared contract cases replay against the same recorded wire bytes the
+> Python and Go SDKs use. Structured logging and an optional tracing hook are in.
 
-## Installation
-
-```bash
-pip install axonium
-```
-
-With OpenTelemetry span support:
-
-```bash
-pip install "axonium[otel]"
-```
-
-Requires Python 3.10+.
+Requires Rust 1.75+. Async, on any runtime — `tokio` is used for timers only.
 
 ## Quick start
 
-```python
-from axonium import Axonium
+```rust
+use axonium::{ChatRequest, Client, Config, Message};
 
-# Credentials are all you need: the SDK knows where the official platform is.
-with Axonium(client_id=..., client_secret=...) as client:
-    print(client.models.mine().ids)  # what this token can actually call
+let client = Client::new(Config {
+    client_id: "...".into(),
+    client_secret: "...".into(),
+    ..Default::default()
+})?;
 
-    completion = client.chat.completions.create(
-        model="qwen3-0.6b",
-        messages=[{"role": "user", "content": "Hello"}],
-    )
-    print(completion.content)
+let completion = client.chat(&ChatRequest {
+    model: "qwen3-0.6b".into(),
+    messages: vec![Message::text("user", "Hello")],
+    ..Default::default()
+}).await?;
+println!("{}", completion.content());
 ```
+
+Only the credentials are required. The gateway address defaults to the official platform and
+serves **both** the inference API and the token endpoint, so there is a single address to know
+— usually none to supply.
 
 The model name is a **slug**. A slug never changes and is never reused, so pinning one in code
 is safe — but which slugs exist depends on the deployment and on what your token is granted, so
-`client.models.list()` is the source of truth rather than anything written here.
+`client.models().await` is the source of truth rather than anything written here.
 
-Streaming is a separate method, because it needs a different scope and is never retried
-automatically:
+Streaming is a separate method, because it needs a different scope, fails in two different ways,
+and returns a different type:
 
-```python
-with client.chat.completions.stream(model="qwen3-0.6b", messages=messages) as stream:
-    for chunk in stream:
-        print(chunk.content or "", end="", flush=True)
-    print(stream.usage())
+```rust
+let mut stream = client.chat_stream(&request).await?;
+while let Some(chunk) = stream.next().await? {
+    print!("{}", chunk.content());
+}
+println!("{:?}", stream.usage());
 ```
+
+**The two ways it fails are not retried the same.** A rejection that arrives *instead of* the
+stream — the gateway reads the engine's status before the `200`/`text/event-stream` headers exist —
+is retried like any other request, `Retry-After` included: nothing was generated and nothing was
+billed, so reopening is a first generation rather than a second, and it is the only retry there is,
+since the gateway performs none of its own on a streamed request. A stream that has already **begun**
+is never retried: part of the response was delivered and part was billed, so a repeat is a fresh
+generation rather than a resumption.
 
 ### Streamed tool calls
 
@@ -65,210 +70,108 @@ are individually invalid JSON. The SDK reassembles them, keyed by the wire `inde
 arrives only in the first fragment, and `id` never repeats), and hands back **exactly the shape a
 non-streaming completion returns**:
 
-```python
-with client.chat.completions.stream(model="qwen3-0.6b", messages=messages, tools=tools) as stream:
-    for chunk in stream:
-        ...
-    for call in stream.tool_calls:
-        print(call.name, call.parse_arguments())
+```rust
+let mut stream = client.chat_stream(&request).await?;
+while stream.next().await?.is_some() {}
+for call in stream.tool_calls() {
+    // Err(Error::ToolCallArguments) if the generation was cut off mid-call.
+    println!("{} {:?}", call.name(), call.parse_arguments()?);
+}
 ```
 
-The same `ToolCall` comes back from `completion.tool_calls` on a non-streaming call, and a
-`Message` accepts it straight back, so a tool-use loop converts in neither direction:
-
-```python
-messages.append({"role": "assistant", "tool_calls": stream.tool_calls})
-messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
-```
+The same `ToolCall` comes back from `completion.tool_calls()` on a non-streaming call, and
+`Message::tool_calls` takes it straight back, so a tool-use loop converts in neither direction.
 
 `call.function.arguments` stays the model's own JSON *string*; `parse_arguments()` decodes it and
-raises `ToolCallArgumentsError` if it will not parse. That happens when a generation stopped on
-`finish_reason == "length"` partway through writing the call — the raw string stays readable on the
-error, so you can still see what the model was trying to call.
+fails with `Error::ToolCallArguments` if it will not parse. That happens when a generation stopped
+on a `finish_reason` of `length` partway through writing the call — the raw string stays readable,
+so you can still see what the model was trying to call.
 
-`AsyncAxonium` mirrors the whole surface — same names, same behavior, with `await`, `async with`
-and `async for`.
+**Dropping the stream cancels the request**, which the gateway passes to Prometheus, which stops
+generating and frees the backend slot. An abandoned stream stops costing money — but only if you
+drop it.
 
-### Reasoning models
+## Dependencies, and why there are any
 
-A reasoning model streams its chain of thought before any answer token, and keeps it in a field
-separate from the answer. `content` is therefore empty until it stops thinking — with a small
-`max_tokens` it can stay empty, and `finish_reason` will be `"length"`. Both are exposed, and
-neither is inferred from the other:
-
-```python
-if completion.content:
-    print(completion.content)
-elif completion.reasoning:
-    print(f"still thinking: {completion.reasoning}")  # raise max_tokens
-
-# Streaming: a chunk carries one or the other, so progress can show which phase it is in.
-for chunk in stream:
-    print(chunk.reasoning or chunk.content or "", end="")
-print(stream.reasoning, stream.content)
-```
-
-Runnable examples are in [`examples/`](examples/).
+The Go SDK has none: its standard library has HTTP and JSON. Rust's does not, so this takes the
+minimum — `reqwest` (with `rustls`, so building never needs a system OpenSSL), `serde`,
+`serde_json`, and `tokio` for timers. Nothing is pulled in for tracing or logging.
 
 ## What the client does for you
 
-**Authentication.** Tokens are obtained with OAuth2 `client_credentials` and refreshed *ahead* of
-expiry, so a request never fails just to discover its token died. The lifetime comes from the
-server — its `Date` header and the token's `exp` claim are both server-side readings, so no clock
-skew between your machine and the platform can shorten or extend it. Concurrent callers share one
-refresh rather than each triggering their own.
+**Typed errors.** Every gateway error maps to an `ErrorKind` you match on, never on `detail` —
+that is prose the platform may reword. An unrecognised code falls back to its status class rather
+than failing to parse, because the catalogue grows. Token-endpoint failures are a separate variant
+so a handler for "the gateway is unhappy" cannot swallow "your credentials are wrong".
 
-**Typed errors.** Every gateway error maps to its own exception class, so you branch on the type
-rather than string-matching a human-readable message. The token endpoint's errors are a separate
-branch of the hierarchy, since their shape and meaning differ — `except APIError` will not swallow
-an authentication failure.
+**Retries that will not double-bill you.** There is no idempotency by default: a retried
+generation is a new billable one. So retries happen only where the platform says no generation
+occurred. A client-side timeout is retried **only** when an `idempotency_key` was supplied, because
+that is the one thing that makes the repeat free.
 
-**Retries that will not double-bill you.** This API has no idempotency mechanism: a retried
-generation is a new billable one, not a replay. So retries happen only where the platform tells us
-no generation occurred — a rate limit, or a circuit breaker that fast-failed without reaching a
-model. A `502` may have reached one, so retrying it is opt-in. Client-side timeouts are never
-retried, because the backend is probably still working. A server-supplied `Retry-After` is honored,
-but capped: a wait longer than `max_backoff` is handed back to you rather than slept through.
+**Idempotency keys**, on every endpoint including streaming. On a stream a key replays one the
+gateway *finished* and whose delivery your connection dropped; one the model itself broke has
+nothing complete to replay. What happens to a key whose request *failed* is **not
+specified** — that is the gateway's decision, not this SDK's, and assuming a failure frees the key
+has already cost one consumer a day of confusing retries.
 
-**Request validation before the wire.** The gateway silently drops fields it does not accept, so
-the SDK warns by name about every one it removes instead of letting you believe a parameter took
-effect. Remote image URLs are rejected client-side, with the SSRF reason spelled out.
+**Instance pinning** through `instance`, by label (`#2`) or full id — never through `model`, since
+a grant covers a model and billing attributes to a model. A pin opts out of load balancing *and*
+failover, so it is for reproducing a problem rather than for normal traffic, and it is kept across
+retries.
 
-**Optional modality preflight.** The gateway's modality check is one-directional: calling
-`/v1/embeddings` with a text model is rejected, but calling `/v1/chat/completions` with an
-*embedding* model is not — it returns `200` with degenerate output that you pay for. Enable the
-check to catch that, and typos, before the request is sent:
+**Correlation on every response.** `meta` carries the gateway's request, trace and instance ids on
+successes as well as failures, plus the rate-limit budget so you can slow down before a `429`.
 
-```python
-client = Axonium(verify_modality=True)  # or AXONIUM_VERIFY_MODALITY=true
-```
-
-Off by default because it costs one catalog request per client, and the SDK otherwise makes no
-request you did not ask for. If you already call `models.list()`, the result is reused and the
-check is free. If the catalog cannot be loaded the check is skipped rather than failing your
-request — a guard rail should not become a new way for inference to break.
-
-## Credential modes
-
-Two modes, permanent and mutually exclusive. Which one you use follows from how the SDK is
-embedded, not from preference.
-
-**Autonomous** — the SDK mints and refreshes its own tokens. For development, notebooks and tests,
-where there is no host to ask.
-
-```python
-client = Axonium(client_id=..., client_secret=...)  # or from the environment
-```
-
-**Governed** — a host that already owns the credential supplies tokens, and the SDK never holds a
-secret. The provider is the sole authority: it owns caching, refresh and rotation, and Axonium does
-no refresh-ahead of its own, because two caches for one token is how a client ends up sending a
-token its owner already retired.
-
-```python
-def tokens(
-    rejected: str | None,
-) -> str: ...  # `rejected` is the token the gateway just refused, or None
-
-
-client = Axonium(token_provider=tokens)
-```
-
-**The rejected token comes back, not a flag.** With a boolean a provider cannot tell whether two
-concurrent refreshes concern the same dead token or different ones, so it must mint twice or guess
-with a time window. Given the token, the answer is exact — if what it holds already differs, it
-refreshed already.
-
-`AsyncAxonium` requires an async provider: a blocking token fetch would stall the event loop, so
-the mismatch is reported rather than tolerated.
-
-Asking for both modes by name is refused. Credentials that merely happen to be in the environment
-are not — the explicit provider wins, and the credentials are **discarded** with a warning, so the
-secret really does leave the process rather than sitting unused.
+**Reasoning models.** Chain of thought arrives in its own field before any answer token, so
+`content()` stays empty until the model stops thinking — with a small `max_tokens` it can stay
+empty for the whole response. Both are exposed and neither is inferred from the other.
 
 ## Configuration
 
-**You should only need your credentials.** The SDK points at the official Prometheus platform by
-default, so the common case is:
+**You should only need your credentials**: the base URLs default to the official Prometheus
+platform, and those defaults are provisional until it moves to its cloud host.
 
-```python
-client = Axonium(client_id=..., client_secret=...)  # or AXONIUM_CLIENT_ID / _SECRET
-```
-
-> **The default addresses are provisional.** The platform has not moved to its cloud host yet, so
-> they currently point at a local deployment. When it moves, upgrading picks up the new address
-> automatically — but **a pinned version will keep using the old one**, and the release that
-> changes them will say so prominently.
-
-Override them for a self-hosted deployment, one or both, by argument or environment. Settings
-resolve in this order, first match wins:
-
-1. Per-call argument
-2. Constructor argument
-3. Environment variable
-4. The official default (base URLs only) — everything else raises `ConfigurationError` naming the
-   setting and its variable
-
-| Environment variable | Purpose |
-|---|---|
-| `AXONIUM_GATEWAY_BASE_URL` | gateway base URL — overrides the official default |
-| `AXONIUM_CLIENT_ID` | OAuth2 client ID issued by the platform operator |
-| `AXONIUM_CLIENT_SECRET` | OAuth2 client secret |
-| `AXONIUM_SCOPE` | Optional space-separated scope request |
-| `AXONIUM_CA_BUNDLE` | Path to a CA bundle, for deployments using a self-signed certificate |
-
-The SDK does not read `.env` files. Loading them is the application's responsibility (for example
-with `python-dotenv`), and because settings resolve when the client is constructed rather than at
-import time, load order does not silently change behavior.
+Unset fields fall back to `AXONIUM_GATEWAY_BASE_URL`,
+`AXONIUM_CLIENT_ID`, `AXONIUM_CLIENT_SECRET`, `AXONIUM_SCOPE`, `AXONIUM_CA_BUNDLE` and
+`AXONIUM_VERIFY_MODALITY`. A missing required setting fails at construction, naming both the field
+and the variable that can supply it.
 
 ## Observability
 
-The platform owns tracing. This SDK provides only the complementary piece: enough for your traces
-and logs to line up with the platform's, and nothing that duplicates what it already records.
+Off by default, behind a feature, so the crate stays free of a tracing dependency for anyone who
+traces with something else or not at all:
 
-**Correlation IDs on every response.** `X-Request-ID` and `X-Trace-ID` are parsed onto
-`response.meta` for successes as well as failures, and onto every raised error. Correlating a slow
-but successful call matters as much as correlating a failed one.
-
-**Rate-limit visibility.** `client.last_rate_limit` and `response.meta.rate_limit` expose the
-`X-RateLimit-*` budget from every response that carries one, so you can slow down before a `429`
-rather than only reacting to one. The token figures are the gateway's post-hoc accounting — a
-strong signal, not a guarantee.
-
-**Structured logging.** The SDK logs under the `axonium` logger with a `NullHandler` attached, so
-it stays silent until your application configures logging. Records carry `request_id`, `trace_id`,
-`model`, `status`, `duration_ms` and `attempt`.
-
-Prompts, completions and credentials are **never** logged, and there is no option to enable it.
-Anything you need to log about the content, you already have at the call site.
-
-**OpenTelemetry spans** are available behind an extra and off by default:
-
-```python
-client = Axonium(otel_enabled=True)  # or AXONIUM_OTEL_ENABLED=true
+```toml
+axonium = { version = "0.3", features = ["tracing"] }
 ```
 
-**Trace context is not propagated outbound, and this is measured rather than assumed.** The
-platform runs in what its guide calls OTEL mode: it starts its own trace and returns that id,
-specifically so a client cannot forge trace context. Verified against the deployment — a valid
-UUID4 sent as `X-Trace-ID` is discarded, and `traceparent` is never read in either mode. So the SDK
-offers no way to supply one: a parameter that silently does nothing is worse than its absence.
-Correlation runs the other way, through the `X-Trace-ID` the gateway returns on every response.
+With it on, each operation opens a span and each attempt emits an event carrying `method`, `path`,
+`model`, `status`, `attempt`, `duration_ms` and the gateway's `request_id`, `trace_id` and
+`instance_id`. Attribute names follow the GenAI semantic conventions, so the spans are readable by
+tooling that already understands LLM traffic.
 
-**Scope diagnostics.** A `403` is matched against the scopes your token was actually granted, so
-the error says what is missing rather than just that access was refused:
+**Prompts, completions and credentials are never emitted, and there is no option to enable it.**
+Correlating a request with the platform's traces needs the IDs, not the content — and a library
+that can be configured to log prompts is how prompts reach a collector nobody audited. A test
+fails if the crate is changed to emit any.
 
-```
-Forbidden Scope check: the token holds inference:read but not inference:stream;
-streaming needs its own scope and holding one does not grant the other. request_id=...
-```
+## What this release does not have
+
+Stated here rather than discovered, because a crates.io version can be yanked but never replaced.
+
+- **The surface is still `0.x`.** It is complete against the current gateway contract, but the
+  tri-party coordination this SDK is built inside keeps surfacing things, and changing shape before
+  `1.0` costs a consumer far less than after.
 
 ## Development
 
 ```bash
-cd python
-uv sync
-uv run pytest
-uv run ruff check
-uv run mypy src/
+cd rust
+cargo test
+cargo clippy --all-targets -- -D warnings
+cargo fmt --check
 ```
+
+Behaviour is pinned to the other SDKs by the shared contract cases in [`../spec/`](../spec/), which
+Python, Go and Rust all replay against the same recorded wire bytes.

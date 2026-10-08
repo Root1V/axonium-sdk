@@ -28,6 +28,10 @@ pub struct Client {
     last_rate_limit: Mutex<Option<RateLimit>>,
     rate_limits: Mutex<std::collections::HashMap<String, RateLimit>>,
     pub(crate) catalog: tokio::sync::OnceCell<crate::catalog::ModelList>,
+    /// `server.address` for every span, resolved once. The convention names it as what identifies
+    /// the actual system behind an OpenAI-compatible endpoint, which is the question
+    /// `gen_ai.provider.name` cannot answer from a client.
+    gateway_host: String,
 }
 
 /// What one call needs beyond its body: which model, which instance, which idempotency key.
@@ -114,6 +118,13 @@ impl Client {
             .build()
             .map_err(|e| Error::Configuration(format!("could not build the HTTP client: {e}")))?;
 
+        let gateway_host = reqwest::Url::parse(&config.gateway_base_url)
+            .ok()
+            .and_then(|url| url.host_str().map(str::to_owned))
+            // A base URL that will not parse yields no host rather than an error: a span attribute
+            // must never be the reason a request does not happen.
+            .unwrap_or_default();
+
         Ok(Self {
             config,
             http,
@@ -122,6 +133,7 @@ impl Client {
             last_rate_limit: Mutex::new(None),
             rate_limits: Mutex::new(std::collections::HashMap::new()),
             catalog: tokio::sync::OnceCell::new(),
+            gateway_host,
         })
     }
 
@@ -207,10 +219,7 @@ impl Client {
             })));
         }
 
-        let op = crate::observability::Operation::start(
-            crate::observability::operation_name(path),
-            &opts.model,
-        );
+        let op = crate::observability::Operation::start(path, &opts.model, &self.gateway_host);
         let method = if body.is_some() { "POST" } else { "GET" };
 
         let mut attempt = 1u32;
