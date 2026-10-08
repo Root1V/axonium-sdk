@@ -1521,7 +1521,18 @@ which spoke to a platform generation that no longer exists.
 
 Nothing yet.
 
-### 0.6.3 — 2026-10-08
+### 0.6.4 — 2026-10-08
+
+**`v0.6.3` is retracted. Use this one.** It was tagged with the `Version` constant still reading
+`0.6.2`, so every request from it reports `axonium-go/0.6.2` as its User-Agent. Nothing else about
+it is wrong — the code here is identical — but the module proxy had already fetched the tag by the
+time the release gate reported the mismatch, and the proxy is immutable, so the version could only
+be withdrawn. `go/go.mod` carries the `retract` directive.
+
+The gate did its job and still ran too late: it checks the constant against the **tag**, which means
+after publication. `TestVersionMatchesTheNewestChangelogEntry` now checks it where it can still be
+changed. TypeScript already had that test and it caught the same mistake in the same hour, before
+anything was published.
 
 **`gen_ai.system` is gone; it was deprecated.** Spans now carry `gen_ai.provider.name` and
 `gen_ai.operation.name`, plus `http.request.method`, `url.path` and `server.address`, and are named

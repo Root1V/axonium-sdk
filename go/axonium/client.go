@@ -41,7 +41,13 @@ import (
 const userAgent = "axonium-go/" + Version
 
 // Version is this SDK's version.
-const Version = "0.6.2"
+//
+// It has to match the tag that publishes it, and nothing local checked that until v0.6.3 was
+// published with this constant still reading 0.6.2. The release workflow's gate caught it, but a
+// gate that runs on a tag runs after the module proxy has already fetched the tag -- and the proxy
+// is immutable, so there was nothing to correct. v0.6.3 is retracted in go.mod for that reason.
+// TestVersionMatchesTheChangelog now checks it where it can still be changed.
+const Version = "0.6.4"
 
 // Client is a client for the Prometheus inference platform. Safe for concurrent use.
 type Client struct {
