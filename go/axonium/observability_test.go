@@ -28,6 +28,9 @@ type recordingSpan struct {
 	attrs map[string]any
 	errs  []error
 	ended bool
+	// Attributes offered after End, which a real span discards. Recorded rather than ignored so a
+	// test can report what was lost.
+	droppedAfterEnd []string
 }
 
 func (t *recordingTracer) StartSpan(ctx context.Context, name string, attrs map[string]any) (context.Context, Span) {
@@ -41,10 +44,24 @@ func (t *recordingTracer) StartSpan(ctx context.Context, name string, attrs map[
 	return ctx, s
 }
 
+// SetAttributes DROPS everything once the span has ended, because that is what a real span does.
+//
+// It used to accept attributes after End and keep them, and that made this double lie in the one
+// way that mattered: TestTheSpanCarriesTheModelThatAnswered passed with the span closed before the
+// body was decoded, which is precisely the bug moving the span's ownership out of send was meant to
+// fix. Measured -- the mutation that restores the old shape passed against the old double and fails
+// against this one. A test double that is more forgiving than production turns a guard into
+// decoration.
+//
+// The dropped keys are kept so a test can say what was lost rather than only that something was.
 func (s *recordingSpan) SetAttributes(attrs map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for k, v := range attrs {
+		if s.ended {
+			s.droppedAfterEnd = append(s.droppedAfterEnd, k)
+			continue
+		}
 		s.attrs[k] = v
 	}
 }
@@ -369,5 +386,140 @@ func TestOperationNamesMatchTheSharedTable(t *testing.T) {
 		if got := operationName(entry.Path); got != "" {
 			t.Errorf("%s carries no GenAI operation, but the map returns %q", entry.Path, got)
 		}
+	}
+}
+
+// The second witness: the model that ANSWERED, next to the one that was asked for.
+//
+// ARG-AXO-001. On the gateway's own span these two come from the same already-resolved variable, so
+// the pair cannot differ -- Prometheus measured that and published it as P-21 rather than let Argus
+// watch thirty minutes of data and conclude the case never happens. From a client they come from
+// two places: the request model is the string the caller wrote, which may be an alias, and the
+// response model is read out of the body. Argus asked for it because half the inference incidents
+// they have seen are the model that answered not being the one asked for.
+//
+// This could not be emitted until the span's lifetime moved out of send and into doJSON: the body
+// is decoded by the caller, so the span used to be closed by the time the served model was known.
+func TestTheSpanCarriesTheModelThatAnswered(t *testing.T) {
+	tracer := &recordingTracer{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"t","token_type":"Bearer","expires_in":300}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		// The alias on the way in, the public name on the way out: the shape Prometheus measured
+		// when they found their own span reporting both as the resolved name.
+		_, _ = w.Write([]byte(`{"id":"c","object":"chat.completion","created":0,
+			"model":"qwen3-0.6b",
+			"choices":[{"index":0,"finish_reason":"stop",
+			            "message":{"role":"assistant","content":"hi"}}],
+			"usage":{"prompt_tokens":11,"completion_tokens":3,"total_tokens":14}}`))
+	}))
+	defer srv.Close()
+
+	client, err := New(Config{GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s", Tracer: tracer})
+	if err != nil {
+		t.Fatalf("building: %v", err)
+	}
+	defer client.Close()
+
+	_, err = client.Chat.Create(context.Background(), ChatRequest{
+		Model:    "qwen3-0-6b-iq4-nl-local-1",
+		Messages: []Message{TextMessage("user", "hi")},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	span := tracer.spans[0]
+	for key, want := range map[string]any{
+		"gen_ai.request.model":       "qwen3-0-6b-iq4-nl-local-1",
+		"gen_ai.response.model":      "qwen3-0.6b",
+		"gen_ai.usage.input_tokens":  int64(11),
+		"gen_ai.usage.output_tokens": int64(3),
+	} {
+		if span.attrs[key] != want {
+			t.Errorf("%s: got %v (%T), want %v", key, span.attrs[key], span.attrs[key], want)
+		}
+	}
+	// The pair DIFFERING is the whole point, asserted as a pair rather than as two values: two
+	// correct-looking values that happen to be equal is exactly the state the gateway's span was in
+	// while reporting both.
+	if span.attrs["gen_ai.request.model"] == span.attrs["gen_ai.response.model"] {
+		t.Error("the pair is equal, so this test could not tell a resolved alias from a missing one")
+	}
+	// It has to be set BEFORE the span ends. A real span discards what arrives after End, and so
+	// does this double -- which it did not until a mutation restoring the old span ownership passed
+	// against it. That is the assertion, not span.ended on its own.
+	if len(span.droppedAfterEnd) > 0 {
+		t.Errorf("attributes were set after the span ended, so they are lost in production: %v",
+			span.droppedAfterEnd)
+	}
+	if !span.ended {
+		t.Error("the span never ended")
+	}
+}
+
+// Absent, never zero. A fabricated 0 reads exactly like a measured 0 and sums into a trace total
+// that looks exact. Argus raised it and confirmed their own usage() skips nil for the same reason.
+func TestUsageIsAbsentRatherThanZeroWhenUnreported(t *testing.T) {
+	tracer := &recordingTracer{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/oauth2/token" {
+			_, _ = w.Write([]byte(`{"access_token":"t","token_type":"Bearer","expires_in":300}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":"c","object":"chat.completion","created":0,"model":"m",
+			"choices":[{"index":0,"finish_reason":"stop",
+			            "message":{"role":"assistant","content":"hi"}}]}`))
+	}))
+	defer srv.Close()
+
+	client, err := New(Config{GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s", Tracer: tracer})
+	if err != nil {
+		t.Fatalf("building: %v", err)
+	}
+	defer client.Close()
+
+	if _, err := client.Chat.Create(context.Background(), ChatRequest{
+		Model: "m", Messages: []Message{TextMessage("user", "hi")},
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	span := tracer.spans[0]
+	for _, key := range []string{"gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens"} {
+		if _, present := span.attrs[key]; present {
+			t.Errorf("%s was set with nothing to report: %v", key, span.attrs[key])
+		}
+	}
+	// The served model is still there: the body named it, only the usage was missing.
+	if span.attrs["gen_ai.response.model"] != "m" {
+		t.Errorf("gen_ai.response.model: got %v", span.attrs["gen_ai.response.model"])
+	}
+}
+
+// recordOutcome runs on the success path, so a body that is not what we expect must contribute
+// nothing rather than panic. encoding/json gives every number as float64, so a fractional count is
+// a body we do not understand -- reporting int64(11.5) as 11 would be inventing a measurement.
+func TestRecordOutcomeSurvivesABodyItDoesNotUnderstand(t *testing.T) {
+	for name, body := range map[string]map[string]any{
+		"no model":            {},
+		"model not a string":  {"model": 7.0},
+		"model empty":         {"model": ""},
+		"usage not an object": {"usage": "nope"},
+		"count not a number":  {"model": "m", "usage": map[string]any{"prompt_tokens": "11"}},
+		"count fractional":    {"model": "m", "usage": map[string]any{"prompt_tokens": 11.5}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			span := &recordingSpan{attrs: map[string]any{}}
+			recordOutcome(span, body)
+			if _, present := span.attrs["gen_ai.usage.input_tokens"]; present {
+				t.Errorf("invented a token count from %v: %v", body, span.attrs)
+			}
+		})
 	}
 }
