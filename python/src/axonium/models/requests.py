@@ -164,6 +164,28 @@ class Message(BaseModel):
     tool_calls: list[ToolCall] | None = None
     tool_call_id: str | None = None
 
+    #: A reasoning model's own chain of thought, **sent back** on an assistant turn you continue
+    #: from.
+    #:
+    #: Give it back whenever the response gave it to you. It is not politeness: llama.cpp measured
+    #: **7 failed turns out of 120** with the reasoning withheld against **0 of 120** with it
+    #: returned, and closed the issue as not fixable in the parser. A reasoning model asked to
+    #: continue from its own tool call, without its analysis channel, emits malformed headers that
+    #: lose the whole turn. On models that do not use Harmony it is not an error at all -- it is
+    #: quietly worse answers.
+    #:
+    #: **This field already reached the wire before it was declared**, because ``Message`` allows
+    #: extras, so Python was one of the three SDKs that happened to work. Declaring it is not a fix
+    #: but a statement: it puts the two rules below somewhere a reader can find them, and it stops
+    #: the behaviour being an accident of configuration.
+    #:
+    #: **Omitted when the model reported none; never ``""``.** Absent and empty are different
+    #: assertions, and the second claims the model thought about nothing.
+    #:
+    #: It does **not** substitute for ``content`` or ``tool_calls``: a turn carrying only reasoning
+    #: has no valid wire form and the gateway answers ``400``.
+    reasoning_content: str | None = None
+
 
 class ChatCompletionRequest(_AllowlistRequest):
     """Body for ``POST /v1/chat/completions``."""

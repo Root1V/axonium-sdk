@@ -27,6 +27,31 @@ export interface Message {
   name?: string;
   tool_call_id?: string;
   tool_calls?: unknown[];
+  /**
+   * A reasoning model's own chain of thought, **sent back** on an assistant turn you are
+   * continuing from.
+   *
+   * Give it back whenever the response gave it to you. It is not politeness: llama.cpp measured
+   * **7 failed turns out of 120** with the reasoning withheld against **0 of 120** with it
+   * returned, and closed the issue as not fixable in the parser. A reasoning model asked to
+   * continue from its own tool call, without its analysis channel, emits malformed headers that
+   * lose the whole turn. On models that do not use Harmony it is not an error at all — it is
+   * quietly worse answers, which is harder to notice and worse to diagnose.
+   *
+   * **This interface refused the field until `0.2.5`.** The runtime passed it through, so an
+   * object built as `unknown` and cast reached the wire, but anyone writing the turn as a typed
+   * literal got `TS2353: 'reasoning_content' does not exist in type 'Message'` — so the supported
+   * way to do the right thing did not compile. Prometheus found their own gateway deleting this
+   * field from every message of every client, told the three frameworks to check their side, and
+   * this is what checking found here.
+   *
+   * **Omit it when the model reported none; never send `""`.** Absent and empty are different
+   * assertions, and the second one claims the model thought about nothing.
+   *
+   * It does **not** substitute for `content` or `tool_calls`: a turn carrying only reasoning has no
+   * valid wire form and the gateway answers `400`.
+   */
+  reasoning_content?: string;
 }
 
 /** One part of a multi-part message. */
