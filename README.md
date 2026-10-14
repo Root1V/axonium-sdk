@@ -31,19 +31,22 @@ equivalent.
 
 | Language | Install | Version |
 |---|---|---|
-| Python | `pip install axonium` | [`1.0.0rc9`](https://pypi.org/project/axonium/) on PyPI |
-| Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.2` | `v0.6.2` |
-| Rust | `axonium = "0.6"` | [`0.6.2`](https://crates.io/crates/axonium) on crates.io |
-| Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.2")` | [`0.3.2`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
-| TypeScript | `npm install axonium` | [`0.2.3`](https://www.npmjs.com/package/axonium) on npm |
+| Python | `pip install axonium` | [`1.0.0rc10`](https://pypi.org/project/axonium/) on PyPI |
+| Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.4` | `v0.6.4` |
+| Rust | `axonium = "0.6"` | [`0.6.3`](https://crates.io/crates/axonium) on crates.io |
+| Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.4")` | [`0.3.4`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
+| TypeScript | `npm install axonium` | [`0.2.4`](https://www.npmjs.com/package/axonium) on npm |
 
 All five are published and implement the same surface.
 
-Every version above was read back from its own registry on 2026-10-08, not from a release log:
+Every version above was read back from its own registry on 2026-10-14, not from a release log:
 `pypi`, `crates.io`, `npm` and the Go module proxy each confirm the number next to it. The row that
 made this worth doing said PyPI had `1.0.0rc6` with `1.0.0rc9` *"tagged and rehearsed"* — `rc9` had
 been on PyPI for two days. `python/v1.0.0rc8` is tagged and will never publish: its gate requires a
-TestPyPI rehearsal and TestPyPI was answering `503` at the time, so `rc9` superseded it.
+TestPyPI rehearsal and TestPyPI was answering `503` at the time, so `rc9` superseded it. **`go/v0.6.3`
+is retracted** — it was tagged with the `Version` constant unbumped, the module proxy had already
+fetched it, and the proxy is immutable, so it could only be withdrawn; `go list -m -versions` omits
+it and `@upgrade` resolves to `v0.6.4`.
 
 Python was built first as the reference
 implementation; every behaviour they share is pinned by the contract corpus in

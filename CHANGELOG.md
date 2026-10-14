@@ -9,6 +9,23 @@ form `python/vX.Y.Z`, `go/vX.Y.Z`, `rust/vX.Y.Z`.
 
 Nothing yet.
 
+### 0.2.5 — 2026-10-14
+
+**`reasoning_content` is on the `Message` interface, and until now it would not compile.**
+
+The runtime always passed the field through, so an object built as `unknown` and cast reached the
+wire. But writing the turn as a typed literal gave
+`TS2353: 'reasoning_content' does not exist in type 'Message'` — **the supported way to do the right
+thing was the one that failed**, and the way that worked was the one that evaded the type. That is
+not a defect you find by reading the code; you find it by trying to write the call.
+
+Give it back whenever a response gave it to you. Prometheus found their gateway deleting this field
+from every message of every client, and llama.cpp issue #27720 — closed as not fixable in the parser
+— measures the cost: **7 failed turns out of 120** with the reasoning withheld against **0 of 120**
+with it returned. Omit it when the model reported none; never send `""`.
+
+No breaking changes.
+
 ### 0.2.4 — 2026-10-08
 
 **`IdempotencyKeyReuseError` had no documentation; it now has the part that costs money.** The
@@ -493,6 +510,33 @@ is a real conflict rather than a tuning question and is written down as one.
 ### Unreleased
 
 Nothing yet.
+
+### 1.0.0rc11 — 2026-10-14
+
+**`reasoning_content` is declared on a request `Message`.** It already reached the wire, because
+`Message` allows extras — the right behaviour by configuration rather than by decision, which
+nothing documented and a reasonable hardening of the model would have removed without any test
+noticing. Declaring it puts the two rules somewhere a reader can find them.
+
+Give it back whenever a response gave it to you. Prometheus found their gateway deleting this field
+from every message of every client; llama.cpp issue #27720 is closed as not fixable in the parser
+and measures the cost: **7 failed turns out of 120** with the reasoning withheld against **0 of 120**
+with it returned. Omit it when the model reported none — never `""`.
+
+**`gen_ai.response.model` on the span, with `gen_ai.usage.input_tokens` / `output_tokens`.** Argus
+asked for it and the gateway cannot provide it: there, that attribute and `gen_ai.request.model`
+come from the same already-resolved variable, so the pair cannot differ. From a client they come
+from different places — the request model is the string you wrote, which may be an alias, and the
+response model is read out of the body — so a client span is the one place the discrepancy is
+observable. Half the inference incidents Argus has seen are the model that answered not being the
+one asked for.
+
+Each of those is **omitted when the platform reported nothing and never written as 0**: a fabricated
+zero reads exactly like a measured one and sums into a trace total that looks exact. Not recorded on
+a streamed call, where the model and usage arrive in the chunks rather than in a body this layer
+sees.
+
+No breaking changes.
 
 ### 1.0.0rc10 — 2026-10-08
 
@@ -1521,6 +1565,20 @@ which spoke to a platform generation that no longer exists.
 
 Nothing yet.
 
+### 0.6.5 — 2026-10-14
+
+**Documentation only, and it is the second half of `v0.6.4`'s story.**
+
+`Message.ReasoningContent` already travelled — Go was one of the three SDKs that worked when
+Prometheus asked whether this field survives each framework's serialization — but nothing asserted
+that it *left*, which is the hole every team that hit this had in common: tests for what arrived,
+none for what was sent back. `reasoning_returns_test.go` now pins the direction, including that the
+key is absent rather than empty when the model reported none.
+
+`gen_ai.response.model` is **not** here yet, and the reason is structural rather than effort: the
+span's lifetime ends inside `send` while the body is decoded by `doJSON`, so by the time the served
+model is known the span is closed. Tracked as `AXO-166`.
+
 ### 0.6.4 — 2026-10-08
 
 **`v0.6.3` is retracted. Use this one.** It was tagged with the `Version` constant still reading
@@ -2423,6 +2481,19 @@ No third-party dependencies: standard library only.
 ### Unreleased
 
 Nothing yet.
+
+### 0.6.4 — 2026-10-14
+
+**Documentation and tests only.**
+
+`Message.reasoning_content` already travelled, declared with `skip_serializing_if`, so Rust was one
+of the three SDKs that worked when Prometheus asked whether this field survives each framework's
+serialization. What was missing is what every team that hit this was missing: a test that it
+*leaves*. The `reasoning_returns` module pins it, including that the key is absent rather than empty
+when the model reported none.
+
+`gen_ai.response.model` is **not** here yet, for the same structural reason as Go: the span's
+lifetime ends inside `send` while the body is decoded by the caller. Tracked as `AXO-166`.
 
 ### 0.6.3 — 2026-10-08
 
