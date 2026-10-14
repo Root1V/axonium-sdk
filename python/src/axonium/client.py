@@ -38,7 +38,13 @@ from axonium.models.common import (
     ResponseMeta,
 )
 from axonium.observability.logging import request_fields
-from axonium.observability.otel import PROVIDER_NAME, operation_name, record_response, span
+from axonium.observability.otel import (
+    PROVIDER_NAME,
+    operation_name,
+    outcome_of,
+    record_response,
+    span,
+)
 from axonium.observability.scopes import explain_forbidden
 from axonium.preflight import check_model
 from axonium.providers import AsyncTokenProvider, ProvidedTokenAuth, TokenProvider
@@ -413,7 +419,15 @@ class _BaseAxonium:
         started: float,
     ) -> None:
         meta = ResponseMeta.from_response(response)
-        record_response(active, request_id=meta.request_id, trace_id=meta.trace_id)
+        served_model, input_tokens, output_tokens = _outcome_for_span(active, response)
+        record_response(
+            active,
+            request_id=meta.request_id,
+            trace_id=meta.trace_id,
+            served_model=served_model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
         logger.debug(
             "Request completed",
             extra=request_fields(
@@ -426,6 +440,25 @@ class _BaseAxonium:
                 trace_id=meta.trace_id,
             ),
         )
+
+
+def _outcome_for_span(
+    active: Any, response: httpx.Response
+) -> tuple[str | None, int | None, int | None]:
+    """The served model and token counts, or nothing at all when tracing is off.
+
+    The body is decoded a second time here, which is cheap for a response already in memory and is
+    skipped entirely when there is no span to put the result on. It is wrapped because **this runs
+    on the success path**: a malformed body is the caller's problem to discover from the value they
+    asked for, never a reason for a request that worked to raise from the observability layer.
+    """
+    if active is None:
+        return None, None, None
+    try:
+        return outcome_of(response.json())
+    except Exception:  # a span attribute is never worth failing a good response
+        logger.debug("Could not read the outcome for the span", exc_info=True)
+        return None, None, None
 
 
 class Axonium(_BaseAxonium):
