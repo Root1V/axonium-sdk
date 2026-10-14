@@ -146,7 +146,16 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, o
 		body = encoded
 	}
 
-	resp, meta, err := c.send(ctx, method, path, body, false, model, instance, idemKey)
+	// The span is opened HERE rather than inside send, so that it is still open when the body has
+	// been decoded. gen_ai.response.model can only be read from the body, and Argus asked for it
+	// because from the gateway's own span that attribute and gen_ai.request.model come from the
+	// same already-resolved variable and so cannot differ -- which Prometheus measured and
+	// published as P-21. From a client they come from two different places, so this is where the
+	// discrepancy is observable.
+	ctx, span := c.startSpan(ctx, method, path, model)
+	defer span.End()
+
+	resp, meta, err := c.send(ctx, span, method, path, body, false, model, instance, idemKey)
 	if err != nil {
 		return meta, err
 	}
@@ -157,9 +166,13 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, o
 		if err != nil {
 			return meta, translateTransportError(ctx, err)
 		}
+		var raw map[string]any
+		rawOK := json.Unmarshal(decoded, &raw) == nil
+		if rawOK {
+			recordOutcome(span, raw)
+		}
 		if capturer, ok := out.(rawCapturer); ok {
-			var raw map[string]any
-			if json.Unmarshal(decoded, &raw) == nil {
+			if rawOK {
 				capturer.setRaw(raw)
 			}
 		}
@@ -188,7 +201,14 @@ func (c *Client) doJSON(ctx context.Context, method, path string, payload any, o
 // only retry there is, since the gateway performs none of its own on a streamed request. Once the
 // stream has begun the failure arrives in band instead, where this function cannot see it and never
 // retries it. Agreed across all four SDKs on 2026-09-27; the shared corpus pins the attempt count.
-func (c *Client) send(ctx context.Context, method, path string, body []byte, streaming bool, model, instance, idemKey string) (*http.Response, ResponseMeta, error) {
+// send runs the retry loop against one route and reports onto a span it is HANDED rather than one
+// it creates.
+//
+// The span used to be started and ended here, which meant it was closed before the caller had
+// decoded the body -- so `gen_ai.response.model`, which can only be read from the body, had nowhere
+// to go. Ownership now sits with whoever decodes: `doJSON` for a JSON call, the stream opener for a
+// stream. The retry loop itself is unchanged; it just uses the span it was given.
+func (c *Client) send(ctx context.Context, span Span, method, path string, body []byte, streaming bool, model, instance, idemKey string) (*http.Response, ResponseMeta, error) {
 	// Keyed by model, not by gateway. 503 backend-unavailable is a per-model condition -- it means
 	// every instance of that model is out, and other models on the same gateway keep serving.
 	// Cooling the whole gateway would refuse requests the platform would have answered.
@@ -216,9 +236,6 @@ func (c *Client) send(ctx context.Context, method, path string, body []byte, str
 	if c.config.Retry != nil {
 		policy = *c.config.Retry
 	}
-
-	ctx, span := c.startSpan(ctx, method, path, model)
-	defer span.End()
 
 	var waited time.Duration
 	for attempt := 1; ; attempt++ {

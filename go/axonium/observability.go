@@ -148,6 +148,52 @@ func hostOf(base string) string {
 	return parsed.Hostname()
 }
 
+// recordOutcome attaches the model that answered and the tokens it used, read from the decoded
+// response body.
+//
+// gen_ai.response.model is what Argus asked for and what the gateway cannot supply: on its own span
+// that attribute and gen_ai.request.model come from the same already-resolved variable, so the pair
+// CANNOT differ -- Prometheus measured that and published it as P-21 rather than let Argus watch
+// thirty minutes of data and conclude the case never happens. From a client the two come from
+// different places: the request model is the string the caller wrote, which may be an alias, and
+// this one is read out of the body. So a client span is the one place the discrepancy is observable.
+//
+// Every value is OMITTED when the platform did not report it, never written as zero or an empty
+// string. A fabricated 0 reads exactly like a measured 0, and in a trace -- which is where somebody
+// goes to ask what a call cost -- it sums into a total that looks exact. Argus raised that and
+// confirmed their own usage() skips nil for the same reason, so the two sides agree rather than
+// each guessing.
+//
+// Defensive on every field because this runs on the success path: a body whose "model" is not a
+// string, a "usage" that is not an object, a count that is not a number -- each contributes nothing
+// rather than panicking. A span attribute must never be the reason a request that worked reports a
+// failure.
+func recordOutcome(span Span, body map[string]any) {
+	attrs := map[string]any{}
+
+	if model, ok := body["model"].(string); ok && model != "" {
+		attrs["gen_ai.response.model"] = model
+	}
+	if usage, ok := body["usage"].(map[string]any); ok {
+		// encoding/json decodes every JSON number into float64, so the integer the gateway sent
+		// arrives as a float and is converted back here. Checked for a whole value rather than
+		// truncated: a fractional token count is a body we do not understand, and reporting
+		// int64(11.5) as 11 would be inventing a measurement.
+		for key, name := range map[string]string{
+			"prompt_tokens":     "gen_ai.usage.input_tokens",
+			"completion_tokens": "gen_ai.usage.output_tokens",
+		} {
+			if raw, ok := usage[key].(float64); ok && raw == float64(int64(raw)) {
+				attrs[name] = int64(raw)
+			}
+		}
+	}
+
+	if len(attrs) > 0 {
+		span.SetAttributes(attrs)
+	}
+}
+
 // recordResponse attaches the gateway's correlation IDs to a span, which is the whole point of the
 // span existing: it is what lets a caller's trace be matched against the platform's.
 func recordResponse(span Span, meta ResponseMeta) {

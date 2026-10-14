@@ -507,7 +507,14 @@ func (s *ChatService) Stream(ctx context.Context, req ChatRequest) (*ChatComplet
 
 	// The stream owns this cancel for its whole life, so Close can tear the connection down.
 	streamCtx, cancel := context.WithCancel(ctx)
-	resp, meta, err := s.client.send(streamCtx, http.MethodPost, "/v1/chat/completions", body, true, req.Model, req.Instance, req.IdempotencyKey)
+	// Opened and ended around the send, which is exactly what send used to do for itself -- a
+	// stream's span deliberately does not change shape here. The response attributes doJSON adds
+	// are not available on this path anyway: the model and usage arrive in the chunks, not in a
+	// body this layer reads.
+	streamCtx, span := s.client.startSpan(streamCtx, http.MethodPost, "/v1/chat/completions", req.Model)
+	defer span.End()
+
+	resp, meta, err := s.client.send(streamCtx, span, http.MethodPost, "/v1/chat/completions", body, true, req.Model, req.Instance, req.IdempotencyKey)
 	if err != nil {
 		cancel()
 		return nil, err
