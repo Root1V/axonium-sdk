@@ -551,6 +551,90 @@ mod tool_results {
     }
 }
 
+/// Does a reasoning model's own analysis go back OUT, or only come in?
+///
+/// `PRM-VRT-003`, 2026-10-13. Prometheus found their gateway **deleting `reasoning_content` from
+/// every message of every client** — their internal message model did not name the field, Pydantic
+/// dropped what it did not name — and then asked the three frameworks the one question they could
+/// not answer themselves: does that field survive *your* serialization?
+///
+/// Not cosmetic. llama.cpp issue #27720 is closed as not fixable in the parser and the thread
+/// measures the cost: **7 failed turns out of 120** with the reasoning withheld, **0 of 120** with
+/// it returned. A reasoning model continuing from its own tool call, without its analysis channel,
+/// emits malformed headers that lose the whole turn.
+///
+/// Rust was one of the three SDKs that already worked. **Swift could not send it at all** and
+/// **TypeScript refused it at compile time**, so two of five could not do the right thing. And the
+/// hole was never the field: every team that hit this had tests asserting what ARRIVED and none
+/// asserting what was SENT BACK. A field that enters and does not leave breaks nothing visible.
+#[cfg(test)]
+mod reasoning_returns {
+    use super::{ChatCompletion, Message};
+
+    fn a_turn_that_called_a_tool() -> Message {
+        Message {
+            role: "assistant".into(),
+            reasoning_content: Some("The user wants weather. I should call get_weather.".into()),
+            tool_calls: Some(vec![serde_json::from_value(serde_json::json!({
+                "id": "c1",
+                "type": "function",
+                "function": {"name": "get_weather", "arguments": "{\"city\":\"Quito\"}"}
+            }))
+            .expect("a tool call")]),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn it_leaves_on_an_assistant_turn() {
+        let wire = serde_json::to_value(a_turn_that_called_a_tool()).expect("serialises");
+
+        assert_eq!(
+            wire["reasoning_content"],
+            "The user wants weather. I should call get_weather."
+        );
+        // The tool call has to survive beside it: the measured turn carries both, and a fix that
+        // sent the reasoning while dropping the call would satisfy a weaker assertion.
+        assert_eq!(wire["tool_calls"][0]["id"], "c1");
+    }
+
+    /// Never `""`. Absent and empty are different assertions, and the second claims the model
+    /// thought about nothing. Aeon and Synaptum fixed this field in the same week and both wrote
+    /// down this rule, so it is pinned rather than left to the serializer's defaults.
+    #[test]
+    fn it_is_omitted_when_there_is_none() {
+        let wire = serde_json::to_value(Message::text("assistant", "hi")).expect("serialises");
+
+        assert!(wire.get("reasoning_content").is_none(), "{wire}");
+    }
+
+    /// The round trip, which is what a tool-use loop does. End to end rather than field by field,
+    /// because the failure lives in the join: the response type carried the field and the request
+    /// type did not, and each half looked right on its own.
+    #[test]
+    fn a_response_message_can_be_handed_straight_back() {
+        let completion: ChatCompletion = serde_json::from_value(serde_json::json!({
+            "id": "c", "object": "chat.completion", "created": 0, "model": "gpt-oss-20b-mxfp4",
+            "choices": [{"index": 0, "finish_reason": "tool_calls", "message": {
+                "role": "assistant",
+                "reasoning_content": "thinking out loud",
+                "tool_calls": [{"id": "c1", "type": "function",
+                                "function": {"name": "f", "arguments": "{}"}}]
+            }}]
+        }))
+        .expect("a completion");
+
+        assert_eq!(completion.reasoning(), "thinking out loud");
+
+        let handed_back = completion.choices[0]
+            .message
+            .clone()
+            .expect("the choice carries a message");
+        let wire = serde_json::to_value(handed_back).expect("serialises");
+        assert_eq!(wire["reasoning_content"], "thinking out loud");
+    }
+}
+
 #[cfg(test)]
 mod response_format {
     use super::{ChatRequest, Message};

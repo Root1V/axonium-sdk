@@ -188,6 +188,7 @@ One chat message.
 | `name` | `str \| None` | `None` |
 | `tool_calls` | `list[axonium.models.chat.ToolCall] \| None` | `None` |
 | `tool_call_id` | `str \| None` | `None` |
+| `reasoning_content` | `str \| None` | `None` |
 
 ### `ContentPart`
 
