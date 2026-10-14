@@ -21,7 +21,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager, nullcontext
 from typing import Any
 
-__all__ = ["PROVIDER_NAME", "operation_name", "span"]
+__all__ = ["PROVIDER_NAME", "operation_name", "outcome_of", "span"]
 
 logger = logging.getLogger("axonium.otel")
 
@@ -115,11 +115,73 @@ def span(name: str, *, enabled: bool, **attributes: Any) -> Any:
     return _record(name, attributes)
 
 
-def record_response(active: Any, *, request_id: str | None, trace_id: str | None) -> None:
-    """Attach the gateway's correlation IDs to an active span."""
+def record_response(
+    active: Any,
+    *,
+    request_id: str | None,
+    trace_id: str | None,
+    served_model: str | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+) -> None:
+    """Attach the gateway's correlation IDs, the model that answered, and the tokens it used.
+
+    **``gen_ai.response.model`` is the attribute Argus asked for and could not get from the
+    gateway.** There, it and ``gen_ai.request.model`` come from the same already-resolved variable,
+    so the pair *cannot* differ — Prometheus measured that and said so in ``P-21`` rather than let
+    Argus look at thirty minutes of data and conclude the case never happens. From a client the two
+    come from different places: the request model is the string the caller wrote, which may be an
+    alias, and this one is read back out of the response body. So a client span is the one place the
+    discrepancy is observable, and Argus asked for it in ``ARG-AXO-001`` because *"half the
+    inference incidents we have seen are explained by the model that answered not being the one
+    that was asked for"*.
+
+    **Every one of these is omitted when the platform did not report it, never written as zero or
+    an empty string.** A fabricated 0 reads exactly like a measured 0, and in a trace — which is
+    where somebody goes to ask what a call cost — it sums into a total that looks exact. Argus
+    confirmed their own ``usage()`` takes ``int | None`` and skips ``None`` for the same reason.
+
+    **Not recorded on a streamed call**, because the model and the usage arrive in the chunks rather
+    than in a body this layer ever sees. That is a gap and it is named rather than papered over: a
+    stream's span carries the correlation IDs and nothing about the outcome.
+    """
     if active is None:
         return
     if request_id:
         active.set_attribute("prometheus.request_id", request_id)
     if trace_id:
         active.set_attribute("prometheus.trace_id", trace_id)
+    if served_model:
+        active.set_attribute("gen_ai.response.model", served_model)
+    if input_tokens is not None:
+        active.set_attribute("gen_ai.usage.input_tokens", input_tokens)
+    if output_tokens is not None:
+        active.set_attribute("gen_ai.usage.output_tokens", output_tokens)
+
+
+def outcome_of(body: Any) -> tuple[str | None, int | None, int | None]:
+    """The served model and token counts from a decoded response body, or ``None`` for each.
+
+    Defensive to the point of paranoia on purpose: this runs on the success path of every
+    non-streaming call, and **a span attribute must never be the reason a request that worked
+    reports a failure**. A body that is not an object, a ``usage`` that is not an object, a count
+    that is not an integer — each yields ``None`` rather than raising.
+
+    A ``bool`` is rejected explicitly because ``isinstance(True, int)`` is true in Python, and
+    ``gen_ai.usage.input_tokens = True`` would be a number nobody could explain.
+    """
+    if not isinstance(body, dict):
+        return None, None, None
+
+    served = body.get("model")
+    model = served if isinstance(served, str) and served else None
+
+    usage = body.get("usage")
+    if not isinstance(usage, dict):
+        return model, None, None
+
+    def count(name: str) -> int | None:
+        value = usage.get(name)
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    return model, count("prompt_tokens"), count("completion_tokens")

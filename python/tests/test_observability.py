@@ -581,3 +581,151 @@ class TestTheGenAiSemanticConventions:
         assert "models/mine" in name
         # Still useful without the GenAI half: this is what correlates the call with the platform.
         assert attributes["server.address"] == "gateway.test.invalid"
+
+
+class TestTheSecondWitness:
+    """``gen_ai.response.model``: the attribute Argus could not get from the gateway.
+
+    `ARG-AXO-001`, 2026-10-13. On the gateway's own span that attribute and
+    ``gen_ai.request.model`` come from the **same already-resolved variable**, so the pair *cannot*
+    differ — Prometheus measured it and said so in their `P-21` rather than let Argus look at
+    thirty minutes of data and conclude the case never happens. From a client the two come from
+    different places: the request model is the string the caller wrote, which may be an alias, and
+    the response model is read out of the body. So a client span is the one place the discrepancy
+    is observable, and Argus asked for it because *"half the inference incidents we have seen are
+    explained by the model that answered not being the one that was asked for"*.
+    """
+
+    @respx.mock
+    def test_an_alias_and_the_served_name_are_both_on_the_span(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        """The pair that the gateway's own span cannot show.
+
+        The request asks for an alias and the body answers with the public name — the exact shape
+        Prometheus measured when they found their own span reporting both as the resolved name.
+        """
+        respx.post(AUTH_URL).mock(return_value=token())
+        respx.post(CHAT_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": "c-1",
+                    "object": "chat.completion",
+                    "created": 0,
+                    "model": "qwen3-0.6b",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "hi"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 11, "completion_tokens": 3, "total_tokens": 14},
+                },
+            )
+        )
+
+        recorded: dict[str, object] = {}
+
+        from axonium.observability import otel
+
+        class Collecting:
+            def set_attribute(self, key: str, value: object) -> None:
+                recorded[key] = value
+
+        @contextmanager
+        def capture(name: str, attributes: dict[str, object]) -> Iterator[Collecting]:
+            recorded.update(attributes)
+            yield Collecting()
+
+        with (
+            mock.patch.object(otel, "_record", capture),
+            Axonium(otel_enabled=True, **config_kwargs) as client,
+        ):
+            client.chat.completions.create(
+                model="qwen3-0-6b-iq4-nl-local-1",
+                messages=[{"role": "user", "content": "hi"}],
+            )
+
+        assert recorded["gen_ai.request.model"] == "qwen3-0-6b-iq4-nl-local-1"
+        assert recorded["gen_ai.response.model"] == "qwen3-0.6b"
+        # The pair differing is the whole point. Asserted as a pair rather than as two values,
+        # because two correct-looking values that happen to be equal is exactly the state
+        # Prometheus's gateway was in while reporting both.
+        assert recorded["gen_ai.request.model"] != recorded["gen_ai.response.model"]
+        assert recorded["gen_ai.usage.input_tokens"] == 11
+        assert recorded["gen_ai.usage.output_tokens"] == 3
+
+    @respx.mock
+    def test_usage_is_absent_rather_than_zero_when_the_platform_reports_none(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        """A fabricated 0 reads exactly like a measured 0.
+
+        In a trace — which is where somebody goes to ask what a call cost — it sums into a total
+        that looks exact. Argus raised this and confirmed their own ``usage()`` takes ``int | None``
+        and skips ``None`` for the same reason, so the two sides agree instead of each guessing.
+        """
+        respx.post(AUTH_URL).mock(return_value=token())
+        respx.post(CHAT_URL).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "id": "c-1",
+                    "object": "chat.completion",
+                    "created": 0,
+                    "model": "m",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {"role": "assistant", "content": "hi"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                },
+            )
+        )
+
+        recorded: dict[str, object] = {}
+
+        from axonium.observability import otel
+
+        class Collecting:
+            def set_attribute(self, key: str, value: object) -> None:
+                recorded[key] = value
+
+        @contextmanager
+        def capture(name: str, attributes: dict[str, object]) -> Iterator[Collecting]:
+            recorded.update(attributes)
+            yield Collecting()
+
+        with (
+            mock.patch.object(otel, "_record", capture),
+            Axonium(otel_enabled=True, **config_kwargs) as client,
+        ):
+            client.chat.completions.create(model="m", messages=[{"role": "user", "content": "hi"}])
+
+        assert "gen_ai.usage.input_tokens" not in recorded, recorded
+        assert "gen_ai.usage.output_tokens" not in recorded, recorded
+        # The served model is still there: the body named it, only the usage was missing.
+        assert recorded["gen_ai.response.model"] == "m"
+
+    def test_a_body_that_is_not_what_we_expect_never_breaks_a_good_response(self) -> None:
+        """This runs on the success path of every non-streaming call.
+
+        A span attribute must never be the reason a request that worked reports a failure, so every
+        shape below yields nothing rather than raising. ``True`` is in the list because
+        ``isinstance(True, int)`` is true in Python, and ``gen_ai.usage.input_tokens = True`` would
+        be a number nobody could explain.
+        """
+        from axonium.observability.otel import outcome_of
+
+        assert outcome_of(None) == (None, None, None)
+        assert outcome_of("a string") == (None, None, None)
+        assert outcome_of([1, 2]) == (None, None, None)
+        assert outcome_of({"model": 7}) == (None, None, None)
+        assert outcome_of({"model": ""}) == (None, None, None)
+        assert outcome_of({"model": "m", "usage": "not an object"}) == ("m", None, None)
+        assert outcome_of({"model": "m", "usage": {"prompt_tokens": "11"}}) == ("m", None, None)
+        assert outcome_of({"model": "m", "usage": {"prompt_tokens": True}}) == ("m", None, None)
