@@ -194,6 +194,49 @@ impl Client {
         body: Option<&Value>,
         opts: &CallOptions,
     ) -> Result<(reqwest::Response, ResponseMeta)> {
+        let key = self.precheck(opts)?;
+        let op = crate::observability::Operation::start(path, &opts.model, &self.gateway_host);
+        self.run(&op, &key, path, body, opts).await
+    }
+
+    /// `send` for a call whose body this SDK decodes, which is every call but a stream.
+    ///
+    /// It exists so that **the span is still open when the body has been read**. `gen_ai.response
+    /// .model` can only come from the body, and Argus asked for it because on the gateway's own
+    /// span that attribute and `gen_ai.request.model` come from the same already-resolved variable
+    /// and so cannot differ -- which Prometheus measured and published as `P-21`. From a client
+    /// they come from two different places, so this is where the discrepancy is observable.
+    ///
+    /// It also removes the seven hand-written copies of *read the body, then complain about it*
+    /// that each caller carried. `what` keeps each complaint specific, which was the only thing
+    /// those copies were doing differently.
+    pub(crate) async fn send_json(
+        &self,
+        path: &str,
+        body: Option<&Value>,
+        opts: &CallOptions,
+        what: &str,
+    ) -> Result<(Value, ResponseMeta)> {
+        let key = self.precheck(opts)?;
+        let op = crate::observability::Operation::start(path, &opts.model, &self.gateway_host);
+        let (response, meta) = self.run(&op, &key, path, body, opts).await?;
+
+        let raw: Value = response.json().await.map_err(|e| {
+            Error::Transport(format!(
+                "the gateway returned {what} this SDK could not parse: {e}"
+            ))
+        })?;
+        op.record_outcome(&raw);
+        Ok((raw, meta))
+    }
+
+    /// The two refusals that happen before a request exists, and therefore before a span does.
+    ///
+    /// Kept ahead of `Operation::start` on purpose: a call refused locally never reached a model,
+    /// so opening a span for it would put a request that did not happen into GenAI aggregations.
+    /// That ordering is what `send` did before it was split, and it is preserved rather than
+    /// rediscovered.
+    fn precheck(&self, opts: &CallOptions) -> Result<String> {
         if opts.idempotency_key.len() > MAX_IDEMPOTENCY_KEY_LENGTH {
             return Err(Error::InvalidRequest(format!(
                 "idempotency_key is {} characters; the gateway accepts at most {}",
@@ -218,8 +261,21 @@ impl Client {
                 ..Default::default()
             })));
         }
+        Ok(key)
+    }
 
-        let op = crate::observability::Operation::start(path, &opts.model, &self.gateway_host);
+    /// The retry loop, against a span it is handed rather than one it creates.
+    ///
+    /// Unchanged from when it lived inside `send`: what moved is who owns the span, not a single
+    /// decision about what is retried.
+    async fn run(
+        &self,
+        op: &crate::observability::Operation,
+        key: &str,
+        path: &str,
+        body: Option<&Value>,
+        opts: &CallOptions,
+    ) -> Result<(reqwest::Response, ResponseMeta)> {
         let method = if body.is_some() { "POST" } else { "GET" };
 
         let mut attempt = 1u32;
@@ -227,11 +283,11 @@ impl Client {
         loop {
             let started = std::time::Instant::now();
             let outcome = self.attempt(path, body, opts).await;
-            record(&op, method, path, opts, attempt, started, &outcome);
+            record(op, method, path, opts, attempt, started, &outcome);
 
             match outcome {
                 Ok(mut pair) => {
-                    self.cooldowns.clear(&key);
+                    self.cooldowns.clear(key);
                     // What the caller needs to explain their own wall clock, carried on the answer
                     // rather than left in a trace event they may never have subscribed to.
                     pair.1.waited_for = waited;
@@ -240,7 +296,7 @@ impl Client {
                     return Ok(pair);
                 }
                 Err(Error::Api(api)) => {
-                    self.cooldowns.note(&key, &api);
+                    self.cooldowns.note(key, &api);
                     match self.config.retry.delay_for(&api, attempt) {
                         Some(delay) => {
                             op.record_retry_wait(

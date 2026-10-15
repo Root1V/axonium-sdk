@@ -125,12 +125,9 @@ impl Client {
     }
 
     async fn catalog_request(&self, path: &str) -> Result<ModelList> {
-        let (response, meta) = self.send(path, None, &CallOptions::default()).await?;
-        let raw: Value = response.json().await.map_err(|e| {
-            Error::Transport(format!(
-                "the gateway returned a catalog this SDK could not parse: {e}"
-            ))
-        })?;
+        let (raw, meta) = self
+            .send_json(path, None, &CallOptions::default(), "a catalog")
+            .await?;
         let mut list: ModelList = serde_json::from_value(raw.clone()).map_err(|e| {
             Error::Transport(format!(
                 "the gateway returned a catalog this SDK could not parse: {e}"
