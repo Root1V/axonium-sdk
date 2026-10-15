@@ -174,12 +174,12 @@ impl Client {
             ..Default::default()
         };
 
-        let (response, meta) = self.send(&path, Some(body), &call).await?;
-        let value: Value = response.json().await.map_err(|e| {
-            Error::Transport(format!(
-                "the predict route returned a body that is not JSON: {e}"
-            ))
-        })?;
+        // "a predict body" rather than the previous "the predict route returned a body that is
+        // not JSON": the sentence is now shared, so the noun is what stays specific. The route is
+        // already in the error's own context.
+        let (value, meta) = self
+            .send_json(&path, Some(body), &call, "a predict body")
+            .await?;
         Ok(PredictResult { value, meta })
     }
 }

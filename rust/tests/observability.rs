@@ -221,3 +221,84 @@ async fn a_short_backoff_stays_at_debug() {
         "a zero-second wait should not reach INFO:\n{text}"
     );
 }
+
+/// The second witness: the model that **answered**, beside the one that was asked for.
+///
+/// `ARG-AXO-001`. On the gateway's own span these two come from the same already-resolved variable,
+/// so the pair cannot differ — Prometheus measured that and published it as `P-21` rather than let
+/// Argus watch thirty minutes of data and conclude the case never happens. From a client they come
+/// from two places: the request model is the string the caller wrote, which may be an alias, and
+/// the response model is read out of the body.
+///
+/// This could not be emitted until the span's lifetime moved out of `send`: the body is decoded by
+/// the caller, so the span used to be gone by the time the served model was known. And it needed
+/// one more thing that is easy to miss — **`tracing` can only record a field the macro declared.**
+/// Recording an undeclared field is a silent no-op, the same shape as Go's ended span accepting
+/// attributes and dropping them, so the three new fields are declared `Empty` at `Operation::start`
+/// and this test is what proves the declaration is there.
+async fn alias_call_with_subscriber(collected: &Collected) {
+    let server = MockServer::start().await;
+    Mock::given(wiremock::matchers::path("/oauth2/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "access_token": "header.eyJzY29wZSI6ImluZmVyZW5jZTpyZWFkIn0.sig",
+            "token_type": "Bearer",
+            "expires_in": 300
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(any())
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "c1",
+            // The public name, answering a request that asked for an alias: the exact shape
+            // Prometheus measured when they found their own span reporting both as resolved.
+            "model": "qwen3-0.6b",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "hi"}}],
+            "usage": {"prompt_tokens": 11, "completion_tokens": 3, "total_tokens": 14}
+        })))
+        .mount(&server)
+        .await;
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(collected.clone())
+        .with_ansi(false)
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+        .with_max_level(tracing::Level::DEBUG)
+        .finish();
+
+    let client = Client::new(Config {
+        gateway_base_url: server.uri(),
+        client_id: "id".into(),
+        client_secret: "secret".into(),
+        ..Default::default()
+    })
+    .expect("building");
+
+    let request = ChatRequest {
+        model: "qwen3-0-6b-iq4-nl-local-1".into(),
+        messages: vec![Message::text("user", "hi")],
+        ..Default::default()
+    };
+
+    tracing::subscriber::with_default(subscriber, || {
+        futures_executor_block_on(client.chat(&request)).expect("the call should succeed");
+    });
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_span_carries_the_model_that_answered() {
+    let collected = Collected::default();
+    alias_call_with_subscriber(&collected).await;
+    let emitted = collected.text();
+
+    for expected in [
+        "gen_ai.request.model=\"qwen3-0-6b-iq4-nl-local-1\"",
+        "gen_ai.response.model=\"qwen3-0.6b\"",
+        "gen_ai.usage.input_tokens=11",
+        "gen_ai.usage.output_tokens=3",
+    ] {
+        assert!(
+            emitted.contains(expected),
+            "should carry {expected}\n{emitted}"
+        );
+    }
+}

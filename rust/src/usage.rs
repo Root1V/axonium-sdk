@@ -101,14 +101,14 @@ impl Client {
     pub async fn usage(&self, request_id: &str) -> Result<RequestUsage> {
         let path = format!("/v1/usage/{}", escape_path_segment(request_id));
 
-        let (response, meta) = self
-            .send(&path, None, &crate::client::CallOptions::default())
+        let (raw, meta) = self
+            .send_json(
+                &path,
+                None,
+                &crate::client::CallOptions::default(),
+                "a usage row",
+            )
             .await?;
-        let raw: Value = response.json().await.map_err(|e| {
-            Error::Transport(format!(
-                "the gateway returned a usage row this SDK could not parse: {e}"
-            ))
-        })?;
         let mut row: RequestUsage = serde_json::from_value(raw.clone()).map_err(|e| {
             Error::Transport(format!(
                 "the gateway returned a usage row this SDK could not parse: {e}"

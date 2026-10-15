@@ -439,19 +439,14 @@ impl Client {
         self.check_modality(&request.model, crate::catalog::CHAT_MODALITIES)
             .await?;
 
-        let (response, meta) = self
-            .send(
+        let (raw, meta) = self
+            .send_json(
                 ENDPOINT,
                 Some(&request.payload(false)),
                 &request.options(false),
+                "a body",
             )
             .await?;
-
-        let raw: Value = response.json().await.map_err(|e| {
-            Error::Transport(format!(
-                "the gateway returned a body this SDK could not parse: {e}"
-            ))
-        })?;
         let mut completion: ChatCompletion = serde_json::from_value(raw.clone()).map_err(|e| {
             Error::Transport(format!(
                 "the gateway returned a chat completion this SDK could not parse: {e}"

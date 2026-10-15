@@ -118,12 +118,9 @@ impl Client {
             ..Default::default()
         };
 
-        let (response, meta) = self.send("/v1/rerank", Some(&body), &options).await?;
-        let raw: Value = response.json().await.map_err(|e| {
-            Error::Transport(format!(
-                "the gateway returned a rerank response this SDK could not parse: {e}"
-            ))
-        })?;
+        let (raw, meta) = self
+            .send_json("/v1/rerank", Some(&body), &options, "a rerank response")
+            .await?;
         let mut out: RerankResponse = serde_json::from_value(raw.clone()).map_err(|e| {
             Error::Transport(format!(
                 "the gateway returned a rerank response this SDK could not parse: {e}"

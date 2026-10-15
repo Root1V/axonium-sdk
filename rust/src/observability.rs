@@ -73,6 +73,13 @@ impl Operation {
                 prometheus.request_id = tracing::field::Empty,
                 prometheus.trace_id = tracing::field::Empty,
                 prometheus.instance_id = tracing::field::Empty,
+                // Declared Empty because `tracing` can only record a field the macro named:
+                // recording an undeclared one is a SILENT no-op, which is the same shape as Go's
+                // ended span accepting attributes and dropping them. Filled by `record_outcome`
+                // once the body has been read.
+                gen_ai.response.model = tracing::field::Empty,
+                gen_ai.usage.input_tokens = tracing::field::Empty,
+                gen_ai.usage.output_tokens = tracing::field::Empty,
             ),
         }
     }
@@ -98,6 +105,48 @@ impl Operation {
             if !_meta.instance_id.is_empty() {
                 self.span
                     .record("prometheus.instance_id", _meta.instance_id.as_str());
+            }
+        }
+    }
+
+    /// Attaches the model that answered and the tokens it used, from the decoded response body.
+    ///
+    /// `gen_ai.response.model` is what Argus asked for and what the gateway cannot supply: on its
+    /// own span that attribute and `gen_ai.request.model` come from the same already-resolved
+    /// variable, so the pair **cannot** differ — Prometheus measured that and published it as
+    /// `P-21` rather than let Argus watch thirty minutes of data and conclude the case never
+    /// happens. From a client the request model is the string the caller wrote, which may be an
+    /// alias, and this one is read out of the body.
+    ///
+    /// **Every value is omitted when the platform did not report it, never recorded as zero.** A
+    /// fabricated 0 reads exactly like a measured 0, and in a trace — which is where somebody goes
+    /// to ask what a call cost — it sums into a total that looks exact. Argus raised that and
+    /// confirmed their own `usage()` skips `None` for the same reason.
+    ///
+    /// Defensive on every field because this runs on the success path: a `model` that is not a
+    /// string, a `usage` that is not an object, a count that is not an unsigned integer — each
+    /// contributes nothing. **A span attribute must never be the reason a request that worked
+    /// reports a failure.**
+    pub(crate) fn record_outcome(&self, _body: &serde_json::Value) {
+        #[cfg(feature = "tracing")]
+        {
+            if let Some(model) = _body.get("model").and_then(|v| v.as_str()) {
+                if !model.is_empty() {
+                    self.span.record("gen_ai.response.model", model);
+                }
+            }
+            let Some(usage) = _body.get("usage") else {
+                return;
+            };
+            for (key, field) in [
+                ("prompt_tokens", "gen_ai.usage.input_tokens"),
+                ("completion_tokens", "gen_ai.usage.output_tokens"),
+            ] {
+                // `as_u64` refuses a float and a negative, so a fractional or impossible count
+                // contributes nothing rather than being truncated into an invented measurement.
+                if let Some(count) = usage.get(key).and_then(|v| v.as_u64()) {
+                    self.span.record(field, count);
+                }
             }
         }
     }

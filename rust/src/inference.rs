@@ -109,12 +109,9 @@ impl Client {
             idempotency_key: request.idempotency_key.clone(),
             streaming: false,
         };
-        let (response, meta) = self.send("/v1/embeddings", Some(&body), &opts).await?;
-        let raw: Value = response.json().await.map_err(|e| {
-            Error::Transport(format!(
-                "the gateway returned embeddings this SDK could not parse: {e}"
-            ))
-        })?;
+        let (raw, meta) = self
+            .send_json("/v1/embeddings", Some(&body), &opts, "embeddings")
+            .await?;
         let mut list: EmbeddingList = serde_json::from_value(raw.clone()).map_err(|e| {
             Error::Transport(format!(
                 "the gateway returned embeddings this SDK could not parse: {e}"
@@ -158,14 +155,9 @@ impl Client {
             idempotency_key: request.idempotency_key.clone(),
             streaming: false,
         };
-        let (response, meta) = self
-            .send("/v1/images/generations", Some(&body), &opts)
+        let (raw, meta) = self
+            .send_json("/v1/images/generations", Some(&body), &opts, "images")
             .await?;
-        let raw: Value = response.json().await.map_err(|e| {
-            Error::Transport(format!(
-                "the gateway returned images this SDK could not parse: {e}"
-            ))
-        })?;
         let mut list: ImageList = serde_json::from_value(raw.clone()).map_err(|e| {
             Error::Transport(format!(
                 "the gateway returned images this SDK could not parse: {e}"
