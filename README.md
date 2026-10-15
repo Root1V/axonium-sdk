@@ -31,15 +31,15 @@ equivalent.
 
 | Language | Install | Version |
 |---|---|---|
-| Python | `pip install axonium` | [`1.0.0rc10`](https://pypi.org/project/axonium/) on PyPI |
-| Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.4` | `v0.6.4` |
-| Rust | `axonium = "0.6"` | [`0.6.3`](https://crates.io/crates/axonium) on crates.io |
+| Python | `pip install axonium` | [`1.0.0rc11`](https://pypi.org/project/axonium/) on PyPI |
+| Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.5` | `v0.6.5` |
+| Rust | `axonium = "0.6"` | [`0.6.4`](https://crates.io/crates/axonium) on crates.io |
 | Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.4")` | [`0.3.4`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
-| TypeScript | `npm install axonium` | [`0.2.4`](https://www.npmjs.com/package/axonium) on npm |
+| TypeScript | `npm install axonium` | [`0.2.5`](https://www.npmjs.com/package/axonium) on npm |
 
 All five are published and implement the same surface.
 
-Every version above was read back from its own registry on 2026-10-14, not from a release log:
+Every version above was read back from its own registry on 2026-10-15, not from a release log:
 `pypi`, `crates.io`, `npm` and the Go module proxy each confirm the number next to it. The row that
 made this worth doing said PyPI had `1.0.0rc6` with `1.0.0rc9` *"tagged and rehearsed"* — `rc9` had
 been on PyPI for two days. `python/v1.0.0rc8` is tagged and will never publish: its gate requires a

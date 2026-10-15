@@ -47,7 +47,7 @@ const userAgent = "axonium-go/" + Version
 // gate that runs on a tag runs after the module proxy has already fetched the tag -- and the proxy
 // is immutable, so there was nothing to correct. v0.6.3 is retracted in go.mod for that reason.
 // TestVersionMatchesTheChangelog now checks it where it can still be changed.
-const Version = "0.6.5"
+const Version = "0.6.6"
 
 // Client is a client for the Prometheus inference platform. Safe for concurrent use.
 type Client struct {

@@ -1565,6 +1565,30 @@ which spoke to a platform generation that no longer exists.
 
 Nothing yet.
 
+### 0.6.6 — 2026-10-15
+
+**`gen_ai.response.model` on the span, with `gen_ai.usage.input_tokens` / `output_tokens`.**
+
+Argus asked for it and the gateway cannot supply it: on the gateway's own span that attribute and
+`gen_ai.request.model` come from the same already-resolved variable, so the pair **cannot** differ —
+Prometheus measured that and published it as `P-21`. From a client the request model is the string
+you wrote, which may be an alias, and the response model is read out of the body. So a client span
+is the one place the discrepancy is observable, and half the inference incidents Argus has seen are
+the model that answered not being the one asked for.
+
+**The span's ownership moved** from `send` to `doJSON`, because the body is decoded there and a span
+closed before the body is read has nowhere to put the attribute. Not one retry decision changed; the
+loop uses a span it is handed. A streamed call keeps the previous shape exactly — the model and usage
+arrive in the chunks, not in a body this layer reads, so a stream's span carries the correlation IDs
+and nothing about the outcome.
+
+Each value is **omitted when the platform reported nothing and never written as zero**: a fabricated
+0 reads exactly like a measured 0 and sums into a trace total that looks exact. `recordOutcome` is
+defensive on every field because it runs on the success path — a fractional token count contributes
+nothing rather than being truncated into an invented measurement.
+
+No API changes: `Span` and `Tracer` are unchanged, and a host that implements them needs no edit.
+
 ### 0.6.5 — 2026-10-14
 
 **Documentation only, and it is the second half of `v0.6.4`'s story.**
@@ -2481,6 +2505,31 @@ No third-party dependencies: standard library only.
 ### Unreleased
 
 Nothing yet.
+
+### 0.6.5 — 2026-10-15
+
+**`gen_ai.response.model` on the span, with `gen_ai.usage.input_tokens` / `output_tokens`.** Same
+attribute and same reason as Go `0.6.6`: from the gateway's own span the pair cannot differ, from a
+client it can, and that is the case Argus asked for.
+
+**`Client::send_json` is new internally** and the seven non-streaming callers use it. They each used
+to send, read the body, and write their own complaint about it; the sentence is now shared and the
+noun stays specific. The span is owned there, so it is still open when the body has been read. The
+two local refusals — an over-length idempotency key, a cooldown — stay **ahead** of the span, which
+is the ordering `send` had before the split: a call refused without a request never opens one.
+
+One error message changed shape: the predict route's *"returned a body that is not JSON"* is now
+*"the gateway returned a predict body this SDK could not parse"*.
+
+Each value is **omitted when the platform reported nothing and never recorded as zero**. `as_u64`
+refuses a float and a negative, so a fractional or impossible count contributes nothing rather than
+being truncated into an invented measurement.
+
+**A note for anyone reading spans in this crate:** `tracing` can only record a field the span macro
+declared, and recording an undeclared one is a **silent no-op**. The three new fields are declared
+`Empty` at span start, and the test that proves it fails when the declaration is removed.
+
+No public API changes.
 
 ### 0.6.4 — 2026-10-14
 
