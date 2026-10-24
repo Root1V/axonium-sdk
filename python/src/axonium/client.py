@@ -370,7 +370,20 @@ class _BaseAxonium:
         def succeeded() -> None:
             self._cooldowns.clear(key)
 
-        return StreamOpen(opener=opener, after_failure=after_failure, succeeded=succeeded)
+        def observe() -> Any:
+            # `/v1/chat/completions` is the only streamed route, so the operation is not looked up.
+            return self._observe("POST", "/v1/chat/completions", model)
+
+        def served_model(active: Any, served: str) -> None:
+            record_response(active, request_id=None, trace_id=None, served_model=served)
+
+        return StreamOpen(
+            opener=opener,
+            after_failure=after_failure,
+            succeeded=succeeded,
+            observe=observe,
+            served_model=served_model,
+        )
 
     def _observe(self, method: str, path: str, model: str | None) -> Any:
         """A span for one call, named and attributed per the GenAI semantic conventions.

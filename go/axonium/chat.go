@@ -507,17 +507,18 @@ func (s *ChatService) Stream(ctx context.Context, req ChatRequest) (*ChatComplet
 
 	// The stream owns this cancel for its whole life, so Close can tear the connection down.
 	streamCtx, cancel := context.WithCancel(ctx)
-	// Opened and ended around the send, which is exactly what send used to do for itself -- a
-	// stream's span deliberately does not change shape here. The response attributes doJSON adds
-	// are not available on this path anyway: the model and usage arrive in the chunks, not in a
-	// body this layer reads.
+	// The span is handed to the STREAM, which ends it on Close. It used to be ended here, when
+	// this function returned -- so it timed the handshake and not the generation, and Argus named
+	// why that is the worst place to lose a span: the long generations are the ones done with
+	// streaming, so the measurement was missing precisely where the model is slow.
 	streamCtx, span := s.client.startSpan(streamCtx, http.MethodPost, "/v1/chat/completions", req.Model)
-	defer span.End()
 
 	resp, meta, err := s.client.send(streamCtx, span, http.MethodPost, "/v1/chat/completions", body, true, req.Model, req.Instance, req.IdempotencyKey)
 	if err != nil {
 		cancel()
+		// Nothing to stream, so nothing will Close: this is the one path that has to end it here.
+		span.End()
 		return nil, err
 	}
-	return newChatCompletionStream(resp, meta, cancel), nil
+	return newChatCompletionStream(resp, meta, cancel, span), nil
 }

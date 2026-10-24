@@ -151,6 +151,15 @@ impl Operation {
         }
     }
 
+    /// Records only `gen_ai.response.model`, for a stream.
+    ///
+    /// Separate from `record_outcome` because a stream has no body to pass: the model comes from a
+    /// chunk, and the token counts do not arrive at all on this path.
+    pub(crate) fn record_served_model(&self, _model: &str) {
+        #[cfg(feature = "tracing")]
+        self.span.record("gen_ai.response.model", _model);
+    }
+
     /// Reports that the SDK is about to sleep before retrying, and for how long.
     ///
     /// A caller who sees a call take 45 seconds and finds nothing in their logs files a latency

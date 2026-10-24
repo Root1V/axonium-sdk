@@ -175,10 +175,20 @@ pub struct ChatStream {
     // free; a HashMap would hand back whichever order it felt like.
     tool_calls: BTreeMap<i64, PartialToolCall>,
     done: bool,
+    /// The span covering this stream's whole life, dropped with it. Held here rather than released
+    /// when the headers arrived, so that a long generation is inside the span that measures it.
+    op: crate::observability::Operation,
+    /// Set once the first chunk's model has been recorded: every chunk names it, and a long
+    /// generation would write the same value hundreds of times.
+    model_recorded: bool,
 }
 
 impl ChatStream {
-    pub(crate) fn new(response: reqwest::Response, meta: ResponseMeta) -> Self {
+    pub(crate) fn new(
+        response: reqwest::Response,
+        meta: ResponseMeta,
+        op: crate::observability::Operation,
+    ) -> Self {
         Self {
             body: Some(Box::new(response.bytes_stream())),
             buffer: String::new(),
@@ -189,6 +199,8 @@ impl ChatStream {
             timings: None,
             tool_calls: BTreeMap::new(),
             done: false,
+            op,
+            model_recorded: false,
         }
     }
 
@@ -257,6 +269,16 @@ impl ChatStream {
         }
 
         let chunk = Chunk { raw: payload };
+        // The one thing a stream can witness: a stream's body never arrives as an object this
+        // layer decodes, so the served model comes from a chunk or not at all. Recorded once.
+        if !self.model_recorded {
+            if let Some(model) = chunk.raw.get("model").and_then(Value::as_str) {
+                if !model.is_empty() {
+                    self.op.record_served_model(model);
+                    self.model_recorded = true;
+                }
+            }
+        }
         self.content.push_str(&chunk.content());
         self.reasoning.push_str(&chunk.reasoning());
         if let Some(usage) = chunk.raw.get("usage") {

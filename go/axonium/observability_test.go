@@ -523,3 +523,81 @@ func TestRecordOutcomeSurvivesABodyItDoesNotUnderstand(t *testing.T) {
 		})
 	}
 }
+
+// A stream's span has to outlive the headers, and the only thing a stream can witness is the model
+// its first chunk names.
+//
+// ARG-AXO-002. Argus took the note that the response attributes were missing on a streamed call as
+// a known limitation and said why it is the worst place to have one: THE LONG GENERATIONS ARE THE
+// ONES DONE WITH STREAMING, so the measurement was missing precisely where the model is slow --
+// which is where somebody looks when something is wrong.
+//
+// This span used to end when Stream() returned, so it timed the handshake of a call whose whole
+// cost is what follows. A duration that excludes the slow part is worse than none: it reads as a
+// fast call.
+func TestAStreamsSpanCoversTheGenerationAndNamesTheServedModel(t *testing.T) {
+	tracer := &recordingTracer{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"access_token":"t","token_type":"Bearer","expires_in":300}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		// The public name in the chunks, answering a request that asked for an alias.
+		_, _ = w.Write([]byte("data: {\"id\":\"c\",\"model\":\"qwen3-0.6b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+			"data: {\"id\":\"c\",\"model\":\"qwen3-0.6b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"!\"},\"finish_reason\":\"stop\"}]}\n\n" +
+			"data: [DONE]\n\n"))
+	}))
+	defer srv.Close()
+
+	client, err := New(Config{GatewayBaseURL: srv.URL, ClientID: "i", ClientSecret: "s", Tracer: tracer})
+	if err != nil {
+		t.Fatalf("building: %v", err)
+	}
+	defer client.Close()
+
+	stream, err := client.Chat.Stream(context.Background(), ChatRequest{
+		Model:    "qwen3-0-6b-iq4-nl-local-1",
+		Messages: []Message{TextMessage("user", "hi")},
+	})
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+
+	span := tracer.spans[0]
+	// The span is open while chunks are read, which is the whole point. Asserted DURING iteration:
+	// the attribute can only land if the span has not ended.
+	chunks := 0
+	for stream.Next() {
+		chunks++
+		if chunks == 1 {
+			if span.ended {
+				t.Fatal("the span ended before the first chunk, so it timed the handshake")
+			}
+		}
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatalf("iterating: %v", err)
+	}
+	if chunks == 0 {
+		t.Fatal("the stream yielded nothing, so nothing was measured")
+	}
+	_ = stream.Close()
+
+	if got := span.attrs["gen_ai.response.model"]; got != "qwen3-0.6b" {
+		t.Errorf("gen_ai.response.model: got %v, want qwen3-0.6b", got)
+	}
+	if got := span.attrs["gen_ai.request.model"]; got != "qwen3-0-6b-iq4-nl-local-1" {
+		t.Errorf("gen_ai.request.model: got %v", got)
+	}
+	// Ended by Close, not before it.
+	if !span.ended {
+		t.Error("Close did not end the span, which leaks one per stream")
+	}
+	// Recorded once: every chunk names the model and a long generation would write it hundreds of
+	// times. The double records what arrived after End, so a late write would show there too.
+	if len(span.droppedAfterEnd) > 0 {
+		t.Errorf("wrote to the span after it ended: %v", span.droppedAfterEnd)
+	}
+}
