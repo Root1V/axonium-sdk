@@ -26,6 +26,7 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any
@@ -60,6 +61,22 @@ class StreamOpen:
     opener: Callable[[], Any]
     after_failure: Callable[[APIError, int], float | None]
     succeeded: Callable[[], None]
+    #: A context manager covering the **whole stream**, yielding something to record onto, and a
+    #: sink for the model named by the first chunk.
+    #:
+    #: Both default to doing nothing, so a stream built without them behaves exactly as before.
+    #:
+    #: **A streamed call used to emit no span at all in this SDK**, which Go and Rust did emit.
+    #: Argus named why that is the worst place to be missing one: *the long generations are the ones
+    #: done with streaming, so the witness is missing precisely where the model is slow* — which is
+    #: where somebody looks when something is wrong. They also named the datum worth having, and it
+    #: is the one a stream can give: the model from the first chunk.
+    #:
+    #: The span covers the stream rather than the open. Ending it when the headers arrive — which is
+    #: when the opener returns — would time the connection and not the generation, and a span whose
+    #: duration excludes the slow part is worse than none: it reads as a fast call.
+    observe: Callable[[], AbstractContextManager[Any]] = lambda: nullcontext()
+    served_model: Callable[[Any, str], None] = lambda active, model: None
 
 
 class _StreamBase:
@@ -69,6 +86,24 @@ class _StreamBase:
         self._response: httpx.Response | None = None
         self._state = StreamAccumulator()
         self._meta: ResponseMeta | None = None
+        self._span: AbstractContextManager[Any] | None = None
+        self._active: Any = None
+        #: Recorded once. Every chunk names the model and re-recording it on each one would be the
+        #: same value written hundreds of times for a long generation.
+        self._model_recorded = False
+
+    def _note_model(self, chunk: ChatCompletionChunk) -> None:
+        """Record the model the first chunk named, which is the one thing a stream can witness.
+
+        A stream's body never arrives as an object this layer parses, so the served model has to
+        come from a chunk or not at all.
+        """
+        if self._model_recorded or self._active is None:
+            return
+        model = chunk.model
+        if model:
+            self._opening.served_model(self._active, model)
+            self._model_recorded = True
 
     @property
     def content(self) -> str:
@@ -148,6 +183,11 @@ class ChatCompletionStream(_StreamBase):
         The loop can only ever repeat an open that produced no stream: the moment a non-error
         response is in hand it returns, and nothing past that point reopens anything.
         """
+        # Entered before the first attempt so that the span covers the retries too: an open
+        # refused twice and honoured on the third is exactly the duration a caller cannot explain.
+        self._span = self._opening.observe()
+        self._active = self._span.__enter__()
+
         attempt = 1
         waited = 0.0
         while True:
@@ -181,6 +221,10 @@ class ChatCompletionStream(_StreamBase):
     ) -> None:
         if self._opener is not None:
             self._opener.__exit__(exc_type, exc, traceback)
+        if self._span is not None:
+            self._span.__exit__(exc_type, exc, traceback)
+            self._span = None
+            self._active = None
 
     def __iter__(self) -> Iterator[ChatCompletionChunk]:
         if self._response is None:
@@ -193,7 +237,9 @@ class ChatCompletionStream(_StreamBase):
             if event.done:
                 self._state.finish()
                 return
-            yield self._state.feed(event)
+            chunk = self._state.feed(event)
+            self._note_model(chunk)
+            yield chunk
 
     def close(self) -> None:
         if self._response is not None:
@@ -212,6 +258,12 @@ class AsyncChatCompletionStream(_StreamBase):
         # The sync stream checks this when stream() is called; here the method that builds the
         # stream cannot await, so the check moves to the point the request is actually sent.
         await self._preflight()
+
+        # Same span, same reason as the sync stream: it covers the retries and the generation, not
+        # the connection. A synchronous context manager is correct here -- a span is bookkeeping,
+        # not I/O, so there is nothing to await and nothing to block the loop.
+        self._span = self._opening.observe()
+        self._active = self._span.__enter__()
 
         attempt = 1
         waited = 0.0
@@ -242,6 +294,10 @@ class AsyncChatCompletionStream(_StreamBase):
     ) -> None:
         if self._opener is not None:
             await self._opener.__aexit__(exc_type, exc, traceback)
+        if self._span is not None:
+            self._span.__exit__(exc_type, exc, traceback)
+            self._span = None
+            self._active = None
 
     async def __aiter__(self) -> AsyncIterator[ChatCompletionChunk]:
         if self._response is None:
@@ -254,7 +310,9 @@ class AsyncChatCompletionStream(_StreamBase):
             if event.done:
                 self._state.finish()
                 return
-            yield self._state.feed(event)
+            chunk = self._state.feed(event)
+            self._note_model(chunk)
+            yield chunk
 
     async def aclose(self) -> None:
         if self._response is not None:

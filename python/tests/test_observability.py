@@ -729,3 +729,151 @@ class TestTheSecondWitness:
         assert outcome_of({"model": "m", "usage": "not an object"}) == ("m", None, None)
         assert outcome_of({"model": "m", "usage": {"prompt_tokens": "11"}}) == ("m", None, None)
         assert outcome_of({"model": "m", "usage": {"prompt_tokens": True}}) == ("m", None, None)
+
+
+class TestAStreamedCallIsObservedToo:
+    """A streamed call used to emit **no span at all** in this SDK. Go and Rust emitted one.
+
+    Found while answering `ARG-AXO-002`, where Argus took my own sentence — *"in none of the three
+    is it recorded on a streamed call"* — as a known limitation and said why it is the worst place
+    to have one: **the long generations are the ones done with streaming**, so the witness is
+    missing precisely where the model is slow, which is where somebody looks when something is
+    wrong. Measuring it to answer them showed my sentence had concealed something worse for Python:
+    not the response attributes were missing, the span was.
+
+    Argus also named the datum a stream *can* give, and it is the one recorded here: the model from
+    the first chunk. A stream's body never arrives as an object this layer parses, so it comes from
+    a chunk or not at all.
+    """
+
+    SSE = (
+        b'data: {"id":"c","model":"qwen3-0.6b","choices":[{"index":0,'
+        b'"delta":{"content":"hi"},"finish_reason":null}]}\n\n'
+        b'data: {"id":"c","model":"qwen3-0.6b","choices":[{"index":0,'
+        b'"delta":{"content":"!"},"finish_reason":"stop"}]}\n\n'
+        b"data: [DONE]\n\n"
+    )
+
+    @contextmanager
+    def _capture(
+        self, opened: list[tuple[str, dict[str, object]]], recorded: dict[str, object]
+    ) -> Iterator[None]:
+        from axonium.observability import otel
+
+        class Collecting:
+            def set_attribute(self, key: str, value: object) -> None:
+                recorded[key] = value
+
+        @contextmanager
+        def capture(name: str, attributes: dict[str, object]) -> Iterator[Collecting]:
+            opened.append((name, attributes))
+            yield Collecting()
+
+        with mock.patch.object(otel, "_record", capture):
+            yield
+
+    @respx.mock
+    def test_the_span_exists_and_names_the_model_from_the_first_chunk(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        respx.post(AUTH_URL).mock(return_value=token(scope="inference:stream"))
+        respx.post(CHAT_URL).mock(
+            return_value=httpx.Response(
+                200, content=self.SSE, headers={"Content-Type": "text/event-stream"}
+            )
+        )
+
+        opened: list[tuple[str, dict[str, object]]] = []
+        recorded: dict[str, object] = {}
+
+        with (
+            self._capture(opened, recorded),
+            Axonium(otel_enabled=True, **config_kwargs) as client,
+            client.chat.completions.stream(
+                model="qwen3-0-6b-iq4-nl-local-1",
+                messages=[{"role": "user", "content": "hi"}],
+            ) as stream,
+        ):
+            for _ in stream:
+                pass
+
+        assert opened, "a streamed call opened no span, which is where it started"
+        name, attributes = opened[-1]
+        assert name == "chat qwen3-0-6b-iq4-nl-local-1"
+        assert attributes["gen_ai.request.model"] == "qwen3-0-6b-iq4-nl-local-1"
+        # The alias asked for, the public name served: the pair, from a stream.
+        assert recorded["gen_ai.response.model"] == "qwen3-0.6b"
+
+    @respx.mock
+    def test_the_span_is_still_open_while_the_stream_is_consumed(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        """The span covers the generation, not the connection.
+
+        Ending it when the headers arrive would time the handshake of a call whose whole cost is
+        what comes after — and a span whose duration excludes the slow part is worse than none,
+        because it reads as a fast call. Asserted by recording *inside* the iteration: the attribute
+        can only land if the span is open at that moment.
+        """
+        respx.post(AUTH_URL).mock(return_value=token(scope="inference:stream"))
+        respx.post(CHAT_URL).mock(
+            return_value=httpx.Response(
+                200, content=self.SSE, headers={"Content-Type": "text/event-stream"}
+            )
+        )
+
+        opened: list[tuple[str, dict[str, object]]] = []
+        recorded: dict[str, object] = {}
+        seen_mid_stream: list[bool] = []
+
+        with (
+            self._capture(opened, recorded),
+            Axonium(otel_enabled=True, **config_kwargs) as client,
+            client.chat.completions.stream(
+                model="m", messages=[{"role": "user", "content": "hi"}]
+            ) as stream,
+        ):
+            for _ in stream:
+                seen_mid_stream.append("gen_ai.response.model" in recorded)
+
+        assert seen_mid_stream, "the stream yielded nothing, so nothing was measured"
+        assert seen_mid_stream[0], (
+            "the first chunk's model was not on the span while the stream was still being read, "
+            "so the span was not open during the generation"
+        )
+
+    @respx.mock
+    def test_the_model_is_recorded_once_and_not_per_chunk(
+        self, config_kwargs: dict[str, str]
+    ) -> None:
+        """Every chunk names the model; a long generation would write it hundreds of times."""
+        respx.post(AUTH_URL).mock(return_value=token(scope="inference:stream"))
+        respx.post(CHAT_URL).mock(
+            return_value=httpx.Response(
+                200, content=self.SSE, headers={"Content-Type": "text/event-stream"}
+            )
+        )
+
+        writes: list[str] = []
+
+        from axonium.observability import otel
+
+        class Counting:
+            def set_attribute(self, key: str, value: object) -> None:
+                writes.append(key)
+
+        @contextmanager
+        def capture(name: str, attributes: dict[str, object]) -> Iterator[Counting]:
+            yield Counting()
+
+        with (
+            mock.patch.object(otel, "_record", capture),
+            Axonium(otel_enabled=True, **config_kwargs) as client,
+            client.chat.completions.stream(
+                model="m", messages=[{"role": "user", "content": "hi"}]
+            ) as stream,
+        ):
+            for _ in stream:
+                pass
+
+        assert writes.count("gen_ai.response.model") == 1, writes
