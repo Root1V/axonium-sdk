@@ -39,10 +39,18 @@ type ChatCompletionStream struct {
 	current *ChatCompletionChunk
 	err     error
 
+	// The span covering this stream's whole life, ended by Close. Recording the served model needs
+	// it to still be open while chunks arrive, which is the reason it is held here and not ended
+	// when Stream() returned.
+	span Span
+	// Set once the first chunk's model has been recorded: every chunk names it, and a long
+	// generation would write the same value hundreds of times.
+	modelRecorded bool
+
 	closeOnce sync.Once
 }
 
-func newChatCompletionStream(resp *http.Response, meta ResponseMeta, cancel context.CancelFunc) *ChatCompletionStream {
+func newChatCompletionStream(resp *http.Response, meta ResponseMeta, cancel context.CancelFunc, span Span) *ChatCompletionStream {
 	scanner := bufio.NewScanner(resp.Body)
 	// A single SSE line can carry a whole chunk; the default 64KiB ceiling is not generous enough
 	// for a reasoning model's larger deltas.
@@ -54,6 +62,7 @@ func newChatCompletionStream(resp *http.Response, meta ResponseMeta, cancel cont
 		body:    resp.Body,
 		cancel:  cancel,
 		meta:    meta,
+		span:    span,
 	}
 }
 
@@ -78,6 +87,7 @@ func (s *ChatCompletionStream) Next() bool {
 			s.err = err
 			return false
 		}
+		s.noteModel(chunk)
 		s.current = chunk
 		return true
 	}
@@ -152,6 +162,28 @@ func (s *ChatCompletionStream) Close() error {
 		if s.body != nil {
 			_ = s.body.Close()
 		}
+		// Ended here rather than when Stream() returned, which is what it used to do. A span that
+		// ends at the headers times the handshake of a call whose whole cost is what follows, and a
+		// duration that excludes the slow part is worse than none: it reads as a fast call.
+		if s.span != nil {
+			s.span.End()
+		}
 	})
 	return nil
+}
+
+// noteModel records the model the first chunk named, which is the one thing a stream can witness.
+//
+// A stream's body never arrives as an object this layer decodes, so the served model comes from a
+// chunk or not at all -- which is the datum Argus asked for when they noted that the witness was
+// missing precisely where the model is slow.
+//
+// Once, not per chunk: every chunk names the model, and a long generation would write the same
+// value hundreds of times.
+func (s *ChatCompletionStream) noteModel(chunk *ChatCompletionChunk) {
+	if s.modelRecorded || s.span == nil || chunk == nil || chunk.Model == "" {
+		return
+	}
+	s.span.SetAttributes(map[string]any{"gen_ai.response.model": chunk.Model})
+	s.modelRecorded = true
 }

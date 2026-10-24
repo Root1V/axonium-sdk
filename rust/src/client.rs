@@ -177,26 +177,32 @@ impl Client {
         )
     }
 
-    /// Sends one logical call, retrying only where the platform says no generation occurred.
+    // `send` itself is gone: every caller now goes through `send_json` or `send_stream`, which
+    // differ in who ends up owning the span. A generic `send` that created and dropped one is
+    // exactly what made the response attributes unrecordable, so leaving it available would leave
+    // the trap available.
+
+    /// `send` for a stream, handing the span **out** so the stream can own it.
     ///
-    /// `opts.streaming` deliberately does **not** exclude a request from this loop, and this is the
-    /// one place to say so, because the reverse looks like the safer reading. A streamed request
-    /// that fails here failed before its first byte of body existed: the gateway reads the engine's
-    /// status before the `200`/`text/event-stream` headers are sent, so an error at this point means
-    /// nothing was generated and nothing was billed. A retry is therefore a first generation rather
-    /// than a second -- and it is the only one there is, since the gateway performs no internal
-    /// retries on a streamed request. Once the stream has begun the failure arrives in band, where
-    /// this function cannot see it and never retries it. Agreed across all four SDKs on 2026-09-27;
-    /// the shared corpus pins the attempt count.
-    pub(crate) async fn send(
+    /// The span used to be created and dropped inside `send`, which meant it closed when the
+    /// headers arrived — timing the handshake of a call whose whole cost is what follows. Argus
+    /// named why that is the worst place to lose one: **the long generations are the ones done with
+    /// streaming**, so the measurement was missing precisely where the model is slow, which is
+    /// where somebody looks when something is wrong.
+    pub(crate) async fn send_stream(
         &self,
         path: &str,
         body: Option<&Value>,
         opts: &CallOptions,
-    ) -> Result<(reqwest::Response, ResponseMeta)> {
+    ) -> Result<(
+        reqwest::Response,
+        ResponseMeta,
+        crate::observability::Operation,
+    )> {
         let key = self.precheck(opts)?;
         let op = crate::observability::Operation::start(path, &opts.model, &self.gateway_host);
-        self.run(&op, &key, path, body, opts).await
+        let (response, meta) = self.run(&op, &key, path, body, opts).await?;
+        Ok((response, meta, op))
     }
 
     /// `send` for a call whose body this SDK decodes, which is every call but a stream.
@@ -264,10 +270,20 @@ impl Client {
         Ok(key)
     }
 
-    /// The retry loop, against a span it is handed rather than one it creates.
+    /// Sends one logical call, retrying only where the platform says no generation occurred.
     ///
-    /// Unchanged from when it lived inside `send`: what moved is who owns the span, not a single
-    /// decision about what is retried.
+    /// `opts.streaming` deliberately does **not** exclude a request from this loop, and this is the
+    /// one place to say so, because the reverse looks like the safer reading. A streamed request
+    /// that fails here failed before its first byte of body existed: the gateway reads the engine's
+    /// status before the `200`/`text/event-stream` headers are sent, so an error at this point means
+    /// nothing was generated and nothing was billed. A retry is therefore a first generation rather
+    /// than a second -- and it is the only one there is, since the gateway performs no internal
+    /// retries on a streamed request. Once the stream has begun the failure arrives in band, where
+    /// this function cannot see it and never retries it. Agreed across all four SDKs on 2026-09-27;
+    /// the shared corpus pins the attempt count.
+    ///
+    /// Against a span it is handed rather than one it creates. Unchanged from when this body lived
+    /// inside `send`: what moved is who owns the span, not a single decision about what is retried.
     async fn run(
         &self,
         op: &crate::observability::Operation,

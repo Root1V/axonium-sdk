@@ -479,14 +479,14 @@ impl Client {
         self.check_modality(&request.model, crate::catalog::CHAT_MODALITIES)
             .await?;
 
-        let (response, meta) = self
-            .send(
+        let (response, meta, op) = self
+            .send_stream(
                 ENDPOINT,
                 Some(&request.payload(true)),
                 &request.options(true),
             )
             .await?;
-        Ok(ChatStream::new(response, meta))
+        Ok(ChatStream::new(response, meta, op))
     }
 }
 

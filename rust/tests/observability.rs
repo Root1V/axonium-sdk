@@ -302,3 +302,86 @@ async fn the_span_carries_the_model_that_answered() {
         );
     }
 }
+
+/// A stream's span has to outlive the headers, and the model its first chunk names is the one thing
+/// a stream can witness.
+///
+/// `ARG-AXO-002`. The span used to be created and dropped inside `send`, so it closed when the
+/// headers arrived — timing the handshake of a call whose whole cost is what follows. Argus named
+/// why that is the worst place to lose one: **the long generations are the ones done with
+/// streaming**, so the measurement was missing precisely where the model is slow.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_streams_span_covers_the_generation_and_names_the_served_model() {
+    let collected = Collected::default();
+    let server = MockServer::start().await;
+    Mock::given(wiremock::matchers::path("/oauth2/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "access_token": "header.eyJzY29wZSI6ImluZmVyZW5jZTpzdHJlYW0ifQ.sig",
+            "token_type": "Bearer",
+            "expires_in": 300
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(any())
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("content-type", "text/event-stream")
+                // The public name in the chunks, for a request that asked for an alias.
+                .set_body_string(
+                    "data: {\"id\":\"c\",\"model\":\"qwen3-0.6b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n\
+                     data: {\"id\":\"c\",\"model\":\"qwen3-0.6b\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"!\"},\"finish_reason\":\"stop\"}]}\n\n\
+                     data: [DONE]\n\n",
+                ),
+        )
+        .mount(&server)
+        .await;
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(collected.clone())
+        .with_ansi(false)
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+        .with_max_level(tracing::Level::DEBUG)
+        .finish();
+
+    let client = Client::new(Config {
+        gateway_base_url: server.uri(),
+        client_id: "id".into(),
+        client_secret: "secret".into(),
+        ..Default::default()
+    })
+    .expect("building");
+
+    let request = ChatRequest {
+        model: "qwen3-0-6b-iq4-nl-local-1".into(),
+        messages: vec![Message::text("user", "hi")],
+        ..Default::default()
+    };
+
+    tracing::subscriber::with_default(subscriber, || {
+        futures_executor_block_on(async {
+            let mut stream = client
+                .chat_stream(&request)
+                .await
+                .expect("the stream opens");
+            let mut chunks = 0;
+            while stream.next().await.expect("a chunk").is_some() {
+                chunks += 1;
+            }
+            assert!(
+                chunks > 0,
+                "the stream yielded nothing, so nothing was measured"
+            );
+        });
+    });
+
+    let emitted = collected.text();
+    for expected in [
+        "gen_ai.request.model=\"qwen3-0-6b-iq4-nl-local-1\"",
+        "gen_ai.response.model=\"qwen3-0.6b\"",
+    ] {
+        assert!(
+            emitted.contains(expected),
+            "a stream's span should carry {expected}\n{emitted}"
+        );
+    }
+}
