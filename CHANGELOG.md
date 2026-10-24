@@ -511,6 +511,24 @@ is a real conflict rather than a tuning question and is written down as one.
 
 Nothing yet.
 
+### 1.0.0rc12 — 2026-10-24
+
+**A streamed call emitted no span at all. Now it emits one, for the stream's own life.**
+
+Go and Rust emitted one; Python did not, so a caller streaming a long generation had the slow call
+be the invisible one in their traces. The span covers the generation and the retries, not the
+connection: ending it when the headers arrive would time the handshake of a call whose whole cost is
+what follows, and a duration that excludes the slow part reads as a fast call.
+
+It carries `gen_ai.response.model` from the **first chunk**, which is the only outcome a stream can
+witness — a stream's body never arrives as an object this layer parses. Recorded once, not per
+chunk.
+
+Reported by Argus, who put it better than the changelog can: the long generations are the ones done
+with streaming, so the measurement was missing precisely where the model is slow.
+
+No API changes.
+
 ### 1.0.0rc11 — 2026-10-14
 
 **`reasoning_content` is declared on a request `Message`.** It already reached the wire, because
@@ -1565,6 +1583,22 @@ which spoke to a platform generation that no longer exists.
 
 Nothing yet.
 
+### 0.6.7 — 2026-10-24
+
+**A stream's span now ends when the stream does, not when the headers arrive.**
+
+It used to be ended by the `defer` in `Stream()`, so it timed the handshake of a call whose whole
+cost is what follows — and a duration that excludes the slow part is worse than none, because it
+reads as a fast call. `ChatCompletionStream` owns it now and ends it in `Close`.
+
+It carries `gen_ai.response.model` from the **first chunk**, recorded once rather than per chunk:
+the only outcome a stream can witness, since the body never arrives as an object this layer decodes.
+
+**If you do not call `Close`, the span does not end.** That was already true of the connection and
+the context cancel; it is now true of the span too.
+
+No API changes: `Span` and `Tracer` are untouched.
+
 ### 0.6.6 — 2026-10-15
 
 **`gen_ai.response.model` on the span, with `gen_ai.usage.input_tokens` / `output_tokens`.**
@@ -2505,6 +2539,19 @@ No third-party dependencies: standard library only.
 ### Unreleased
 
 Nothing yet.
+
+### 0.6.6 — 2026-10-24
+
+**A stream's span now lives as long as the stream.** It was created and dropped inside `send`, so it
+closed at the headers and timed the handshake rather than the generation. `ChatStream` holds it and
+drops it with itself.
+
+It carries `gen_ai.response.model` from the **first chunk**, recorded once.
+
+**`Client::send` is gone** (it was `pub(crate)`, so this is internal). Every call now goes through
+`send_json` or `send_stream`, which differ in who ends up owning the span — a generic `send` that
+made and dropped one is what made the response attributes unrecordable in the first place. The
+retry-on-stream rule it documented moved to `run`, unchanged.
 
 ### 0.6.5 — 2026-10-15
 
