@@ -28,6 +28,7 @@ step() {
 cd "$root" || exit 1
 step "spec: catalog matches guide" ./scripts/check_catalog_matches_guide.py
 step "roadmap: ids are unique" ./scripts/check_roadmap_ids.py
+step "readme: matrix matches the indexes" python3 scripts/check_published_versions.py
 step "spec: cases, fixtures and framing" ./scripts/check_spec.py
 
 # --- ts-ci.yml ---
