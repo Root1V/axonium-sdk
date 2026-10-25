@@ -32,17 +32,23 @@ equivalent.
 | Language | Install | Version |
 |---|---|---|
 | Python | `pip install axonium` | [`1.0.0rc11`](https://pypi.org/project/axonium/) on PyPI |
-| Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.6` | `v0.6.6` |
-| Rust | `axonium = "0.6"` | [`0.6.5`](https://crates.io/crates/axonium) on crates.io |
+| Go | `go get github.com/Root1V/axonium-sdk/go@v0.6.7` | `v0.6.7` |
+| Rust | `axonium = "0.6"` | [`0.6.4`](https://crates.io/crates/axonium) on crates.io |
 | Swift | `.package(url: "…/axonium-sdk-swift", from: "0.3.4")` | [`0.3.4`](https://github.com/Root1V/axonium-sdk-swift) — its own repository |
 | TypeScript | `npm install axonium` | [`0.2.5`](https://www.npmjs.com/package/axonium) on npm |
 
 All five are published and implement the same surface.
 
-Every version above was read back from its own registry on 2026-10-24, not from a release log:
-`pypi`, `crates.io`, `npm` and the Go module proxy each confirm the number next to it. The row that
-made this worth doing said PyPI had `1.0.0rc6` with `1.0.0rc9` *"tagged and rehearsed"* — `rc9` had
-been on PyPI for two days. `python/v1.0.0rc8` is tagged and will never publish: its gate requires a
+Every version above is what its index **serves**, checked by `scripts/check_published_versions.py` rather than asserted:
+it asks `pypi`, `crates.io`, `npm`, the Go module proxy and the Swift repository's tags, and fails
+if a row disagrees. **The claim used to be prose, and the fourth time the matrix was wrong it was
+this sentence that made it a lie rather than a staleness**: on 2026-10-24 the Rust row was moved to
+`0.6.5` because the tag had been pushed, while `crates.io` was still serving `0.6.4` — the publish
+gate had been waiting for a human for nine days. **Pushing a tag is not publishing, and only the
+index knows the difference.**
+
+Two rows can therefore disagree in opposite directions, and both did: Rust was ahead of what was
+published, Go behind it. `python/v1.0.0rc8` is tagged and will never publish: its gate requires a
 TestPyPI rehearsal and TestPyPI was answering `503` at the time, so `rc9` superseded it. **`go/v0.6.3`
 is retracted** — it was tagged with the `Version` constant unbumped, the module proxy had already
 fetched it, and the proxy is immutable, so it could only be withdrawn; `go list -m -versions` omits

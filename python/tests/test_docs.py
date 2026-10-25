@@ -12,6 +12,7 @@ import json
 import re
 import subprocess
 import sys
+import urllib.error
 from pathlib import Path
 from typing import Any
 
@@ -845,3 +846,98 @@ class TestAnEnglishPageIsNotTheSpanishOne:
             f"other. The pages share every code block by construction, which is why a test "
             f"comparing only those cannot see this"
         )
+
+
+class TestTheMatrixCheckCannotPassWithoutLooking:
+    """A check that cannot reach the registries must not look like one that agreed.
+
+    `scripts/check_published_versions.py` asks five indexes what they serve and fails if the
+    README's matrix disagrees. Offline it **skips**, because an unreached registry has verified
+    nothing — and the one thing it must not do is exit 0 quietly, which is indistinguishable from
+    agreement. That is the shape `check_spec.py` exists to kill, so the skip is asserted here rather
+    than trusted.
+
+    The matrix is worth this much machinery because it has been wrong four times, and the fourth
+    time it was a **lie** rather than a staleness: the prose claimed every version had been read
+    back from its registry while the Rust row named a version whose publish gate had been waiting
+    for a human for nine days. Pushing a tag is not publishing.
+    """
+
+    @staticmethod
+    def _load() -> Any:
+        spec = importlib.util.spec_from_file_location(
+            "check_published_versions", SCRIPTS / "check_published_versions.py"
+        )
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_it_skips_loudly_when_the_registries_cannot_be_reached(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        module = self._load()
+
+        def unreachable(*args: object, **kwargs: object) -> None:
+            raise urllib.error.URLError("no route to host")
+
+        monkeypatch.setattr(module.urllib.request, "urlopen", unreachable)
+
+        assert module.main() == 0
+        printed = capsys.readouterr().out
+        assert "SKIPPED" in printed, printed
+        # Saying *that* it skipped is not enough: a reader has to know the matrix is unverified.
+        assert "NOT verified" in printed, printed
+
+    def test_a_row_ahead_of_its_index_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The exact defect of 2026-10-24, reproduced without touching the network.
+
+        A tag was pushed, the gate was waiting, and the row was bumped anyway.
+        """
+        module = self._load()
+        monkeypatch.setattr(
+            module,
+            "SOURCES",
+            {
+                "Python": lambda: "1.0.0rc11",
+                "Go": lambda: "v0.6.7",
+                # What crates.io served while the matrix claimed 0.6.5.
+                "Rust": lambda: "0.6.4",
+                "Swift": lambda: "0.3.4",
+                "TypeScript": lambda: "0.2.5",
+            },
+        )
+        monkeypatch.setattr(
+            module,
+            "claimed",
+            lambda: {
+                "Python": "1.0.0rc11",
+                "Go": "v0.6.7",
+                "Rust": "0.6.5",
+                "Swift": "0.3.4",
+                "TypeScript": "0.2.5",
+            },
+        )
+
+        assert module.main() == 1
+
+    def test_it_agrees_with_the_matrix_as_it_stands(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Reads the real README, with the indexes stubbed to what they serve today.
+
+        This is what makes the class more than a test of its own stubs: `claimed()` parses the
+        actual matrix, so a row edited into a shape the parser cannot read fails here rather than
+        silently matching nothing.
+        """
+        module = self._load()
+        monkeypatch.setattr(
+            module,
+            "SOURCES",
+            {
+                "Python": lambda: "1.0.0rc11",
+                "Go": lambda: "v0.6.7",
+                "Rust": lambda: "0.6.4",
+                "Swift": lambda: "0.3.4",
+                "TypeScript": lambda: "0.2.5",
+            },
+        )
+        assert module.main() == 0
